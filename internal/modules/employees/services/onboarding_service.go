@@ -1,0 +1,1478 @@
+package services
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
+	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
+	departmentRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
+	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
+	positionRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
+	"gorm.io/gorm"
+)
+
+type OnboardingService struct {
+	draftRepo           *employeeRepos.OnboardingDraftRepository
+	employeeRepo        *employeeRepos.EmployeeRepository
+	basicInfoRepo       *employeeRepos.EmployeeBasicInformationRepository
+	employmentDetailsRepo *employeeRepos.EmployeeEmploymentDetailsRepository
+	addressRepo         *employeeRepos.EmployeeAddressRepository
+	salaryRepo          *employeeRepos.EmployeeSalaryRepository
+	bankRepo            *employeeRepos.EmployeeBankRepository
+	statutoryRepo       *employeeRepos.EmployeeStatutoryRepository
+	documentRepo        *employeeRepos.EmployeeDocumentRepository
+	contactRepo         *employeeRepos.EmployeeEmergencyContactRepository
+	policyRepo          *employeeRepos.EmployeePolicyRepository
+	assetRepo           *employeeRepos.EmployeeAssetRepository
+	departmentRepo      *departmentRepos.DepartmentRepository
+	positionRepo        *positionRepos.JobPositionRepository
+	locationRepo        *locationRepos.LocationRepository
+}
+
+func NewOnboardingService() *OnboardingService {
+	return &OnboardingService{
+		draftRepo:            employeeRepos.NewOnboardingDraftRepository(),
+		employeeRepo:         employeeRepos.NewEmployeeRepository(),
+		basicInfoRepo:        employeeRepos.NewEmployeeBasicInformationRepository(),
+		employmentDetailsRepo: employeeRepos.NewEmployeeEmploymentDetailsRepository(),
+		addressRepo:          employeeRepos.NewEmployeeAddressRepository(),
+		salaryRepo:           employeeRepos.NewEmployeeSalaryRepository(),
+		bankRepo:             employeeRepos.NewEmployeeBankRepository(),
+		statutoryRepo:        employeeRepos.NewEmployeeStatutoryRepository(),
+		documentRepo:         employeeRepos.NewEmployeeDocumentRepository(),
+		contactRepo:          employeeRepos.NewEmployeeEmergencyContactRepository(),
+		policyRepo:           employeeRepos.NewEmployeePolicyRepository(),
+		assetRepo:            employeeRepos.NewEmployeeAssetRepository(),
+		departmentRepo:       departmentRepos.NewDepartmentRepository(),
+		positionRepo:         positionRepos.NewJobPositionRepository(),
+		locationRepo:         locationRepos.NewLocationRepository(),
+	}
+}
+
+// CreateDraft creates a new onboarding draft
+func (s *OnboardingService) CreateDraft(tenantID *uint, createdBy *uint) (*models.EmployeeOnboardingDraft, error) {
+	draft := &models.EmployeeOnboardingDraft{
+		TenantID:       tenantID,
+		CompletedSteps: "[]",
+		Progress:       0,
+		IsCompleted:    false,
+		CreatedBy:      createdBy,
+		UpdatedBy:      createdBy,
+	}
+
+	if err := s.draftRepo.Create(draft); err != nil {
+		return nil, fmt.Errorf("failed to create draft: %w", err)
+	}
+
+	return draft, nil
+}
+
+// SaveStep saves data for a specific onboarding step
+func (s *OnboardingService) SaveStep(draftID uint, step int, data map[string]interface{}, updatedBy *uint) (*models.EmployeeOnboardingDraft, error) {
+	draft, err := s.draftRepo.FindByID(draftID)
+	if err != nil {
+		return nil, errors.New("draft not found")
+	}
+
+	// Update draft
+	draft.UpdatedBy = updatedBy
+
+	// Ensure employee_id is set and normalized (should be set in step 1, but handle edge cases)
+	if draft.EmployeeID == nil || *draft.EmployeeID == "" {
+		if step == 1 {
+			employeeID := s.generateEmployeeID()
+			draft.EmployeeID = &employeeID
+		} else {
+			// For steps > 1, employee_id should already be set
+			// If not, this is an error condition
+			return nil, errors.New("employee_id is not set in draft. Please save step 1 first")
+		}
+	} else {
+		// Normalize employee_id (uppercase, trimmed) to ensure consistency
+		normalizedID := strings.ToUpper(strings.TrimSpace(*draft.EmployeeID))
+		if *draft.EmployeeID != normalizedID {
+			draft.EmployeeID = &normalizedID
+			// Save the normalized employee_id immediately
+			if err := s.draftRepo.Update(draft); err != nil {
+				return nil, fmt.Errorf("failed to normalize employee_id: %w", err)
+			}
+		}
+	}
+
+	// Save step-specific data
+	switch step {
+	case 1:
+		err = s.saveStep1PersonalInfo(draft, data)
+	case 2:
+		err = s.saveStep2Employment(draft, data)
+	case 3:
+		err = s.saveStep3Salary(draft, data)
+	case 4:
+		err = s.saveStep4Bank(draft, data)
+	case 5:
+		err = s.saveStep5Statutory(draft, data)
+	case 6:
+		err = s.saveStep6Documents(draft, data)
+	case 7:
+		err = s.saveStep7Assets(draft, data) // Placeholder - assets API will be separate
+	case 8:
+		err = s.saveStep8Policies(draft, data)
+	case 9:
+		err = s.saveStep9EmergencyContacts(draft, data)
+	case 10:
+		err = s.saveStep10Notes(draft, data)
+	default:
+		return nil, errors.New("invalid step number")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Mark step as completed (this updates CompletedSteps)
+	draft.AddCompletedStep(models.OnboardingStep(step))
+	
+	// Calculate progress AFTER updating completed steps
+	draft.Progress = draft.CalculateProgress()
+	draft.UpdatedBy = updatedBy
+
+	// Save to database - ensure all fields are updated including Progress and CompletedSteps
+	if err := s.draftRepo.Update(draft); err != nil {
+		return nil, fmt.Errorf("failed to update draft: %w", err)
+	}
+
+	// Reload draft from database to ensure we have the latest saved data including progress
+	var updatedDraft *models.EmployeeOnboardingDraft
+	if draft.EmployeeID != nil {
+		updatedDraft, err = s.draftRepo.FindByEmployeeIDString(*draft.EmployeeID, draft.TenantID)
+	} else {
+		updatedDraft, err = s.draftRepo.FindByID(draft.ID)
+	}
+	if err != nil {
+		// If reload fails, return the draft we have (should still have progress calculated)
+		return draft, nil
+	}
+
+	return updatedDraft, nil
+}
+
+// SaveStepByEmployeeID saves data for a specific onboarding step by employee ID
+func (s *OnboardingService) SaveStepByEmployeeID(employeeID string, tenantID *uint, step int, data map[string]interface{}, updatedBy *uint) (*models.EmployeeOnboardingDraft, error) {
+	// Trim whitespace from employee ID and normalize (uppercase)
+	employeeID = strings.TrimSpace(employeeID)
+	employeeID = strings.ToUpper(employeeID)
+	if employeeID == "" {
+		return nil, errors.New("employee ID cannot be empty")
+	}
+
+	// Try to find existing draft by employee ID (case-insensitive search)
+	draft, err := s.draftRepo.FindByEmployeeIDString(employeeID, tenantID)
+	if err != nil {
+		// If draft doesn't exist and this is step 1, create a new draft
+		if step == 1 && errors.Is(err, gorm.ErrRecordNotFound) {
+			// Create new draft with the provided employee ID
+			draft = &models.EmployeeOnboardingDraft{
+				TenantID:       tenantID,
+				EmployeeID:     &employeeID,
+				CompletedSteps: "[]",
+				Progress:       0,
+				IsCompleted:    false,
+				CreatedBy:      updatedBy,
+				UpdatedBy:      updatedBy,
+			}
+			if err := s.draftRepo.Create(draft); err != nil {
+				return nil, fmt.Errorf("failed to create draft: %w", err)
+			}
+		} else {
+			// For other steps, try to find by case-insensitive search or create if step 1 was saved but employee_id wasn't properly set
+			// This handles edge cases where step 1 was saved but employee_id wasn't persisted
+			if step > 1 {
+				// Try to find any draft for this tenant that might have this employee_id in a different case
+				// Or check if there's a draft without employee_id that we can assign
+				allDrafts, _ := s.draftRepo.FindIncompleteDrafts(tenantID)
+				for _, d := range allDrafts {
+					if d.EmployeeID != nil && strings.EqualFold(strings.TrimSpace(*d.EmployeeID), employeeID) {
+						// Found a draft with matching employee_id (case-insensitive)
+						draft = &d
+						// Normalize the employee_id in the draft
+						normalizedID := strings.ToUpper(strings.TrimSpace(*draft.EmployeeID))
+						if *draft.EmployeeID != normalizedID {
+							draft.EmployeeID = &normalizedID
+							if err := s.draftRepo.Update(draft); err != nil {
+								return nil, fmt.Errorf("failed to normalize employee ID: %w", err)
+							}
+						}
+						break
+					}
+				}
+				// If still not found, return error
+				if draft == nil || draft.ID == 0 {
+					return nil, fmt.Errorf("draft not found for employee ID '%s'. Please save step 1 first", employeeID)
+				}
+			} else {
+				return nil, fmt.Errorf("draft not found for employee ID '%s'. Please save step 1 first", employeeID)
+			}
+		}
+	}
+	
+	// Ensure the draft has the employee ID set and normalized (in case it was created without it or with wrong case)
+	normalizedID := strings.ToUpper(strings.TrimSpace(employeeID))
+	if draft.EmployeeID == nil || *draft.EmployeeID == "" || !strings.EqualFold(strings.TrimSpace(*draft.EmployeeID), normalizedID) {
+		draft.EmployeeID = &normalizedID
+		if err := s.draftRepo.Update(draft); err != nil {
+			return nil, fmt.Errorf("failed to update draft with employee ID: %w", err)
+		}
+	}
+	
+	return s.SaveStep(draft.ID, step, data, updatedBy)
+}
+
+// GetDraft retrieves a draft with all step data by draft ID
+func (s *OnboardingService) GetDraft(draftID uint) (*models.GetDraftResponse, error) {
+	draft, err := s.draftRepo.FindByID(draftID)
+	if err != nil {
+		return nil, errors.New("draft not found")
+	}
+
+	response := &models.GetDraftResponse{
+		DraftID:        draft.ID,
+		EmployeeID:     draft.EmployeeID,
+		Progress:       draft.Progress,
+		CompletedSteps: draft.GetCompletedStepsList(),
+		IsCompleted:    draft.IsCompleted,
+		Steps:          make(map[string]interface{}),
+		CreatedAt:      draft.CreatedAt,
+		UpdatedAt:      draft.UpdatedAt,
+	}
+
+	// Load all step data
+	s.loadStepData(draft, response)
+
+	// Add finished and unfinished steps information
+	allSteps := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+	finishedSteps := make([]int, 0)
+	unfinishedSteps := make([]int, 0)
+	
+	for _, step := range allSteps {
+		if draft.HasStepCompleted(models.OnboardingStep(step)) {
+			finishedSteps = append(finishedSteps, step)
+		} else {
+			unfinishedSteps = append(unfinishedSteps, step)
+		}
+	}
+
+	// Add to response (we'll extend GetDraftResponse model)
+	response.FinishedSteps = finishedSteps
+	response.UnfinishedSteps = unfinishedSteps
+
+	return response, nil
+}
+
+// GetDraftByEmployeeID retrieves a draft with all step data by employee ID
+func (s *OnboardingService) GetDraftByEmployeeID(employeeID string, tenantID *uint) (*models.GetDraftResponse, error) {
+	draft, err := s.draftRepo.FindByEmployeeIDString(employeeID, tenantID)
+	if err != nil {
+		return nil, errors.New("draft not found for this employee ID")
+	}
+	return s.GetDraft(draft.ID)
+}
+
+// GetDraftSummary returns a simplified draft response for create/update operations
+func (s *OnboardingService) GetDraftSummary(draftID uint) (*models.EmployeeOnboardingDraft, error) {
+	return s.draftRepo.FindByID(draftID)
+}
+
+// ListDrafts lists all drafts for a tenant
+func (s *OnboardingService) ListDrafts(tenantID *uint) ([]models.EmployeeOnboardingDraft, error) {
+	return s.draftRepo.FindByTenantID(tenantID)
+}
+
+// ListDraftEmployees lists all incomplete draft employees with their filled details
+func (s *OnboardingService) ListDraftEmployees(tenantID *uint) ([]models.DraftEmployeeListItem, error) {
+	// Get incomplete drafts
+	drafts, err := s.draftRepo.FindIncompleteDrafts(tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch drafts: %w", err)
+	}
+	return s.buildDraftEmployeeList(drafts)
+}
+
+// ListDraftEmployeesWithPagination lists incomplete draft employees with pagination
+func (s *OnboardingService) ListDraftEmployeesWithPagination(tenantID *uint, page, pageSize int) ([]models.DraftEmployeeListItem, int64, error) {
+	// Get incomplete drafts with pagination
+	drafts, total, err := s.draftRepo.FindIncompleteDraftsWithPagination(tenantID, page, pageSize)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to fetch drafts: %w", err)
+	}
+
+	draftEmployees, err := s.buildDraftEmployeeList(drafts)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return draftEmployees, total, nil
+}
+
+// GetCompletedEmployeeOnboarding retrieves all onboarding data for a completed employee
+func (s *OnboardingService) GetCompletedEmployeeOnboarding(employeeID string, tenantID *uint) (*models.CompletedEmployeeOnboardingResponse, error) {
+	// Find employee by employee_id string
+	employee, err := s.employeeRepo.FindByEmployeeID(employeeID)
+	if err != nil {
+		return nil, errors.New("employee not found")
+	}
+
+	// Verify tenant ownership
+	if tenantID != nil && employee.TenantID != nil && *employee.TenantID != *tenantID {
+		return nil, errors.New("employee does not belong to your tenant")
+	}
+
+	response := &models.CompletedEmployeeOnboardingResponse{
+		EmployeeID:      employee.EmployeeID,
+		EmployeeDBID:    employee.ID,
+		Progress:        100.0, // Always 100% for completed employees
+		CompletedSteps:  []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, // All steps completed
+		IsCompleted:     true,
+		Steps:           make(map[string]interface{}),
+		CreatedAt:       employee.CreatedAt,
+		UpdatedAt:       employee.UpdatedAt,
+	}
+
+	// Load all step data from employee record and related tables
+	s.loadCompletedEmployeeStepData(employee, response)
+
+	return response, nil
+}
+
+// loadCompletedEmployeeStepData loads all step data for a completed employee
+func (s *OnboardingService) loadCompletedEmployeeStepData(employee *models.Employee, response *models.CompletedEmployeeOnboardingResponse) {
+	// Step 1: Personal Info & Addresses
+	basicInfo, _ := s.basicInfoRepo.FindByEmployeeID(employee.ID)
+	addresses, _ := s.addressRepo.FindByEmployeeID(employee.ID)
+	
+	step1Response := make(map[string]interface{})
+	if basicInfo != nil {
+		step1Response["photo_url"] = basicInfo.PhotoURL
+		step1Response["first_name"] = basicInfo.FirstName
+		step1Response["middle_name"] = basicInfo.MiddleName
+		step1Response["last_name"] = basicInfo.LastName
+		step1Response["date_of_birth"] = basicInfo.DateOfBirth
+		step1Response["gender"] = basicInfo.Gender
+		step1Response["marital_status"] = basicInfo.MaritalStatus
+		step1Response["blood_group"] = basicInfo.BloodGroup
+		step1Response["nationality"] = basicInfo.Nationality
+		step1Response["personal_email"] = basicInfo.PersonalEmail
+		step1Response["mobile_number"] = basicInfo.MobileNumber
+		step1Response["alternate_number"] = basicInfo.AlternateNumber
+	} else {
+		// Fallback to employee table if basic info not found
+		step1Response["photo_url"] = employee.PhotoURL
+		step1Response["first_name"] = employee.FirstName
+		step1Response["middle_name"] = employee.MiddleName
+		step1Response["last_name"] = employee.LastName
+		step1Response["date_of_birth"] = employee.DateOfBirth
+		step1Response["gender"] = employee.Gender
+		step1Response["marital_status"] = employee.MaritalStatus
+		step1Response["blood_group"] = employee.BloodGroup
+		step1Response["nationality"] = employee.Nationality
+		step1Response["personal_email"] = employee.PersonalEmail
+		step1Response["mobile_number"] = employee.PhoneNumber
+		step1Response["alternate_number"] = employee.AlternatePhone
+	}
+	if len(addresses) > 0 {
+		step1Response["addresses"] = addresses
+	}
+	
+	if len(step1Response) > 0 {
+		response.Steps["1"] = step1Response
+	}
+
+	// Step 2: Employment Details
+	employmentDetails, _ := s.employmentDetailsRepo.FindByEmployeeID(employee.ID)
+	if employmentDetails != nil {
+		step2Response := make(map[string]interface{})
+		step2Response["employee_id"] = employee.EmployeeID
+		step2Response["official_email"] = employmentDetails.OfficialEmail
+		step2Response["date_of_joining"] = employmentDetails.DateOfJoining
+		step2Response["department_id"] = employmentDetails.DepartmentID
+		step2Response["position_id"] = employmentDetails.PositionID
+		step2Response["grade"] = employmentDetails.Grade
+		step2Response["reporting_manager_id"] = employmentDetails.ReportingManagerID
+		step2Response["employment_type"] = employmentDetails.EmploymentType
+		step2Response["location_id"] = employmentDetails.LocationID
+		step2Response["shift"] = employmentDetails.Shift
+		step2Response["work_phone"] = employmentDetails.WorkPhone
+		step2Response["probation_period_days"] = employmentDetails.ProbationPeriodDays
+		step2Response["expected_confirmation_date"] = employmentDetails.ExpectedConfirmationDate
+		response.Steps["2"] = step2Response
+	} else {
+		// Fallback to employee table
+		step2Response := make(map[string]interface{})
+		step2Response["employee_id"] = employee.EmployeeID
+		step2Response["official_email"] = employee.WorkEmail
+		step2Response["date_of_joining"] = employee.HireDate
+		step2Response["department_id"] = employee.DepartmentID
+		step2Response["position_id"] = employee.PositionID
+		step2Response["grade"] = employee.Grade
+		step2Response["reporting_manager_id"] = employee.ReportsToID
+		step2Response["employment_type"] = employee.EmploymentType
+		step2Response["location_id"] = employee.LocationID
+		step2Response["shift"] = employee.Shift
+		step2Response["work_phone"] = employee.WorkPhone
+		step2Response["probation_period_days"] = employee.ProbationPeriodDays
+		step2Response["expected_confirmation_date"] = employee.ExpectedConfirmationDate
+		response.Steps["2"] = step2Response
+	}
+
+	// Step 3: Salary
+	salary, _ := s.salaryRepo.FindByEmployeeID(employee.ID)
+	if salary != nil {
+		response.Steps["3"] = salary
+	}
+
+	// Step 4: Bank
+	bankAccounts, _ := s.bankRepo.FindByEmployeeID(employee.ID)
+	if len(bankAccounts) > 0 {
+		response.Steps["4"] = bankAccounts
+	}
+
+	// Step 5: Statutory
+	statutory, _ := s.statutoryRepo.FindByEmployeeID(employee.ID)
+	if statutory != nil {
+		response.Steps["5"] = statutory
+	}
+
+	// Step 6: Documents
+	documents, _ := s.documentRepo.FindByEmployeeID(employee.ID)
+	if len(documents) > 0 {
+		response.Steps["6"] = documents
+	}
+
+	// Step 7: Assets
+	assets, _ := s.assetRepo.FindByEmployeeID(employee.ID)
+	if len(assets) > 0 {
+		response.Steps["7"] = assets
+	}
+
+	// Step 8: Policies
+	policy, _ := s.policyRepo.FindByEmployeeID(employee.ID)
+	if policy != nil {
+		response.Steps["8"] = policy
+	}
+
+	// Step 9: Emergency Contacts
+	contacts, _ := s.contactRepo.FindByEmployeeID(employee.ID)
+	if len(contacts) > 0 {
+		response.Steps["9"] = contacts
+	} else {
+		// Fallback to employee table legacy fields
+		if employee.EmergencyContactName != "" {
+			response.Steps["9"] = []map[string]interface{}{
+				{
+					"contact_name": employee.EmergencyContactName,
+					"phone_number": employee.EmergencyContactPhone,
+					"relationship": employee.EmergencyContactRelation,
+					"is_primary":   true,
+				},
+			}
+		}
+	}
+
+	// Step 10: Notes
+	if employee.Notes != "" {
+		response.Steps["10"] = map[string]interface{}{
+			"notes": employee.Notes,
+		}
+	}
+}
+
+// buildDraftEmployeeList builds the draft employee list from drafts
+func (s *OnboardingService) buildDraftEmployeeList(drafts []models.EmployeeOnboardingDraft) ([]models.DraftEmployeeListItem, error) {
+
+	var draftEmployees []models.DraftEmployeeListItem
+
+	for _, draft := range drafts {
+		item := models.DraftEmployeeListItem{
+			DraftID:        draft.ID,
+			EmployeeID:     draft.EmployeeID,
+			Progress:       draft.Progress,
+			CompletedSteps: draft.GetCompletedStepsList(),
+			IsCompleted:    draft.IsCompleted,
+			CreatedAt:      draft.CreatedAt,
+			UpdatedAt:      draft.UpdatedAt,
+		}
+
+		// Calculate finished and unfinished steps
+		allSteps := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
+		finishedSteps := make([]int, 0)
+		unfinishedSteps := make([]int, 0)
+
+		for _, step := range allSteps {
+			if draft.HasStepCompleted(models.OnboardingStep(step)) {
+				finishedSteps = append(finishedSteps, step)
+			} else {
+				unfinishedSteps = append(unfinishedSteps, step)
+			}
+		}
+
+		item.FinishedSteps = finishedSteps
+		item.UnfinishedSteps = unfinishedSteps
+
+		// Load step 1 data (personal information)
+		basicInfo, _ := s.basicInfoRepo.FindByDraftID(draft.ID)
+		if basicInfo != nil {
+			item.FirstName = &basicInfo.FirstName
+			item.LastName = &basicInfo.LastName
+			fullName := basicInfo.FirstName
+			if basicInfo.MiddleName != nil && *basicInfo.MiddleName != "" {
+				fullName += " " + *basicInfo.MiddleName
+			}
+			fullName += " " + basicInfo.LastName
+			item.FullName = &fullName
+			item.PersonalEmail = basicInfo.PersonalEmail
+			item.MobileNumber = basicInfo.MobileNumber
+		}
+
+		// Load step 2 data (employment details) for department and position
+		employmentDetails, _ := s.employmentDetailsRepo.FindByDraftID(draft.ID)
+		if employmentDetails != nil {
+			if employmentDetails.DepartmentID != nil {
+				department, err := s.departmentRepo.FindByID(*employmentDetails.DepartmentID)
+				if err == nil && department != nil {
+					item.DepartmentName = &department.Name
+				}
+			}
+			if employmentDetails.PositionID != nil {
+				position, err := s.positionRepo.FindByID(*employmentDetails.PositionID)
+				if err == nil && position != nil {
+					item.PositionName = &position.Title
+				}
+			}
+		}
+
+		draftEmployees = append(draftEmployees, item)
+	}
+
+	return draftEmployees, nil
+}
+
+// CompleteOnboarding finalizes the onboarding and creates the employee by draft ID
+func (s *OnboardingService) CompleteOnboarding(draftID uint, updatedBy *uint) (*models.Employee, error) {
+	draft, err := s.draftRepo.FindByID(draftID)
+	if err != nil {
+		return nil, errors.New("draft not found")
+	}
+	return s.completeOnboardingForDraft(draft, updatedBy)
+}
+
+// CompleteOnboardingByEmployeeID finalizes the onboarding and creates the employee by employee ID
+func (s *OnboardingService) CompleteOnboardingByEmployeeID(employeeID string, tenantID *uint, updatedBy *uint) (*models.Employee, error) {
+	draft, err := s.draftRepo.FindByEmployeeIDString(employeeID, tenantID)
+	if err != nil {
+		return nil, errors.New("draft not found for this employee ID")
+	}
+	return s.completeOnboardingForDraft(draft, updatedBy)
+}
+
+// completeOnboardingForDraft is the internal method that completes onboarding
+func (s *OnboardingService) completeOnboardingForDraft(draft *models.EmployeeOnboardingDraft, updatedBy *uint) (*models.Employee, error) {
+
+	if draft.IsCompleted {
+		return nil, errors.New("onboarding already completed")
+	}
+
+	// Validate required steps are completed
+	if !s.validateRequiredSteps(draft) {
+		return nil, errors.New("required steps are not completed")
+	}
+
+	// Create employee from draft data
+	employee, err := s.createEmployeeFromDraft(draft)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create employee: %w", err)
+	}
+
+	// Migrate all related data from draft to employee
+	if err := s.migrateDraftDataToEmployee(draft.ID, employee.ID); err != nil {
+		return nil, fmt.Errorf("failed to migrate draft data: %w", err)
+	}
+
+	// Mark draft as completed
+	draft.IsCompleted = true
+	draft.EmployeeIDFinal = &employee.ID
+	draft.Progress = 100.0
+	draft.UpdatedBy = updatedBy
+
+	if err := s.draftRepo.Update(draft); err != nil {
+		return nil, fmt.Errorf("failed to update draft: %w", err)
+	}
+
+	return employee, nil
+}
+
+// Helper methods for each step
+func (s *OnboardingService) saveStep1PersonalInfo(draft *models.EmployeeOnboardingDraft, data map[string]interface{}) error {
+	// Validate required fields
+	if firstName, ok := data["first_name"].(string); !ok || firstName == "" {
+		return fmt.Errorf("first_name is required")
+	}
+	if lastName, ok := data["last_name"].(string); !ok || lastName == "" {
+		return fmt.Errorf("last_name is required")
+	}
+
+	// Generate or use provided employee_id if not already set
+	if draft.EmployeeID == nil || *draft.EmployeeID == "" {
+		var employeeID string
+		// Check if employee_id is provided in the data
+		if empID, ok := data["employee_id"].(string); ok && empID != "" {
+			// Normalize employee_id (uppercase, trimmed)
+			employeeID = strings.ToUpper(strings.TrimSpace(empID))
+		} else {
+			// Auto-generate employee ID
+			employeeID = s.generateEmployeeID()
+		}
+		draft.EmployeeID = &employeeID
+		// Update draft with employee_id immediately - use Save to ensure all fields are persisted
+		if err := s.draftRepo.Update(draft); err != nil {
+			return fmt.Errorf("failed to save employee_id: %w", err)
+		}
+	} else {
+		// Normalize existing employee_id (uppercase, trimmed) to ensure consistency
+		normalizedID := strings.ToUpper(strings.TrimSpace(*draft.EmployeeID))
+		if *draft.EmployeeID != normalizedID {
+			draft.EmployeeID = &normalizedID
+			if err := s.draftRepo.Update(draft); err != nil {
+				return fmt.Errorf("failed to normalize employee_id: %w", err)
+			}
+		}
+	}
+
+	// Parse Step1PersonalInfoRequest from data
+	var req models.Step1PersonalInfoRequest
+	jsonData, _ := json.Marshal(data)
+	if err := json.Unmarshal(jsonData, &req); err != nil {
+		return fmt.Errorf("invalid step 1 data: %w", err)
+	}
+
+	// Check if basic information already exists for this draft
+	existingInfo, err := s.basicInfoRepo.FindByDraftID(draft.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check existing basic information: %w", err)
+	}
+
+	// Create or update basic information
+	basicInfo := &models.EmployeeBasicInformation{
+		DraftID:         &draft.ID,
+		EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
+		PhotoURL:        req.PhotoURL,
+		FirstName:       req.FirstName,
+		MiddleName:      req.MiddleName,
+		LastName:        req.LastName,
+		DateOfBirth:     req.DateOfBirth,
+		Gender:          req.Gender,
+		MaritalStatus:   req.MaritalStatus,
+		BloodGroup:      req.BloodGroup,
+		Nationality:     req.Nationality,
+		PersonalEmail:   req.PersonalEmail,
+		MobileNumber:    req.MobileNumber,
+		AlternateNumber: req.AlternateNumber,
+	}
+
+	if existingInfo != nil {
+		// Update existing record
+		basicInfo.ID = existingInfo.ID
+		if err := s.basicInfoRepo.Update(basicInfo); err != nil {
+			return fmt.Errorf("failed to update basic information: %w", err)
+		}
+	} else {
+		// Create new record
+		if err := s.basicInfoRepo.Create(basicInfo); err != nil {
+			return fmt.Errorf("failed to save basic information: %w", err)
+		}
+	}
+
+	// Save addresses (current and permanent)
+	// Delete existing addresses for this draft
+	s.addressRepo.DeleteByDraftID(draft.ID)
+
+	// Save current address
+	if req.CurrentAddress != nil || req.City != nil {
+		currentAddr := &models.EmployeeAddress{
+			DraftID:         &draft.ID,
+			EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
+			AddressType:     models.AddressTypeCurrent,
+			AddressLine1:    req.CurrentAddress,
+			City:            req.City,
+			State:           req.State,
+			PostalCode:      req.PostalCode,
+			Country:         req.Country,
+		}
+		if err := s.addressRepo.Create(currentAddr); err != nil {
+			return fmt.Errorf("failed to save current address: %w", err)
+		}
+	}
+
+	// Save permanent address
+	if req.PermanentAddress != nil {
+		permanentAddr := &models.EmployeeAddress{
+			DraftID:         &draft.ID,
+			EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
+			AddressType:     models.AddressTypePermanent,
+			AddressLine1:    req.PermanentAddress,
+			City:            req.City,
+			State:           req.State,
+			PostalCode:      req.PostalCode,
+			Country:         req.Country,
+		}
+		if err := s.addressRepo.Create(permanentAddr); err != nil {
+			return fmt.Errorf("failed to save permanent address: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) saveStep2Employment(draft *models.EmployeeOnboardingDraft, data map[string]interface{}) error {
+	var req models.Step2EmploymentRequest
+	jsonData, _ := json.Marshal(data)
+	if err := json.Unmarshal(jsonData, &req); err != nil {
+		return fmt.Errorf("invalid step 2 data: %w", err)
+	}
+
+	// Validate department, position, location if provided
+	if req.DepartmentID != nil {
+		department, err := s.departmentRepo.FindByID(*req.DepartmentID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("department with ID %d not found", *req.DepartmentID)
+			}
+			return fmt.Errorf("failed to validate department: %w", err)
+		}
+		// Check if department belongs to the same tenant (if tenant_id is set)
+		if draft.TenantID != nil && department.TenantID != nil {
+			if *draft.TenantID != *department.TenantID {
+				return fmt.Errorf("department with ID %d does not belong to your tenant", *req.DepartmentID)
+			}
+		}
+		// Check if department is active
+		if !department.IsActive {
+			return fmt.Errorf("department with ID %d is not active", *req.DepartmentID)
+		}
+	}
+	// Position ID is optional - only validate if provided
+	if req.PositionID != nil {
+		position, err := s.positionRepo.FindByID(*req.PositionID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("position with ID %d not found", *req.PositionID)
+			}
+			return fmt.Errorf("failed to validate position: %w", err)
+		}
+		// Check if position belongs to the same tenant (if tenant_id is set)
+		if draft.TenantID != nil && position.TenantID != nil {
+			if *draft.TenantID != *position.TenantID {
+				return fmt.Errorf("position with ID %d does not belong to your tenant", *req.PositionID)
+			}
+		}
+		// Check if position is active
+		if !position.IsActive {
+			return fmt.Errorf("position with ID %d is not active", *req.PositionID)
+		}
+	}
+	if req.LocationID != nil {
+		location, err := s.locationRepo.FindByID(*req.LocationID)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return fmt.Errorf("location with ID %d not found", *req.LocationID)
+			}
+			return fmt.Errorf("failed to validate location: %w", err)
+		}
+		// Check if location belongs to the same tenant (if tenant_id is set)
+		if draft.TenantID != nil && location.TenantID != nil {
+			if *draft.TenantID != *location.TenantID {
+				return fmt.Errorf("location with ID %d does not belong to your tenant", *req.LocationID)
+			}
+		}
+		// Check if location is active
+		if !location.IsActive {
+			return fmt.Errorf("location with ID %d is not active", *req.LocationID)
+		}
+	}
+
+	// Auto-generate employee ID if not provided
+	var employeeID *string
+	if req.EmployeeID != nil && *req.EmployeeID != "" {
+		// Use provided employee ID
+		employeeID = req.EmployeeID
+	} else {
+		// Auto-generate employee ID starting with "EMP"
+		generatedID := s.generateEmployeeID()
+		employeeID = &generatedID
+	}
+
+	// Store employee ID in draft (will be used when creating employee)
+	draft.EmployeeID = employeeID
+
+	// Check if employment details already exist for this draft
+	existingDetails, err := s.employmentDetailsRepo.FindByDraftID(draft.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check existing employment details: %w", err)
+	}
+
+	// Create or update employment details
+	employmentDetails := &models.EmployeeEmploymentDetails{
+		DraftID:              &draft.ID,
+		EmployeeIDString:     draft.EmployeeID, // Use draft's employee_id (already set above)
+		OfficialEmail:         req.OfficialEmail,
+		DateOfJoining:         req.DateOfJoining,
+		DepartmentID:         req.DepartmentID,
+		PositionID:           req.PositionID,
+		Grade:                req.Grade,
+		ReportingManagerID:   req.ReportingManagerID,
+		EmploymentType:       req.EmploymentType,
+		LocationID:           req.LocationID,
+		Shift:                req.Shift,
+		WorkPhone:            req.WorkPhone,
+		ProbationPeriodDays:  req.ProbationPeriodDays,
+		ExpectedConfirmationDate: req.ExpectedConfirmationDate,
+	}
+
+	if existingDetails != nil {
+		// Update existing record
+		employmentDetails.ID = existingDetails.ID
+		if err := s.employmentDetailsRepo.Update(employmentDetails); err != nil {
+			return fmt.Errorf("failed to update employment details: %w", err)
+		}
+	} else {
+		// Create new record
+		if err := s.employmentDetailsRepo.Create(employmentDetails); err != nil {
+			return fmt.Errorf("failed to save employment details: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) saveStep3Salary(draft *models.EmployeeOnboardingDraft, data map[string]interface{}) error {
+	var req models.Step3SalaryRequest
+	jsonData, _ := json.Marshal(data)
+	if err := json.Unmarshal(jsonData, &req); err != nil {
+		return fmt.Errorf("invalid step 3 data: %w", err)
+	}
+
+	// Check if salary already exists for this draft
+	existingSalary, err := s.salaryRepo.FindByDraftID(draft.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check existing salary: %w", err)
+	}
+
+	// Create or update salary component
+	salary := &models.EmployeeSalaryComponent{
+		DraftID:            &draft.ID,
+		EmployeeIDString:   draft.EmployeeID, // Set employee_id_string from draft
+		AnnualCTC:          req.AnnualCTC,
+		CTCEffectiveDate:   req.CTCEffectiveDate,
+		Currency:           req.Currency,
+		BasicSalary:        req.BasicSalary,
+		HouseRentAllowance: req.HouseRentAllowance,
+		TransportAllowance: req.TransportAllowance,
+		SpecialAllowance:   req.SpecialAllowance,
+		OtherAllowances:    req.OtherAllowances,
+		IncomeTax:          req.IncomeTax,
+		ProvidentFund:      req.ProvidentFund,
+		ProfessionalTax:   req.ProfessionalTax,
+		OtherDeductions:    req.OtherDeductions,
+	}
+
+	// Calculate gross and net salary
+	salary.CalculateGrossSalary()
+	salary.CalculateNetSalary()
+
+	if existingSalary != nil {
+		// Update existing record
+		salary.ID = existingSalary.ID
+		if err := s.salaryRepo.Update(salary); err != nil {
+			return fmt.Errorf("failed to update salary: %w", err)
+		}
+	} else {
+		// Create new record
+		if err := s.salaryRepo.Create(salary); err != nil {
+			return fmt.Errorf("failed to save salary: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) saveStep4Bank(draft *models.EmployeeOnboardingDraft, data map[string]interface{}) error {
+	var req models.Step4BankRequest
+	jsonData, _ := json.Marshal(data)
+	if err := json.Unmarshal(jsonData, &req); err != nil {
+		return fmt.Errorf("invalid step 4 data: %w", err)
+	}
+
+	// Check if bank account already exists for this draft
+	existingBank, err := s.bankRepo.FindByDraftID(draft.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check existing bank account: %w", err)
+	}
+
+	// Create or update bank account
+	bank := &models.EmployeeBankAccount{
+		DraftID:          &draft.ID,
+		EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
+		BankName:         req.BankName,
+		AccountHolderName: req.AccountHolderName,
+		AccountNumber:    req.AccountNumber,
+		AccountType:      req.AccountType,
+		BranchName:       req.BranchName,
+		SWIFTCode:        req.SWIFTCode,
+		IsPrimary:        true,
+	}
+
+	if existingBank != nil {
+		// Update existing record
+		bank.ID = existingBank.ID
+		if err := s.bankRepo.Update(bank); err != nil {
+			return fmt.Errorf("failed to update bank account: %w", err)
+		}
+	} else {
+		// Create new record
+		if err := s.bankRepo.Create(bank); err != nil {
+			return fmt.Errorf("failed to save bank account: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) saveStep5Statutory(draft *models.EmployeeOnboardingDraft, data map[string]interface{}) error {
+	var req models.Step5StatutoryRequest
+	jsonData, _ := json.Marshal(data)
+	if err := json.Unmarshal(jsonData, &req); err != nil {
+		return fmt.Errorf("invalid step 5 data: %w", err)
+	}
+
+	// Check if statutory info already exists for this draft
+	existingStatutory, err := s.statutoryRepo.FindByDraftID(draft.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check existing statutory info: %w", err)
+	}
+
+	// Create or update statutory info
+	statutory := &models.EmployeeStatutoryInfo{
+		DraftID:             &draft.ID,
+		EmployeeIDString:    draft.EmployeeID, // Set employee_id_string from draft
+		TINNumber:           req.TINNumber,
+		NSSFNumber:          req.NSSFNumber,
+		NHIFNumber:          req.NHIFNumber,
+		WCFNumber:           req.WCFNumber,
+		SDLNumber:           req.SDLNumber,
+		PassportNumber:      req.PassportNumber,
+		PassportExpiryDate:  req.PassportExpiryDate,
+		WorkPermitNumber:    req.WorkPermitNumber,
+		WorkPermitExpiryDate: req.WorkPermitExpiryDate,
+	}
+
+	if existingStatutory != nil {
+		// Update existing record
+		statutory.ID = existingStatutory.ID
+		if err := s.statutoryRepo.Update(statutory); err != nil {
+			return fmt.Errorf("failed to update statutory info: %w", err)
+		}
+	} else {
+		// Create new record
+		if err := s.statutoryRepo.Create(statutory); err != nil {
+			return fmt.Errorf("failed to save statutory info: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) saveStep6Documents(draft *models.EmployeeOnboardingDraft, data map[string]interface{}) error {
+	var req models.Step6DocumentsRequest
+	jsonData, _ := json.Marshal(data)
+	if err := json.Unmarshal(jsonData, &req); err != nil {
+		return fmt.Errorf("invalid step 6 data: %w", err)
+	}
+
+	// Delete existing documents for this draft
+	s.documentRepo.DeleteByDraftID(draft.ID)
+
+	// Create documents
+	for _, docInput := range req.Documents {
+		doc := &models.EmployeeDocument{
+			DraftID:         &draft.ID,
+			EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
+			DocumentType:    docInput.DocumentType,
+			FileName:        docInput.FileName,
+			FileURL:         docInput.FileURL,
+			FileSize:        docInput.FileSize,
+			MimeType:        docInput.MimeType,
+			Description:     docInput.Description,
+		}
+		if err := s.documentRepo.Create(doc); err != nil {
+			return fmt.Errorf("failed to save document: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) saveStep7Assets(draft *models.EmployeeOnboardingDraft, data map[string]interface{}) error {
+	// Parse assets data - expects array of assets
+	assetsData, ok := data["assets"].([]interface{})
+	if !ok {
+		// Try direct array format
+		if assetsArray, ok := data["assets"].([]map[string]interface{}); ok {
+			assetsData = make([]interface{}, len(assetsArray))
+			for i, asset := range assetsArray {
+				assetsData[i] = asset
+			}
+		} else {
+			return fmt.Errorf("assets must be an array")
+		}
+	}
+
+	// Delete existing assets for this draft
+	s.assetRepo.DeleteByDraftID(draft.ID)
+
+	// Create asset records
+	for _, assetData := range assetsData {
+		assetMap, ok := assetData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		asset := &models.EmployeeAsset{
+			DraftID:         &draft.ID,
+			EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
+		}
+
+		if assetType, ok := assetMap["asset_type"].(string); ok {
+			asset.AssetType = assetType
+		} else {
+			return fmt.Errorf("asset_type is required for each asset")
+		}
+
+		if assetName, ok := assetMap["asset_name"].(string); ok {
+			asset.AssetName = assetName
+		} else {
+			return fmt.Errorf("asset_name is required for each asset")
+		}
+
+		if serialNumber, ok := assetMap["serial_number"].(string); ok {
+			asset.SerialNumber = &serialNumber
+		}
+		if assetTag, ok := assetMap["asset_tag"].(string); ok {
+			asset.AssetTag = &assetTag
+		}
+		if assignedDateStr, ok := assetMap["assigned_date"].(string); ok {
+			if assignedDate, err := time.Parse(time.RFC3339, assignedDateStr); err == nil {
+				asset.AssignedDate = &assignedDate
+			}
+		}
+		if expectedReturnDateStr, ok := assetMap["expected_return_date"].(string); ok {
+			if expectedReturnDate, err := time.Parse(time.RFC3339, expectedReturnDateStr); err == nil {
+				asset.ExpectedReturnDate = &expectedReturnDate
+			}
+		}
+		if condition, ok := assetMap["condition"].(string); ok {
+			asset.Condition = &condition
+		}
+		if notes, ok := assetMap["notes"].(string); ok {
+			asset.Notes = &notes
+		}
+
+		if err := s.assetRepo.Create(asset); err != nil {
+			return fmt.Errorf("failed to save asset: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) saveStep8Policies(draft *models.EmployeeOnboardingDraft, data map[string]interface{}) error {
+	var req models.Step8PoliciesRequest
+	jsonData, _ := json.Marshal(data)
+	if err := json.Unmarshal(jsonData, &req); err != nil {
+		return fmt.Errorf("invalid step 8 data: %w", err)
+	}
+
+	// Delete existing policy for this draft
+	s.policyRepo.DeleteByDraftID(draft.ID)
+
+	// Create policy assignment
+	policy := &models.EmployeePolicy{
+		DraftID:            &draft.ID,
+		EmployeeIDString:   draft.EmployeeID, // Set employee_id_string from draft
+		LeavePolicyID:      req.LeavePolicyID,
+		AttendancePolicyID: req.AttendancePolicyID,
+		WeeklyOffDays:      req.WeeklyOffDays,
+		EffectiveDate:      req.EffectiveDate,
+	}
+
+	if err := s.policyRepo.Create(policy); err != nil {
+		return fmt.Errorf("failed to save policy: %w", err)
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) saveStep9EmergencyContacts(draft *models.EmployeeOnboardingDraft, data map[string]interface{}) error {
+	var req models.Step9EmergencyContactsRequest
+	jsonData, _ := json.Marshal(data)
+	if err := json.Unmarshal(jsonData, &req); err != nil {
+		return fmt.Errorf("invalid step 9 data: %w", err)
+	}
+
+	// Delete existing emergency contacts for this draft
+	s.contactRepo.DeleteByDraftID(draft.ID)
+
+	// Create emergency contacts
+	for _, contactInput := range req.Contacts {
+		contact := &models.EmployeeEmergencyContact{
+			DraftID:         &draft.ID,
+			EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
+			ContactName:     contactInput.ContactName,
+			Relationship:    contactInput.Relationship,
+			PhoneNumber:     contactInput.PhoneNumber,
+			AlternatePhone:  contactInput.AlternatePhone,
+			Email:           contactInput.Email,
+			Address:         contactInput.Address,
+			IsPrimary:       contactInput.IsPrimary,
+		}
+		if err := s.contactRepo.Create(contact); err != nil {
+			return fmt.Errorf("failed to save emergency contact: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) saveStep10Notes(draft *models.EmployeeOnboardingDraft, data map[string]interface{}) error {
+	var req models.Step10NotesRequest
+	jsonData, _ := json.Marshal(data)
+	if err := json.Unmarshal(jsonData, &req); err != nil {
+		return fmt.Errorf("invalid step 10 data: %w", err)
+	}
+
+	// Store step 10 data in draft's StepData field
+	stepData := make(map[string]interface{})
+	if draft.StepData != "" {
+		json.Unmarshal([]byte(draft.StepData), &stepData)
+	}
+	stepData["step10"] = req
+	stepDataBytes, _ := json.Marshal(stepData)
+	draft.StepData = string(stepDataBytes)
+
+	return nil
+}
+
+// loadStepData loads all step data into the response from database tables
+func (s *OnboardingService) loadStepData(draft *models.EmployeeOnboardingDraft, response *models.GetDraftResponse) {
+	// Step 1: Personal Info & Addresses
+	basicInfo, _ := s.basicInfoRepo.FindByDraftID(draft.ID)
+	addresses, _ := s.addressRepo.FindByDraftID(draft.ID)
+	
+	step1Response := make(map[string]interface{})
+	if basicInfo != nil {
+		// Convert basic info to map for response
+		step1Response["photo_url"] = basicInfo.PhotoURL
+		step1Response["first_name"] = basicInfo.FirstName
+		step1Response["middle_name"] = basicInfo.MiddleName
+		step1Response["last_name"] = basicInfo.LastName
+		step1Response["date_of_birth"] = basicInfo.DateOfBirth
+		step1Response["gender"] = basicInfo.Gender
+		step1Response["marital_status"] = basicInfo.MaritalStatus
+		step1Response["blood_group"] = basicInfo.BloodGroup
+		step1Response["nationality"] = basicInfo.Nationality
+		step1Response["personal_email"] = basicInfo.PersonalEmail
+		step1Response["mobile_number"] = basicInfo.MobileNumber
+		step1Response["alternate_number"] = basicInfo.AlternateNumber
+	}
+	if len(addresses) > 0 {
+		step1Response["addresses"] = addresses
+	}
+	
+	if len(step1Response) > 0 {
+		response.Steps["1"] = step1Response
+	}
+
+	// Step 2: Employment Details
+	employmentDetails, _ := s.employmentDetailsRepo.FindByDraftID(draft.ID)
+	if employmentDetails != nil {
+		step2Response := make(map[string]interface{})
+		step2Response["employee_id"] = employmentDetails.EmployeeIDString
+		step2Response["official_email"] = employmentDetails.OfficialEmail
+		step2Response["date_of_joining"] = employmentDetails.DateOfJoining
+		step2Response["department_id"] = employmentDetails.DepartmentID
+		step2Response["position_id"] = employmentDetails.PositionID
+		step2Response["grade"] = employmentDetails.Grade
+		step2Response["reporting_manager_id"] = employmentDetails.ReportingManagerID
+		step2Response["employment_type"] = employmentDetails.EmploymentType
+		step2Response["location_id"] = employmentDetails.LocationID
+		step2Response["shift"] = employmentDetails.Shift
+		step2Response["work_phone"] = employmentDetails.WorkPhone
+		step2Response["probation_period_days"] = employmentDetails.ProbationPeriodDays
+		step2Response["expected_confirmation_date"] = employmentDetails.ExpectedConfirmationDate
+		
+		// Also include employee_id from draft if set
+		if draft.EmployeeID != nil {
+			step2Response["employee_id"] = *draft.EmployeeID
+		}
+		
+		response.Steps["2"] = step2Response
+	} else if draft.EmployeeID != nil {
+		// Fallback: if no employment details but employee_id is set
+		response.Steps["2"] = map[string]interface{}{
+			"employee_id": *draft.EmployeeID,
+		}
+	}
+
+	// Step 3: Salary
+	salary, _ := s.salaryRepo.FindByDraftID(draft.ID)
+	if salary != nil {
+		response.Steps["3"] = salary
+	}
+
+	// Step 4: Bank
+	bank, _ := s.bankRepo.FindByDraftID(draft.ID)
+	if bank != nil {
+		response.Steps["4"] = bank
+	}
+
+	// Step 5: Statutory
+	statutory, _ := s.statutoryRepo.FindByDraftID(draft.ID)
+	if statutory != nil {
+		response.Steps["5"] = statutory
+	}
+
+	// Step 6: Documents
+	documents, _ := s.documentRepo.FindByDraftID(draft.ID)
+	if len(documents) > 0 {
+		response.Steps["6"] = documents
+	}
+
+	// Step 7: Assets
+	assets, _ := s.assetRepo.FindByDraftID(draft.ID)
+	if len(assets) > 0 {
+		response.Steps["7"] = assets
+	}
+
+	// Step 8: Policies
+	policy, _ := s.policyRepo.FindByDraftID(draft.ID)
+	if policy != nil {
+		response.Steps["8"] = policy
+	}
+
+	// Step 9: Emergency Contacts
+	contacts, _ := s.contactRepo.FindByDraftID(draft.ID)
+	if len(contacts) > 0 {
+		response.Steps["9"] = contacts
+	}
+
+	// Step 10: Notes (will be in employee record)
+	response.Steps["10"] = map[string]interface{}{"note": "Notes stored in employee record"}
+}
+
+// validateRequiredSteps checks if required steps are completed
+func (s *OnboardingService) validateRequiredSteps(draft *models.EmployeeOnboardingDraft) bool {
+	// Steps 1, 2, and 9 are required (Personal Info, Employment, Emergency Contacts)
+	requiredSteps := []models.OnboardingStep{
+		models.StepPersonalInfo,
+		models.StepEmployment,
+		models.StepEmergency,
+	}
+
+	for _, step := range requiredSteps {
+		if !draft.HasStepCompleted(step) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// createEmployeeFromDraft creates an employee record from draft data
+func (s *OnboardingService) createEmployeeFromDraft(draft *models.EmployeeOnboardingDraft) (*models.Employee, error) {
+	// Load step 1 data from employee_basic_information table
+	basicInfo, err := s.basicInfoRepo.FindByDraftID(draft.ID)
+	if err != nil {
+		return nil, fmt.Errorf("step 1 (personal information) is required: %w", err)
+	}
+
+	// Load step 2 data from employee_employment_details table
+	employmentDetails, err := s.employmentDetailsRepo.FindByDraftID(draft.ID)
+	if err != nil {
+		return nil, fmt.Errorf("step 2 (employment details) is required: %w", err)
+	}
+
+	// Load step 10 data (notes) from step_data JSON (can be moved to separate table later)
+	var step10Notes *string
+	var stepData map[string]interface{}
+	if draft.StepData != "" {
+		json.Unmarshal([]byte(draft.StepData), &stepData)
+		if step10Raw, ok := stepData["step10"]; ok {
+			if step10Map, ok := step10Raw.(map[string]interface{}); ok {
+				if notes, ok := step10Map["notes"].(string); ok {
+					step10Notes = &notes
+				}
+			}
+		}
+	}
+
+	// Generate employee ID if not provided
+	employeeID := "EMP"
+	if draft.EmployeeID != nil && *draft.EmployeeID != "" {
+		employeeID = *draft.EmployeeID
+	} else if employmentDetails.EmployeeIDString != nil && *employmentDetails.EmployeeIDString != "" {
+		employeeID = *employmentDetails.EmployeeIDString
+	} else {
+		// Auto-generate employee ID using helper function
+		employeeID = s.generateEmployeeID()
+	}
+
+	// Check if employee ID already exists, regenerate if needed
+	maxAttempts := 10
+	attempts := 0
+	for s.employeeRepo.ExistsByEmployeeID(employeeID) && attempts < maxAttempts {
+		employeeID = s.generateEmployeeID()
+		attempts++
+	}
+	if attempts >= maxAttempts {
+		return nil, errors.New("failed to generate unique employee ID after multiple attempts")
+	}
+
+	// Get department to extract organization_id
+	var organizationID *uint
+	var organizationUnitID *uint
+	if employmentDetails.DepartmentID != nil {
+		department, err := s.departmentRepo.FindByID(*employmentDetails.DepartmentID)
+		if err == nil {
+			organizationID = department.OrganizationID
+			organizationUnitID = department.OrganizationUnitID
+		}
+	}
+
+	// Build employee from table data
+	employee := &models.Employee{
+		TenantID:          draft.TenantID,
+		EmployeeID:         employeeID,
+		FirstName:          basicInfo.FirstName,
+		MiddleName:         basicInfo.MiddleName,
+		LastName:           basicInfo.LastName,
+		DateOfBirth:        basicInfo.DateOfBirth,
+		Gender:             basicInfo.Gender,
+		MaritalStatus:      basicInfo.MaritalStatus,
+		BloodGroup:         basicInfo.BloodGroup,
+		Nationality:        basicInfo.Nationality,
+		PhotoURL:           basicInfo.PhotoURL,
+		PersonalEmail:      basicInfo.PersonalEmail,
+		WorkEmail:          employmentDetails.OfficialEmail,
+		PhoneNumber:        basicInfo.MobileNumber,
+		AlternatePhone:     basicInfo.AlternateNumber,
+		DepartmentID:       employmentDetails.DepartmentID,
+		PositionID:         employmentDetails.PositionID,
+		LocationID:         employmentDetails.LocationID,
+		HireDate:           employmentDetails.DateOfJoining,
+		EmploymentType:     employmentDetails.EmploymentType,
+		ReportsToID:        employmentDetails.ReportingManagerID,
+		Grade:              employmentDetails.Grade,
+		Shift:              employmentDetails.Shift,
+		WorkPhone:          employmentDetails.WorkPhone,
+		ProbationPeriodDays: employmentDetails.ProbationPeriodDays,
+		ExpectedConfirmationDate: employmentDetails.ExpectedConfirmationDate,
+		OrganizationID:     organizationID,
+		OrganizationUnitID: organizationUnitID,
+		Status:             models.StatusActive,
+		IsActive:           true,
+		Notes:              "",
+	}
+
+	// Set notes from step 10
+	if step10Notes != nil {
+		employee.Notes = *step10Notes
+	}
+
+	// Set default currency
+	employee.Currency = "TZS"
+
+	// Load salary to set basic salary
+	salary, _ := s.salaryRepo.FindByDraftID(draft.ID)
+	if salary != nil && salary.BasicSalary != nil {
+		employee.Salary = salary.BasicSalary
+		if salary.Currency != "" {
+			employee.Currency = salary.Currency
+		}
+	}
+
+	if err := s.employeeRepo.Create(employee); err != nil {
+		return nil, fmt.Errorf("failed to create employee: %w", err)
+	}
+
+	return employee, nil
+}
+
+// migrateDraftDataToEmployee migrates all draft data to employee
+func (s *OnboardingService) migrateDraftDataToEmployee(draftID uint, employeeID uint) error {
+	// Migrate all related data from tables
+	if err := s.basicInfoRepo.MigrateToEmployee(draftID, employeeID); err != nil {
+		return fmt.Errorf("failed to migrate basic information: %w", err)
+	}
+	if err := s.employmentDetailsRepo.MigrateToEmployee(draftID, employeeID); err != nil {
+		return fmt.Errorf("failed to migrate employment details: %w", err)
+	}
+	if err := s.addressRepo.MigrateToEmployee(draftID, employeeID); err != nil {
+		return fmt.Errorf("failed to migrate addresses: %w", err)
+	}
+	if err := s.salaryRepo.MigrateToEmployee(draftID, employeeID); err != nil {
+		return fmt.Errorf("failed to migrate salary: %w", err)
+	}
+	if err := s.bankRepo.MigrateToEmployee(draftID, employeeID); err != nil {
+		return fmt.Errorf("failed to migrate bank: %w", err)
+	}
+	if err := s.statutoryRepo.MigrateToEmployee(draftID, employeeID); err != nil {
+		return fmt.Errorf("failed to migrate statutory: %w", err)
+	}
+	if err := s.documentRepo.MigrateToEmployee(draftID, employeeID); err != nil {
+		return fmt.Errorf("failed to migrate documents: %w", err)
+	}
+	if err := s.assetRepo.MigrateToEmployee(draftID, employeeID); err != nil {
+		return fmt.Errorf("failed to migrate assets: %w", err)
+	}
+	if err := s.contactRepo.MigrateToEmployee(draftID, employeeID); err != nil {
+		return fmt.Errorf("failed to migrate contacts: %w", err)
+	}
+	if err := s.policyRepo.MigrateToEmployee(draftID, employeeID); err != nil {
+		return fmt.Errorf("failed to migrate policy: %w", err)
+	}
+
+	return nil
+}
+
+// generateEmployeeID generates a unique employee ID starting with "EMP"
+// Format: EMP + 6-digit sequential number (e.g., EMP000001, EMP000002)
+func (s *OnboardingService) generateEmployeeID() string {
+	// Get the current highest employee ID number
+	maxAttempts := 100
+	for i := 0; i < maxAttempts; i++ {
+		// Generate ID using timestamp + random component to ensure uniqueness
+		timestamp := time.Now().Unix()
+		// Use last 6 digits of timestamp + microsecond component
+		idNum := (timestamp % 1000000) + int64(i)
+		employeeID := fmt.Sprintf("EMP%06d", idNum)
+		
+		// Check if this ID already exists
+		if !s.employeeRepo.ExistsByEmployeeID(employeeID) {
+			return employeeID
+		}
+	}
+	
+	// Fallback: use timestamp with nanoseconds if all attempts fail
+	return fmt.Sprintf("EMP%06d", time.Now().UnixNano()%1000000)
+}

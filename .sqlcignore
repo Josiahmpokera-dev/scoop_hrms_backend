@@ -1,0 +1,6 @@
+# Ignore files that shouldn't be processed by sqlc
+*.md
+*.yaml
+*.yml
+*.json
+*.log
