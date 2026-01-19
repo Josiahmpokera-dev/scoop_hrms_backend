@@ -208,9 +208,18 @@ func (r *OffboardingClearanceRepository) Update(clearance *models.OffboardingCle
 
 // GenerateClearanceID generates a unique clearance ID
 func (r *OffboardingClearanceRepository) GenerateClearanceID() (string, error) {
-	var count int64
-	r.db.Model(&models.OffboardingClearance{}).Count(&count)
+	count, err := r.GetClearanceCount()
+	if err != nil {
+		return "", err
+	}
 	return fmt.Sprintf("clear-%03d", count+1), nil
+}
+
+// GetClearanceCount returns the total count of clearances in the database
+func (r *OffboardingClearanceRepository) GetClearanceCount() (int64, error) {
+	var count int64
+	err := r.db.Model(&models.OffboardingClearance{}).Count(&count).Error
+	return count, err
 }
 
 // OffboardingAssetReturnRepository handles database operations for asset returns

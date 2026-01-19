@@ -138,12 +138,15 @@ func (s *OffboardingService) InitiateSeparation(req *employeeModels.InitiateSepa
 		{OffboardingID: offboardingID, TenantID: tenantID, Department: "Assets", Status: "Pending"},
 	}
 
+	// Generate unique clearance IDs for each clearance
+	// Get the base count first, then increment for each clearance
+	baseCount, err := s.clearanceRepo.GetClearanceCount()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get clearance count: %w", err)
+	}
+
 	for i := range clearances {
-		clearanceID, err := s.clearanceRepo.GenerateClearanceID()
-		if err != nil {
-			return nil, err
-		}
-		clearances[i].ClearanceID = clearanceID
+		clearances[i].ClearanceID = fmt.Sprintf("clear-%03d", baseCount+int64(i)+1)
 	}
 
 	if err := s.clearanceRepo.CreateBatch(clearances); err != nil {
