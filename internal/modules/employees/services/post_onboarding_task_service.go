@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 
@@ -501,6 +502,8 @@ func (s *PostOnboardingTaskService) GetTaskSummary(employeeID string, tenantID *
 	var completionPercentage float64
 	if totalTasks > 0 {
 		completionPercentage = float64(completedTasks) / float64(totalTasks) * 100
+		// Round to 1 decimal place
+		completionPercentage = math.Round(completionPercentage*10) / 10
 	}
 
 	return map[string]interface{}{
@@ -600,6 +603,8 @@ func (s *PostOnboardingTaskService) ListEmployeesWithTaskCompletion(tenantID *ui
 			var isCompleted bool
 			if totalTasks > 0 {
 				completionPercent = float64(completedTasks) / float64(totalTasks) * 100
+				// Round to 1 decimal place
+				completionPercent = math.Round(completionPercent*10) / 10
 				isCompleted = completedTasks == totalTasks
 			}
 
@@ -661,4 +666,58 @@ func (s *PostOnboardingTaskService) ListEmployeesWithTaskCompletion(tenantID *ui
 	}
 
 	return result, total, nil
+}
+
+// GetStatistics returns post-onboarding statistics
+func (s *PostOnboardingTaskService) GetStatistics(tenantID *uint) (map[string]interface{}, error) {
+	// Get task counts by status
+	statusCounts, err := s.taskRepo.GetStatisticsCounts(tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get task counts: %w", err)
+	}
+
+	// Get total tasks
+	totalTasks, err := s.taskRepo.GetTotalTasksCount(tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get total tasks count: %w", err)
+	}
+
+	// Get completed tasks
+	completedTasks := statusCounts[string(models.TaskStatusCompleted)]
+	if completedTasks == 0 {
+		completedTasks = 0
+	}
+
+	// Get overdue tasks
+	overdueTasks, err := s.taskRepo.GetOverdueTasksCount(tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get overdue tasks count: %w", err)
+	}
+
+	// Get active onboarding count (employees with incomplete tasks)
+	activeOnboarding, err := s.taskRepo.GetActiveOnboardingCount(tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active onboarding count: %w", err)
+	}
+
+	// Calculate completion percentage
+	var completionPercentage float64
+	if totalTasks > 0 {
+		completionPercentage = float64(completedTasks) / float64(totalTasks) * 100
+		completionPercentage = math.Round(completionPercentage*10) / 10
+	}
+
+	return map[string]interface{}{
+		"active_onboarding":    activeOnboarding,
+		"total_tasks":          totalTasks,
+		"completed_tasks":      completedTasks,
+		"overdue_tasks":        overdueTasks,
+		"completion_percentage": completionPercentage,
+		"tasks_by_status": map[string]int64{
+			"pending":    statusCounts[string(models.TaskStatusPending)],
+			"in_progress": statusCounts[string(models.TaskStatusInProgress)],
+			"completed":  completedTasks,
+			"skipped":    statusCounts[string(models.TaskStatusSkipped)],
+		},
+	}, nil
 }

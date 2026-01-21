@@ -28,6 +28,7 @@ type Organization struct {
 	CompanySize       *string            `json:"company_size,omitempty" gorm:"size:50"` // startup, small, medium, large, enterprise
 	Description       *string            `json:"description,omitempty" gorm:"type:text"`
 	Website           *string            `json:"website,omitempty" gorm:"size:255"`
+	Domain            *string            `json:"domain" gorm:"size:255"` // Organization domain (e.g., company.com)
 	LogoURL           *string            `json:"logo_url,omitempty" gorm:"size:500"`
 	AddressLine1      *string            `json:"address_line1,omitempty" gorm:"type:text"`
 	AddressLine2      *string            `json:"address_line2,omitempty" gorm:"type:text"`

@@ -158,3 +158,27 @@ func (s *JobPositionService) DeleteJobPosition(id uint) error {
 func (s *JobPositionService) ListJobPositions(tenantID *uint, page, pageSize int, filters map[string]interface{}) ([]models.JobPosition, int64, error) {
 	return s.repo.List(tenantID, page, pageSize, filters)
 }
+
+// GetPositionsByDepartment retrieves all active positions for a specific department
+func (s *JobPositionService) GetPositionsByDepartment(departmentID uint, tenantID *uint) ([]models.JobPosition, error) {
+	// Validate department exists and belongs to tenant
+	department, err := s.departmentRepo.FindByID(departmentID)
+	if err != nil {
+		return nil, fmt.Errorf("department with ID %d not found", departmentID)
+	}
+
+	// Check if department belongs to the same tenant (if tenant_id is set)
+	if tenantID != nil && department.TenantID != nil {
+		if *tenantID != *department.TenantID {
+			return nil, fmt.Errorf("department with ID %d does not belong to your tenant", departmentID)
+		}
+	}
+
+	// Get positions for this department
+	positions, err := s.repo.FindByDepartmentID(departmentID, tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve positions for department: %w", err)
+	}
+
+	return positions, nil
+}

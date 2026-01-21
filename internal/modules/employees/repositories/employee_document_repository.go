@@ -45,6 +45,28 @@ func (r *EmployeeDocumentRepository) FindByEmployeeID(employeeID uint) ([]models
 	return docs, err
 }
 
+// FindByEmployeeIDWithPagination finds documents by employee ID with pagination
+func (r *EmployeeDocumentRepository) FindByEmployeeIDWithPagination(employeeID uint, documentType *string, page, pageSize int) ([]models.EmployeeDocument, int64, error) {
+	var docs []models.EmployeeDocument
+	var total int64
+
+	offset := (page - 1) * pageSize
+	query := r.db.Model(&models.EmployeeDocument{}).Where("employee_id = ?", employeeID)
+
+	if documentType != nil && *documentType != "" {
+		query = query.Where("document_type = ?", *documentType)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated results
+	err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&docs).Error
+	return docs, total, err
+}
+
 // Update updates a document
 func (r *EmployeeDocumentRepository) Update(doc *models.EmployeeDocument) error {
 	return r.db.Save(doc).Error
@@ -78,4 +100,58 @@ func (r *EmployeeDocumentRepository) FindByID(id uint) (*models.EmployeeDocument
 		return nil, err
 	}
 	return &doc, nil
+}
+
+// FindByEmployeeIDString finds documents by employee ID string (e.g., "EMP001")
+func (r *EmployeeDocumentRepository) FindByEmployeeIDString(employeeID string) ([]models.EmployeeDocument, error) {
+	var docs []models.EmployeeDocument
+	err := r.db.Where("employee_id_string = ? OR employee_id IN (SELECT id FROM employees WHERE employee_id = ?)", employeeID, employeeID).
+		Order("created_at DESC").
+		Find(&docs).Error
+	return docs, err
+}
+
+// GetAllDocuments gets all documents (for statistics)
+func (r *EmployeeDocumentRepository) GetAllDocuments(tenantID *uint) ([]models.EmployeeDocument, error) {
+	var docs []models.EmployeeDocument
+	query := r.db.Model(&models.EmployeeDocument{})
+	
+	// Filter by tenant if provided
+	if tenantID != nil {
+		// Filter documents where employee belongs to tenant
+		query = query.Where("employee_id IN (SELECT id FROM employees WHERE tenant_id = ?) OR employee_id_string IN (SELECT employee_id FROM employees WHERE tenant_id = ?)", *tenantID, *tenantID)
+	}
+	
+	err := query.Find(&docs).Error
+	return docs, err
+}
+
+// CountByType counts documents grouped by type
+func (r *EmployeeDocumentRepository) CountByType(tenantID *uint) (map[string]int64, error) {
+	type Result struct {
+		DocumentType string
+		Count        int64
+	}
+	
+	var results []Result
+	query := r.db.Model(&models.EmployeeDocument{}).
+		Select("document_type, COUNT(*) as count").
+		Group("document_type")
+	
+	// Filter by tenant if provided
+	if tenantID != nil {
+		query = query.Where("employee_id IN (SELECT id FROM employees WHERE tenant_id = ?) OR employee_id_string IN (SELECT employee_id FROM employees WHERE tenant_id = ?)", *tenantID, *tenantID)
+	}
+	
+	err := query.Scan(&results).Error
+	if err != nil {
+		return nil, err
+	}
+	
+	resultMap := make(map[string]int64)
+	for _, r := range results {
+		resultMap[r.DocumentType] = r.Count
+	}
+	
+	return resultMap, nil
 }

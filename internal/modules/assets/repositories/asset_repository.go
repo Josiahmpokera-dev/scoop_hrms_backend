@@ -148,3 +148,16 @@ func (r *AssetRepository) GetNextAssetCodeNumber(prefix string, tenantID *uint) 
 
 	return maxNumber + 1, nil
 }
+
+// FindByEmployeeID finds assets assigned to an employee
+func (r *AssetRepository) FindByEmployeeID(employeeID string, tenantID *uint) ([]models.Asset, error) {
+	var assets []models.Asset
+	query := r.db.Where("employee_id = ? AND status = ?", employeeID, "in_use")
+	
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	
+	err := query.Order("assigned_date DESC").Find(&assets).Error
+	return assets, err
+}

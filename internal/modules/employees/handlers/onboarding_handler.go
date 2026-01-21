@@ -310,13 +310,21 @@ func (h *OnboardingHandler) CompleteOnboarding(c *gin.Context) {
 		updatedBy = &userObj.ID
 	}
 
-	employee, err := h.onboardingService.CompleteOnboarding(req.DraftID, updatedBy)
+	employee, credentials, err := h.onboardingService.CompleteOnboarding(req.DraftID, updatedBy)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
 
-	response.Created(c, "Employee onboarding completed successfully", employee)
+	// Prepare response with employee and credentials
+	responseData := map[string]interface{}{
+		"employee": employee,
+	}
+	if credentials != nil {
+		responseData["credentials"] = credentials
+	}
+
+	response.Created(c, "Employee onboarding completed successfully", responseData)
 }
 
 // CompleteOnboardingByEmployeeID finalizes the onboarding and creates the employee by employee ID
@@ -343,13 +351,21 @@ func (h *OnboardingHandler) CompleteOnboardingByEmployeeID(c *gin.Context) {
 		updatedBy = &userObj.ID
 	}
 
-	employee, err := h.onboardingService.CompleteOnboardingByEmployeeID(employeeID, tenantID, updatedBy)
+	employee, credentials, err := h.onboardingService.CompleteOnboardingByEmployeeID(employeeID, tenantID, updatedBy)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
 
-	response.Created(c, "Employee onboarding completed successfully", employee)
+	// Prepare response with employee and credentials
+	responseData := map[string]interface{}{
+		"employee": employee,
+	}
+	if credentials != nil {
+		responseData["credentials"] = credentials
+	}
+
+	response.Created(c, "Employee onboarding completed successfully", responseData)
 }
 
 // ListDrafts lists all onboarding drafts for the tenant

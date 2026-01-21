@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
@@ -97,6 +98,9 @@ func (h *FileUploadHandler) UploadDocument(c *gin.Context) {
 		return
 	}
 
+	// Convert relative URL to full URL
+	fullFileURL := h.getFullURL(c, fileURL)
+
 	// Get tenant ID
 	tenantID := middleware.GetTenantID(c)
 
@@ -162,7 +166,7 @@ func (h *FileUploadHandler) UploadDocument(c *gin.Context) {
 			EmployeeIDString: &employeeID,
 			DocumentType:     docType,
 			FileName:         file.Filename,
-			FileURL:          fileURL,
+			FileURL:          fileURL, // Store relative URL in database
 			FileSize:         &fileSize,
 			MimeType:         &mimeType,
 			UploadedBy:       uploadedBy,
@@ -196,7 +200,7 @@ func (h *FileUploadHandler) UploadDocument(c *gin.Context) {
 
 	response.Success(c, message, gin.H{
 		"id":            doc.ID,
-		"file_url":      fileURL,
+		"file_url":      fullFileURL, // Return full URL in response
 		"file_name":     file.Filename,
 		"file_size":     fileSize,
 		"mime_type":     mimeType,
@@ -209,6 +213,30 @@ func (h *FileUploadHandler) UploadDocument(c *gin.Context) {
 		"created_at":    doc.CreatedAt,
 		"updated_at":    doc.UpdatedAt,
 	})
+}
+
+// getFullURL converts a relative URL to a full URL using the request's scheme and host
+func (h *FileUploadHandler) getFullURL(c *gin.Context, relativeURL string) string {
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	// Check X-Forwarded-Proto header for reverse proxy setups
+	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+
+	host := c.Request.Host
+	if host == "" {
+		host = "localhost:8080" // Default fallback
+	}
+
+	// Remove leading slash from relativeURL if present
+	if len(relativeURL) > 0 && relativeURL[0] == '/' {
+		relativeURL = relativeURL[1:]
+	}
+
+	return fmt.Sprintf("%s://%s/%s", scheme, host, relativeURL)
 }
 
 // UploadPhoto handles photo upload for employee onboarding
@@ -244,9 +272,12 @@ func (h *FileUploadHandler) UploadPhoto(c *gin.Context) {
 		return
 	}
 
+	// Convert relative URL to full URL
+	fullFileURL := h.getFullURL(c, fileURL)
+
 	// Return file information
 	response.Success(c, "Photo uploaded successfully", gin.H{
-		"photo_url":   fileURL,
+		"photo_url":   fullFileURL, // Return full URL in response
 		"file_name":   file.Filename,
 		"file_size":   fileSize,
 		"mime_type":   mimeType,
@@ -341,4 +372,163 @@ func (h *FileUploadHandler) DeleteDocument(c *gin.Context) {
 		"document_id": req.DocumentID,
 		"deleted_at":  time.Now(),
 	})
+}
+
+// DocumentHandler handles employee document operations
+type DocumentHandler struct {
+	documentService *services.DocumentService
+	storageService  *storage.StorageService
+}
+
+// NewDocumentHandler creates a new document handler
+func NewDocumentHandler() *DocumentHandler {
+	return &DocumentHandler{
+		documentService: services.NewDocumentService(),
+		storageService:  storage.NewStorageService(),
+	}
+}
+
+// ListEmployeesWithDocuments lists all employees with their uploaded documents
+func (h *DocumentHandler) ListEmployeesWithDocuments(c *gin.Context) {
+	var req struct {
+		Page     int `form:"page" binding:"omitempty,min=1"`
+		PageSize int `form:"page_size" binding:"omitempty,min=1,max=100"`
+	}
+
+	if err := c.ShouldBindQuery(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	// Set defaults
+	page := 1
+	if req.Page > 0 {
+		page = req.Page
+	}
+	pageSize := 20
+	if req.PageSize > 0 {
+		pageSize = req.PageSize
+	}
+
+	tenantID := middleware.GetTenantID(c)
+	employees, total, err := h.documentService.ListEmployeesWithDocuments(tenantID, page, pageSize)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	// Calculate pagination metadata
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+
+	response.SuccessWithMeta(c, "Employees with documents retrieved successfully", employees, &response.Meta{
+		Page:       page,
+		PerPage:    pageSize,
+		Total:      total,
+		TotalPages: totalPages,
+	})
+}
+
+// GetEmployeeDocuments gets all documents for a specific employee
+func (h *DocumentHandler) GetEmployeeDocuments(c *gin.Context) {
+	employeeID := c.Param("employee_id")
+	if employeeID == "" {
+		response.ValidationError(c, "Validation failed", "employee_id is required")
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+	documents, err := h.documentService.GetEmployeeDocuments(employeeID, tenantID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	// Convert to response format with full URLs
+	docsResponse := make([]map[string]interface{}, len(documents))
+	for i, doc := range documents {
+		// Convert relative URL to full URL
+		fullFileURL := h.getFullURL(c, doc.FileURL)
+		docsResponse[i] = map[string]interface{}{
+			"id":            doc.ID,
+			"document_type": doc.DocumentType,
+			"file_name":     doc.FileName,
+			"file_url":      fullFileURL, // Return full URL
+			"file_size":     doc.FileSize,
+			"mime_type":     doc.MimeType,
+			"description":   doc.Description,
+			"uploaded_at":   doc.CreatedAt,
+		}
+	}
+
+	response.Success(c, "Documents retrieved successfully", docsResponse)
+}
+
+// ViewDocument handles viewing/downloading a document
+func (h *DocumentHandler) ViewDocument(c *gin.Context) {
+	var req struct {
+		ID uint `json:"id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", "id is required in request body")
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+	doc, err := h.documentService.GetDocumentByID(req.ID, tenantID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	// Convert relative URL to full URL
+	fullFileURL := h.getFullURL(c, doc.FileURL)
+
+	// Return document information with full file URL
+	response.Success(c, "Document retrieved successfully", map[string]interface{}{
+		"id":            doc.ID,
+		"employee_id":   doc.EmployeeIDString,
+		"document_type": doc.DocumentType,
+		"file_name":     doc.FileName,
+		"file_url":      fullFileURL, // Return full URL
+		"file_size":     doc.FileSize,
+		"mime_type":     doc.MimeType,
+		"description":   doc.Description,
+		"uploaded_at":   doc.CreatedAt,
+	})
+}
+
+// GetDocumentStatistics gets statistics about employee documents
+func (h *DocumentHandler) GetDocumentStatistics(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+	statistics, err := h.documentService.GetDocumentStatistics(tenantID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Document statistics retrieved successfully", statistics)
+}
+
+// getFullURL converts a relative URL to a full URL using the request's scheme and host
+func (h *DocumentHandler) getFullURL(c *gin.Context, relativeURL string) string {
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	// Check X-Forwarded-Proto header for reverse proxy setups
+	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+
+	host := c.Request.Host
+	if host == "" {
+		host = "localhost:8080" // Default fallback
+	}
+
+	// Remove leading slash from relativeURL if present (it will be added back)
+	if len(relativeURL) > 0 && relativeURL[0] == '/' {
+		relativeURL = relativeURL[1:]
+	}
+
+	return fmt.Sprintf("%s://%s/%s", scheme, host, relativeURL)
 }

@@ -200,6 +200,11 @@ func (h *JobPositionHandler) ListJobPositions(c *gin.Context) {
 			filters["level"] = l
 		}
 	}
+	if departmentIDStr := c.Query("department_id"); departmentIDStr != "" {
+		if departmentID, err := strconv.ParseUint(departmentIDStr, 10, 32); err == nil {
+			filters["department_id"] = uint(departmentID)
+		}
+	}
 
 	positions, total, err := h.service.ListJobPositions(tenantID, page, pageSize, filters)
 	if err != nil {
@@ -246,6 +251,62 @@ func (h *JobPositionHandler) ListJobPositions(c *gin.Context) {
 	}
 
 	response.SuccessWithMeta(c, "Job positions retrieved successfully", responseData, meta)
+}
+
+// GetPositionsByDepartment handles getting positions filtered by department ID
+func (h *JobPositionHandler) GetPositionsByDepartment(c *gin.Context) {
+	departmentIDStr := c.Param("department_id")
+	if departmentIDStr == "" {
+		response.BadRequest(c, "Department ID is required", nil)
+		return
+	}
+
+	departmentID, err := strconv.ParseUint(departmentIDStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid department ID", nil)
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+
+	positions, err := h.service.GetPositionsByDepartment(uint(departmentID), tenantID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	// Convert to response format with reporting position name
+	responseData := make([]map[string]interface{}, len(positions))
+	for i, pos := range positions {
+		posMap := map[string]interface{}{
+			"id":                    pos.ID,
+			"code":                  pos.Code,
+			"title":                 pos.Title,
+			"grade":                 pos.Grade,
+			"department_id":         pos.DepartmentID,
+			"reports_to_position":   nil,
+			"reports_to_position_id": pos.ReportsToPositionID,
+			"budgeted_headcount":    pos.BudgetedHeadcount,
+			"current_headcount":     pos.CurrentHeadcount,
+			"employment_type":       pos.EmploymentType,
+			"key_competencies":      pos.KeyCompetencies,
+			"is_active":             pos.IsActive,
+			"created_at":            pos.CreatedAt,
+			"updated_at":            pos.UpdatedAt,
+		}
+
+		// Load reporting position name if reports_to_position_id exists
+		if pos.ReportsToPositionID != nil {
+			reportingPos, err := h.service.GetJobPositionByID(*pos.ReportsToPositionID)
+			if err == nil && reportingPos != nil {
+				posMap["reports_to_position"] = reportingPos.Title
+			}
+		}
+
+		responseData[i] = posMap
+	}
+
+	response.Success(c, "Positions retrieved successfully", responseData)
 }
 
 // HandleAction handles POST-only action-based requests

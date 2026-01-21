@@ -56,6 +56,16 @@ func (r *EmployeeRepository) FindByEmail(email string) (*models.Employee, error)
 	return &employee, nil
 }
 
+// FindByUserID finds an employee by user ID
+func (r *EmployeeRepository) FindByUserID(userID uint) (*models.Employee, error) {
+	var employee models.Employee
+	err := r.db.Where("user_id = ?", userID).First(&employee).Error
+	if err != nil {
+		return nil, err
+	}
+	return &employee, nil
+}
+
 // Update updates an employee
 func (r *EmployeeRepository) Update(employee *models.Employee) error {
 	return r.db.Save(employee).Error
@@ -148,4 +158,71 @@ func (r *EmployeeRepository) FindByName(name string) (*models.Employee, error) {
 	}
 	
 	return nil, fmt.Errorf("employee not found with name: %s", name)
+}
+
+// ListManagers lists all active employees who can be reporting managers
+func (r *EmployeeRepository) ListManagers(tenantID *uint) ([]models.Employee, error) {
+	var employees []models.Employee
+	query := r.db.Where("status = ? AND is_active = ?", models.StatusActive, true)
+	
+	// Filter by tenant if provided
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	
+	err := query.Order("first_name ASC, last_name ASC").Find(&employees).Error
+	return employees, err
+}
+
+// SearchEmployees searches employees with filters and pagination
+func (r *EmployeeRepository) SearchEmployees(tenantID *uint, search *string, departmentID, positionID, locationID *uint, status *string, page, pageSize int) ([]models.Employee, int64, error) {
+	var employees []models.Employee
+	var total int64
+
+	offset := (page - 1) * pageSize
+	query := r.db.Model(&models.Employee{})
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	// Search filter
+	if search != nil && *search != "" {
+		searchTerm := "%" + *search + "%"
+		query = query.Where("(LOWER(first_name) LIKE LOWER(?) OR LOWER(last_name) LIKE LOWER(?) OR LOWER(employee_id) LIKE LOWER(?) OR LOWER(work_email) LIKE LOWER(?))",
+			searchTerm, searchTerm, searchTerm, searchTerm)
+	}
+
+	// Department filter
+	if departmentID != nil {
+		query = query.Where("department_id = ?", *departmentID)
+	}
+
+	// Position filter
+	if positionID != nil {
+		query = query.Where("position_id = ?", *positionID)
+	}
+
+	// Location filter
+	if locationID != nil {
+		query = query.Where("location_id = ?", *locationID)
+	}
+
+	// Status filter
+	if status != nil && *status != "" {
+		query = query.Where("status = ?", *status)
+	} else {
+		// Default to active
+		query = query.Where("status = ? AND is_active = ?", models.StatusActive, true)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated results
+	err := query.Order("first_name ASC, last_name ASC").Offset(offset).Limit(pageSize).Find(&employees).Error
+
+	return employees, total, err
 }

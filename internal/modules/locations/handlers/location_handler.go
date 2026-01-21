@@ -7,6 +7,7 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/services"
+	organizationServices "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/services"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/types"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
@@ -174,6 +175,31 @@ func (h *LocationHandler) GetHeadOffice(c *gin.Context) {
 	}
 
 	response.Success(c, "Head office location retrieved successfully", location)
+}
+
+// GetMyOrganizationLocations handles getting locations for the current user's organization
+func (h *LocationHandler) GetMyOrganizationLocations(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+	
+	// Get user's organization (first organization for the tenant)
+	orgService := organizationServices.NewOrganizationService()
+	organizations, total, err := orgService.ListOrganizations(tenantID, 1, 1, nil)
+	if err != nil || total == 0 || len(organizations) == 0 {
+		response.NotFound(c, "No organization found for your account. Please create one first.")
+		return
+	}
+
+	// Get organization ID (use the first organization)
+	organizationID := organizations[0].ID
+
+	// Get locations for this organization
+	locations, _, err := h.service.ListLocations(tenantID, &organizationID, 1, 100, map[string]interface{}{})
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve locations", err.Error())
+		return
+	}
+
+	response.Success(c, "Locations retrieved successfully", locations)
 }
 
 // HandleAction handles POST-only action-based requests

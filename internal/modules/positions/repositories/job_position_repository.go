@@ -74,6 +74,9 @@ func (r *JobPositionRepository) List(tenantID *uint, page, pageSize int, filters
 	if level, ok := filters["level"].(int); ok {
 		query = query.Where("level = ?", level)
 	}
+	if departmentID, ok := filters["department_id"].(uint); ok {
+		query = query.Where("department_id = ?", departmentID)
+	}
 
 	// Count total
 	if err := query.Count(&total).Error; err != nil {
@@ -83,6 +86,20 @@ func (r *JobPositionRepository) List(tenantID *uint, page, pageSize int, filters
 	// Get paginated results
 	err := query.Offset(offset).Limit(pageSize).Find(&positions).Error
 	return positions, total, err
+}
+
+// FindByDepartmentID finds all job positions for a specific department
+func (r *JobPositionRepository) FindByDepartmentID(departmentID uint, tenantID *uint) ([]models.JobPosition, error) {
+	var positions []models.JobPosition
+	query := r.db.Where("department_id = ?", departmentID).Where("is_active = ?", true)
+
+	// Apply tenant filter if provided
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	err := query.Order("title ASC").Find(&positions).Error
+	return positions, err
 }
 
 // ExistsByCode checks if a job position with the given code exists

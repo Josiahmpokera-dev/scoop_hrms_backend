@@ -11,7 +11,10 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/config"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	assetModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/models"
+	biometricModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/models"
+	biometricWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/workers"
 	costCenterModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/models"
+	helpdeskModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/models"
 	departmentModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/models"
 	employeeModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
 	locationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/models"
@@ -77,6 +80,23 @@ func main() {
 		&employeeModels.OffboardingClearance{},
 		&employeeModels.OffboardingAssetReturn{},
 		&employeeModels.FinalSettlement{},
+		// Self-Service models
+		&employeeModels.ServiceRequest{},
+		&employeeModels.ProfileUpdateRequest{},
+		// Asset self-service models
+		&assetModels.AssetRequest{},
+		&assetModels.AssetIssue{},
+		// Helpdesk models
+		&helpdeskModels.Ticket{},
+		&helpdeskModels.Comment{},
+		&helpdeskModels.Attachment{},
+		&helpdeskModels.RoutingRule{},
+		&helpdeskModels.KnowledgeBaseArticle{},
+		&helpdeskModels.KBArticleFeedback{},
+		&helpdeskModels.TicketCategory{},
+		// Biometric models
+		&biometricModels.BioTimeConfig{},
+		&biometricModels.BioTimeTransaction{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
@@ -227,6 +247,22 @@ func main() {
 
 	// Setup API routes
 	appRouter.SetupRoutes(router)
+
+	// Start transaction worker if RabbitMQ is enabled
+	cfg := config.AppConfig
+	if cfg != nil && cfg.RabbitMQ.Enabled {
+		worker, err := biometricWorkers.NewTransactionWorker()
+		if err != nil {
+			log.Printf("Warning: Failed to start transaction worker: %v. Transactions will not be synced to database.", err)
+		} else {
+			if err := worker.Start(); err != nil {
+				log.Printf("Warning: Failed to start transaction worker: %v. Transactions will not be synced to database.", err)
+			} else {
+				log.Println("✅ Transaction worker started successfully")
+				defer worker.Stop()
+			}
+		}
+	}
 
 	// Start server
 	port := config.AppConfig.Server.Port

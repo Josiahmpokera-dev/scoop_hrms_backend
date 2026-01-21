@@ -4,6 +4,8 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
 	assetHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/handlers"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/auth/handlers"
+	biometricHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/handlers"
+	helpdeskHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/handlers"
 	costCenterHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/handlers"
 	departmentHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/handlers"
 	employeeHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/handlers"
@@ -110,6 +112,49 @@ func SetupRoutes(r *gin.Engine) {
 		}
 
 		// Employee routes (require authentication - HR or Admin)
+		// Self-Service routes (require authentication - all employees)
+		selfServiceHandler := employeeHandlers.NewSelfServiceHandler()
+		selfService := v1.Group("/self-service")
+		selfService.Use(middleware.AuthMiddleware()) // Only authentication required, not HR/Admin
+		{
+			// Profile
+			selfService.GET("/profile", selfServiceHandler.GetProfile)
+			selfService.POST("/profile/update", selfServiceHandler.UpdateProfile)
+			selfService.GET("/profile/update-status", selfServiceHandler.GetProfileUpdateStatus)
+			selfService.GET("/profile/documents", selfServiceHandler.GetDocuments)
+			selfService.GET("/profile/id-card", selfServiceHandler.DownloadIDCard) // ID card generation (placeholder)
+
+			// Payslips (placeholder - to be implemented with payroll module)
+			selfService.GET("/payslips", selfServiceHandler.ListPayslips)
+			selfService.GET("/payslips/:payslip_id", selfServiceHandler.GetPayslipDetails)
+			selfService.GET("/payslips/:payslip_id/download", selfServiceHandler.DownloadPayslip)
+			selfService.POST("/payslips/:payslip_id/email", selfServiceHandler.EmailPayslip)
+			selfService.GET("/payslips/ytd-summary", selfServiceHandler.GetYTDSummary)
+			selfService.POST("/payslips/query", selfServiceHandler.RaiseSalaryQuery)
+
+			// Service Requests
+			selfService.GET("/requests", selfServiceHandler.ListServiceRequests)
+			selfService.GET("/requests/:request_id", selfServiceHandler.GetServiceRequestDetails)
+			selfService.POST("/requests", selfServiceHandler.CreateServiceRequest)
+			selfService.POST("/requests/:request_id/cancel", selfServiceHandler.CancelServiceRequest)
+			// TODO: selfService.GET("/requests/:request_id/download", selfServiceHandler.DownloadRequestDocument)
+
+			// People Directory
+			selfService.GET("/directory", selfServiceHandler.SearchDirectory)
+			selfService.GET("/directory/:employee_id", selfServiceHandler.GetDirectoryEmployeeDetails)
+
+			// Assets (self-service)
+			assetSelfServiceHandler := assetHandlers.NewAssetSelfServiceHandler()
+			selfService.GET("/assets", assetSelfServiceHandler.GetMyAssignedAssets)
+			selfService.GET("/assets/requests", assetSelfServiceHandler.ListAssetRequests)
+			selfService.POST("/assets/requests", assetSelfServiceHandler.CreateAssetRequest)
+			selfService.POST("/assets/requests/:request_id/cancel", assetSelfServiceHandler.CancelAssetRequest) // More specific route first
+			selfService.GET("/assets/requests/:request_id", assetSelfServiceHandler.GetAssetRequestDetails)
+			selfService.GET("/assets/issues", assetSelfServiceHandler.ListAssetIssues)
+			selfService.POST("/assets/issues", assetSelfServiceHandler.CreateAssetIssue)
+			selfService.GET("/assets/issues/:issue_id", assetSelfServiceHandler.GetAssetIssueDetails)
+		}
+
 		employees := v1.Group("/employees")
 		employees.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
@@ -121,12 +166,23 @@ func SetupRoutes(r *gin.Engine) {
 			employees.GET("/employee-id/:employee_id", employeeHandler.GetEmployeeByEmployeeID) // Get by employee ID
 			employees.GET("/department/:department_id", employeeHandler.ListByDepartment)       // List by department
 			employees.GET("/status/:status", employeeHandler.ListByStatus)                      // List by status
+			employees.GET("/managers", employeeHandler.ListManagers)                            // List all potential reporting managers
 
 			// Employee status management (POST with ID in body)
 			employees.POST("/terminate", employeeHandler.TerminateEmployee)   // Terminate employee
 			employees.POST("/suspend", employeeHandler.SuspendEmployee)       // Suspend employee
 			employees.POST("/archive", employeeHandler.ArchiveEmployee)       // Archive employee
 			employees.POST("/reactivate", employeeHandler.ReactivateEmployee) // Reactivate employee
+
+			// Employee document routes
+			documentHandler := employeeHandlers.NewDocumentHandler()
+			documents := employees.Group("/documents")
+			{
+				documents.GET("", documentHandler.ListEmployeesWithDocuments)                 // List all employees with documents
+				documents.GET("/statistics", documentHandler.GetDocumentStatistics)           // Get document statistics
+				documents.GET("/employee/:employee_id", documentHandler.GetEmployeeDocuments) // Get documents for specific employee
+				documents.POST("/view", documentHandler.ViewDocument)                         // View document by ID
+			}
 
 			// Multi-step onboarding routes
 			onboardingHandler := employeeHandlers.NewOnboardingHandler()
@@ -162,6 +218,7 @@ func SetupRoutes(r *gin.Engine) {
 			postOnboardingHandler := employeeHandlers.NewPostOnboardingTaskHandler()
 			postOnboarding := employees.Group("/post-onboarding")
 			{
+				postOnboarding.GET("/statistics", postOnboardingHandler.GetStatistics)                           // Get post-onboarding statistics
 				postOnboarding.GET("/types", postOnboardingHandler.GetTaskTypes)                                 // Get available task types
 				postOnboarding.GET("/employees", postOnboardingHandler.ListEmployeesWithTaskCompletion)          // List all employees with task completion percentages
 				postOnboarding.POST("/tasks", postOnboardingHandler.CreateTask)                                  // Create a task
@@ -245,11 +302,12 @@ func SetupRoutes(r *gin.Engine) {
 		positions := v1.Group("/job-positions")
 		positions.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
-			positions.POST("", positionHandler.CreateJobPosition)        // Create job position
-			positions.GET("", positionHandler.ListJobPositions)          // List job positions
-			positions.POST("/get", positionHandler.GetJobPosition)       // Get job position by ID (POST with ID in body)
-			positions.POST("/update", positionHandler.UpdateJobPosition) // Update job position (POST with ID in body)
-			positions.POST("/delete", positionHandler.DeleteJobPosition) // Delete job position (POST with ID in body)
+			positions.POST("", positionHandler.CreateJobPosition)                                 // Create job position
+			positions.GET("", positionHandler.ListJobPositions)                                   // List job positions
+			positions.GET("/department/:department_id", positionHandler.GetPositionsByDepartment) // Get positions by department
+			positions.POST("/get", positionHandler.GetJobPosition)                                // Get job position by ID (POST with ID in body)
+			positions.POST("/update", positionHandler.UpdateJobPosition)                          // Update job position (POST with ID in body)
+			positions.POST("/delete", positionHandler.DeleteJobPosition)                          // Delete job position (POST with ID in body)
 			// POST-only action-based endpoint
 			positions.POST("/action", positionHandler.HandleAction) // Action-based API
 		}
@@ -258,12 +316,13 @@ func SetupRoutes(r *gin.Engine) {
 		locations := v1.Group("/locations")
 		locations.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
-			locations.POST("", locationHandler.CreateLocation)           // Create location
-			locations.GET("", locationHandler.ListLocations)             // List locations
-			locations.GET("/head-office", locationHandler.GetHeadOffice) // Get head office
-			locations.GET("/:id", locationHandler.GetLocation)           // Get location by ID
-			locations.PUT("/:id", locationHandler.UpdateLocation)        // Update location
-			locations.DELETE("/:id", locationHandler.DeleteLocation)     // Delete location
+			locations.POST("", locationHandler.CreateLocation)               // Create location
+			locations.GET("", locationHandler.ListLocations)                 // List locations
+			locations.GET("/me", locationHandler.GetMyOrganizationLocations) // Get locations for current user's organization
+			locations.GET("/head-office", locationHandler.GetHeadOffice)     // Get head office
+			locations.GET("/:id", locationHandler.GetLocation)               // Get location by ID
+			locations.PUT("/:id", locationHandler.UpdateLocation)            // Update location
+			locations.DELETE("/:id", locationHandler.DeleteLocation)         // Delete location
 			// POST-only action-based endpoint
 			locations.POST("/action", locationHandler.HandleAction) // Action-based API
 		}
@@ -299,6 +358,66 @@ func SetupRoutes(r *gin.Engine) {
 			assets.POST("/complete-repair", assetHandler.CompleteRepair) // Complete asset repair
 			assets.POST("/retire", assetHandler.RetireAsset)             // Retire asset
 			assets.POST("/delete", assetHandler.DeleteAsset)             // Delete asset (only retired assets)
+
+			// Asset Request Management (HR/Admin)
+			assetHRHandler := assetHandlers.NewAssetHRHandler()
+			assets.GET("/requests", assetHRHandler.ListAssetRequests)
+			assets.GET("/requests/:request_id", assetHRHandler.GetAssetRequestDetails)
+			assets.POST("/requests/:request_id/approve", assetHRHandler.ApproveAssetRequest)
+			assets.POST("/requests/:request_id/reject", assetHRHandler.RejectAssetRequest)
+			assets.POST("/requests/:request_id/fulfill", assetHRHandler.FulfillAssetRequest)
+			assets.POST("/:asset_id/reassign", assetHRHandler.ReassignAsset)
+		}
+
+		// Helpdesk routes
+		helpdeskHandler := helpdeskHandlers.NewTicketHandler()
+		helpdeskAgentHandler := helpdeskHandlers.NewTicketAgentHandler()
+		
+		// Employee helpdesk routes (self-service)
+		helpdesk := v1.Group("/helpdesk")
+		helpdesk.Use(middleware.AuthMiddleware())
+		{
+			// Employee ticket routes
+			helpdesk.GET("/tickets", helpdeskHandler.ListMyTickets)
+			helpdesk.GET("/tickets/:ticket_id", helpdeskHandler.GetTicketDetails)
+			helpdesk.POST("/tickets", helpdeskHandler.CreateTicket)
+			helpdesk.POST("/tickets/:ticket_id/comments", helpdeskHandler.AddComment)
+			helpdesk.POST("/tickets/:ticket_id/close", helpdeskHandler.CloseTicket)
+			helpdesk.POST("/tickets/:ticket_id/csat", helpdeskHandler.SubmitCSAT)
+			helpdesk.GET("/tickets/recent", helpdeskAgentHandler.GetRecentTickets) // Available to all authenticated users
+		}
+
+		// Agent/Admin helpdesk routes
+		helpdeskAgent := v1.Group("/helpdesk/agent")
+		helpdeskAgent.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			helpdeskAgent.GET("/tickets", helpdeskAgentHandler.ListTickets)
+			helpdeskAgent.POST("/tickets/:ticket_id/assign", helpdeskAgentHandler.AssignTicket)
+			helpdeskAgent.PATCH("/tickets/:ticket_id/status", helpdeskAgentHandler.UpdateTicketStatus)
+			helpdeskAgent.POST("/tickets/:ticket_id/resolve", helpdeskAgentHandler.ResolveTicket)
+		}
+
+		// Helpdesk dashboard (Agent/Admin)
+		helpdeskDashboard := v1.Group("/helpdesk/dashboard")
+		helpdeskDashboard.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			helpdeskDashboard.GET("/statistics", helpdeskAgentHandler.GetStatistics)
+		}
+
+		// Biometric/BioTime routes
+		biotimeHandler := biometricHandlers.NewBioTimeHandler()
+		biometric := v1.Group("/biometric")
+		biometric.Use(middleware.AuthMiddleware(), middleware.HRMiddleware()) // Require HR/Admin for biometric operations
+		{
+			biometric.GET("/biotime/test-connection", biotimeHandler.TestConnection)
+			biometric.GET("/biotime/token", biotimeHandler.GetToken)
+			biometric.POST("/biotime/refresh-token", biotimeHandler.RefreshToken)
+			biometric.GET("/biotime/terminals", biotimeHandler.GetTerminals)
+			biometric.GET("/biotime/transactions", biotimeHandler.GetTransactions)
+			biometric.GET("/biotime/transactions/:id", biotimeHandler.GetTransaction)
+			biometric.POST("/biotime/backfill", biotimeHandler.BackfillTransactions)
+			// Daily attendance from database
+			biometric.GET("/attendance/daily", biotimeHandler.GetDailyAttendance)
 		}
 	}
 }

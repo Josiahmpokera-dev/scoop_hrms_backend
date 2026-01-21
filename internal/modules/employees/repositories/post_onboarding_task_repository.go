@@ -1,6 +1,8 @@
 package repositories
 
 import (
+	"time"
+
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
 	"gorm.io/gorm"
@@ -114,4 +116,81 @@ func (r *PostOnboardingTaskRepository) CountByEmployeeID(employeeID string) (map
 	}
 
 	return result, nil
+}
+
+// GetStatisticsCounts returns task counts for statistics
+func (r *PostOnboardingTaskRepository) GetStatisticsCounts(tenantID *uint) (map[string]int64, error) {
+	var counts []struct {
+		Status string
+		Count  int64
+	}
+
+	query := r.db.Model(&models.PostOnboardingTask{}).
+		Select("status, COUNT(*) as count")
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	err := query.Group("status").Scan(&counts).Error
+	if err != nil {
+		return nil, err
+	}
+
+	result := make(map[string]int64)
+	for _, c := range counts {
+		result[c.Status] = c.Count
+	}
+
+	return result, nil
+}
+
+// GetTotalTasksCount returns total number of tasks
+func (r *PostOnboardingTaskRepository) GetTotalTasksCount(tenantID *uint) (int64, error) {
+	var count int64
+	query := r.db.Model(&models.PostOnboardingTask{})
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	err := query.Count(&count).Error
+	return count, err
+}
+
+// GetOverdueTasksCount returns count of overdue tasks (pending/in_progress with due_date < today)
+func (r *PostOnboardingTaskRepository) GetOverdueTasksCount(tenantID *uint) (int64, error) {
+	var count int64
+	now := time.Now()
+	query := r.db.Model(&models.PostOnboardingTask{}).
+		Where("status IN ?", []string{"pending", "in_progress"}).
+		Where("due_date IS NOT NULL").
+		Where("due_date < ?", now)
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	err := query.Count(&count).Error
+	return count, err
+}
+
+// GetActiveOnboardingCount returns count of employees with active onboarding (incomplete tasks)
+func (r *PostOnboardingTaskRepository) GetActiveOnboardingCount(tenantID *uint) (int64, error) {
+	var result struct {
+		Count int64
+	}
+	
+	query := r.db.Model(&models.PostOnboardingTask{}).
+		Select("COUNT(DISTINCT employee_id) as count").
+		Where("status != ?", "completed")
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	err := query.Scan(&result).Error
+	if err != nil {
+		return 0, err
+	}
+	
+	return result.Count, nil
 }

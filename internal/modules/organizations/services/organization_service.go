@@ -36,6 +36,7 @@ func (s *OrganizationService) CreateOrganization(req *models.CreateOrganizationR
 		CompanySize:       req.CompanySize,
 		Description:       req.Description,
 		Website:           req.Website,
+		Domain:            req.Domain,
 		LogoURL:           req.LogoURL,
 		AddressLine1:      req.AddressLine1,
 		AddressLine2:      req.AddressLine2,
@@ -125,6 +126,9 @@ func (s *OrganizationService) UpdateOrganization(id uint, req *models.UpdateOrga
 	}
 	if req.Website != nil {
 		organization.Website = req.Website
+	}
+	if req.Domain != nil {
+		organization.Domain = req.Domain
 	}
 	if req.LogoURL != nil {
 		organization.LogoURL = req.LogoURL

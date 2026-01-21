@@ -15,6 +15,8 @@ type Config struct {
 	Database DatabaseConfig
 	JWT      JWTConfig
 	CORS     CORSConfig
+	BioTime  BioTimeConfig
+	RabbitMQ RabbitMQConfig
 }
 
 // ServerConfig holds server configuration
@@ -46,6 +48,24 @@ type CORSConfig struct {
 	AllowedHeaders []string
 }
 
+// BioTimeConfig holds BioTime biometric device configuration
+type BioTimeConfig struct {
+	BaseURL  string
+	Username string
+	Password string
+	Enabled  bool
+}
+
+// RabbitMQConfig holds RabbitMQ configuration
+type RabbitMQConfig struct {
+	URL                string
+	Enabled            bool
+	Exchange           string
+	Queue              string
+	ProcessingInterval int // Processing interval in seconds (0 = process immediately as messages arrive)
+	BatchSize          int // Number of messages to process in a batch (0 = process one at a time)
+}
+
 var AppConfig *Config
 
 // LoadConfig loads configuration from environment variables
@@ -74,6 +94,20 @@ func LoadConfig() (*Config, error) {
 			AllowedOrigins: getEnvSlice("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173"}),
 			AllowedMethods: getEnvSlice("CORS_ALLOWED_METHODS", []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"}),
 			AllowedHeaders: getEnvSlice("CORS_ALLOWED_HEADERS", []string{"Content-Type", "Authorization", "X-Tenant-ID"}),
+		},
+		BioTime: BioTimeConfig{
+			BaseURL:  getEnv("BIOTIME_BASE_URL", "http://10.4.9.24:8087"),
+			Username: getEnv("BIOTIME_USERNAME", "Developer"),
+			Password: getEnv("BIOTIME_PASSWORD", "Developer@123"),
+			Enabled:  getEnvBool("BIOTIME_ENABLED", true),
+		},
+		RabbitMQ: RabbitMQConfig{
+			URL:                getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
+			Enabled:            getEnvBool("RABBITMQ_ENABLED", true),
+			Exchange:           getEnv("RABBITMQ_EXCHANGE", "biotime_exchange"),
+			Queue:              getEnv("RABBITMQ_QUEUE", "biotime_transactions"),
+			ProcessingInterval: getEnvInt("RABBITMQ_PROCESSING_INTERVAL", 0), // 0 = immediate, or seconds (e.g., 5, 300)
+			BatchSize:          getEnvInt("RABBITMQ_BATCH_SIZE", 0),          // 0 = one at a time, or batch size
 		},
 	}
 

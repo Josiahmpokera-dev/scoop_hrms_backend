@@ -13,6 +13,7 @@ type CreateOrganizationRequest struct {
 	CompanySize       *string    `json:"company_size,omitempty" binding:"omitempty,oneof=startup small medium large enterprise"`
 	Description       *string    `json:"description,omitempty"`
 	Website           *string    `json:"website,omitempty" binding:"omitempty,max=255"`
+	Domain            *string    `json:"domain,omitempty" binding:"omitempty,max=255"` // Organization domain (e.g., company.com)
 	LogoURL           *string    `json:"logo_url,omitempty" binding:"omitempty,max=500"`
 	AddressLine1      *string    `json:"address_line1,omitempty"`
 	AddressLine2      *string    `json:"address_line2,omitempty"`
@@ -41,6 +42,7 @@ type UpdateOrganizationRequest struct {
 	CompanySize       *string    `json:"company_size,omitempty" binding:"omitempty,oneof=startup small medium large enterprise"`
 	Description       *string    `json:"description,omitempty"`
 	Website           *string    `json:"website,omitempty" binding:"omitempty,max=255"`
+	Domain            *string    `json:"domain,omitempty" binding:"omitempty,max=255"` // Organization domain (e.g., company.com)
 	LogoURL           *string    `json:"logo_url,omitempty" binding:"omitempty,max=500"`
 	AddressLine1      *string    `json:"address_line1,omitempty"`
 	AddressLine2      *string    `json:"address_line2,omitempty"`

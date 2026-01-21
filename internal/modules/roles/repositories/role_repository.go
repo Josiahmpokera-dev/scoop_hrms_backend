@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"errors"
+	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
@@ -109,4 +110,15 @@ func (r *RoleRepository) HasPermission(roleID uint, permissionCode string) bool 
 		Where("role_permissions.role_id = ? AND permissions.code = ?", roleID, permissionCode).
 		Count(&count)
 	return count > 0
+}
+
+// AssignUserRole assigns a role to a user
+func (r *RoleRepository) AssignUserRole(userID, roleID uint, assignedBy *uint) error {
+	userRole := &models.UserRole{
+		UserID:     userID,
+		RoleID:     roleID,
+		AssignedBy: assignedBy,
+		AssignedAt: time.Now(),
+	}
+	return r.db.Create(userRole).Error
 }

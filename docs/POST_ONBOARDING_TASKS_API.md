@@ -45,7 +45,60 @@ The system supports 14 predefined task types:
 
 ## API Endpoints
 
-### 1. List All Employees with Task Completion
+### 1. Get Post-Onboarding Statistics
+
+Get overall statistics for post-onboarding tasks including active onboarding, total tasks, completed tasks, and overdue tasks.
+
+**Endpoint:** `GET /api/v1/employees/post-onboarding/statistics`
+
+**Authentication:** Required
+
+**Request:** No body or query parameters required
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Post-onboarding statistics retrieved successfully",
+  "data": {
+    "active_onboarding": 12,
+    "total_tasks": 145,
+    "completed_tasks": 98,
+    "overdue_tasks": 5,
+    "completion_percentage": 67.6,
+    "tasks_by_status": {
+      "pending": 25,
+      "in_progress": 22,
+      "completed": 98,
+      "skipped": 0
+    }
+  }
+}
+```
+
+**Response Fields:**
+- `active_onboarding` - Number of employees with active (incomplete) onboarding tasks
+- `total_tasks` - Total number of post-onboarding tasks
+- `completed_tasks` - Number of completed tasks
+- `overdue_tasks` - Number of overdue tasks (pending/in_progress tasks with due_date < today)
+- `completion_percentage` - Overall completion percentage (rounded to 1 decimal place)
+- `tasks_by_status` - Breakdown of tasks by status (pending, in_progress, completed, skipped)
+
+**Example Request:**
+```bash
+GET {{BASE_URL}}/api/v1/employees/post-onboarding/statistics
+Authorization: Bearer {{TOKEN}}
+```
+
+**Use Cases:**
+- Dashboard overview of post-onboarding progress
+- Track overall completion rates
+- Identify overdue tasks that need attention
+- Monitor active onboarding employees
+
+---
+
+### 2. List All Employees with Task Completion
 
 Get a paginated list of all employees with their post-onboarding task completion percentages.
 
@@ -155,7 +208,7 @@ Authorization: Bearer {{TOKEN}}
 
 ---
 
-### 2. Get Available Task Types
+### 3. Get Available Task Types
 
 Get a list of all available task types with their descriptions.
 
@@ -199,7 +252,7 @@ Get a list of all available task types with their descriptions.
 
 ---
 
-### 3. Create a Single Task
+### 4. Create a Single Task
 
 Create a new post-onboarding task for an employee.
 
@@ -287,7 +340,7 @@ Content-Type: application/json
 
 ---
 
-### 4. Bulk Create Tasks
+### 5. Bulk Create Tasks
 
 Create multiple tasks for an employee at once.
 
@@ -365,7 +418,7 @@ Content-Type: application/json
 
 ---
 
-### 5. Get Tasks by Employee ID
+### 6. Get Tasks by Employee ID
 
 Get all tasks for a specific employee.
 
@@ -432,7 +485,7 @@ Authorization: Bearer {{TOKEN}}
 
 ---
 
-### 6. Get Task Summary for Employee
+### 7. Get Task Summary for Employee
 
 Get a summary of tasks (completed, pending, in progress, etc.) for an employee.
 
@@ -482,7 +535,7 @@ Authorization: Bearer {{TOKEN}}
 
 ---
 
-### 7. List All Tasks (with Filters and Pagination)
+### 8. List All Tasks (with Filters and Pagination)
 
 Get a paginated list of all tasks with optional filters.
 
@@ -547,7 +600,7 @@ Authorization: Bearer {{TOKEN}}
 
 ---
 
-### 8. Get Single Task by ID
+### 9. Get Single Task by ID
 
 Get details of a specific task by its ID.
 
@@ -603,7 +656,7 @@ Content-Type: application/json
 
 ---
 
-### 9. Update Task
+### 10. Update Task
 
 Update an existing task (status, priority, assignment, etc.).
 
@@ -675,7 +728,7 @@ Content-Type: application/json
 
 ---
 
-### 10. Complete Task
+### 11. Complete Task
 
 Mark a task as completed. This automatically sets the status to "completed", records who completed it, and sets the completion timestamp.
 
@@ -741,7 +794,7 @@ Content-Type: application/json
 
 ---
 
-### 11. Delete Task
+### 12. Delete Task
 
 Delete a task (soft delete).
 

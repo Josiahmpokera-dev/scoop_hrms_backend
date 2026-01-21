@@ -2,6 +2,7 @@ package services
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	departmentRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
@@ -338,6 +339,48 @@ func (s *EmployeeService) convertToEmployeeListResponse(emp *models.Employee) *m
 	}
 
 	return response
+}
+
+// ListManagers lists all active employees who can be reporting managers
+func (s *EmployeeService) ListManagers(tenantID *uint) ([]map[string]interface{}, error) {
+	managers, err := s.employeeRepo.ListManagers(tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get managers: %w", err)
+	}
+
+	result := make([]map[string]interface{}, len(managers))
+	for i, emp := range managers {
+		managerData := map[string]interface{}{
+			"id":          emp.ID,
+			"employee_id": emp.EmployeeID,
+			"full_name":   emp.FullName(),
+			"first_name":  emp.FirstName,
+			"last_name":   emp.LastName,
+			"email":       emp.WorkEmail,
+		}
+
+		// Add department if available
+		if emp.DepartmentID != nil {
+			managerData["department_id"] = emp.DepartmentID
+			department, err := s.departmentRepo.FindByID(*emp.DepartmentID)
+			if err == nil && department != nil {
+				managerData["department"] = department.Name
+			}
+		}
+
+		// Add position if available
+		if emp.PositionID != nil {
+			managerData["position_id"] = emp.PositionID
+			position, err := s.positionRepo.FindByID(*emp.PositionID)
+			if err == nil && position != nil {
+				managerData["position"] = position.Title
+			}
+		}
+
+		result[i] = managerData
+	}
+
+	return result, nil
 }
 
 // getOnboardingStatus checks if employee has an incomplete onboarding draft

@@ -1,6 +1,8 @@
 package services
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +14,10 @@ import (
 	departmentRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
 	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
 	positionRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
+	roleRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
+	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
+	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -31,6 +37,8 @@ type OnboardingService struct {
 	departmentRepo      *departmentRepos.DepartmentRepository
 	positionRepo        *positionRepos.JobPositionRepository
 	locationRepo        *locationRepos.LocationRepository
+	userRepo            *userRepos.UserRepository
+	roleRepo            *roleRepos.RoleRepository
 }
 
 func NewOnboardingService() *OnboardingService {
@@ -50,6 +58,8 @@ func NewOnboardingService() *OnboardingService {
 		departmentRepo:       departmentRepos.NewDepartmentRepository(),
 		positionRepo:         positionRepos.NewJobPositionRepository(),
 		locationRepo:         locationRepos.NewLocationRepository(),
+		userRepo:             userRepos.NewUserRepository(),
+		roleRepo:             roleRepos.NewRoleRepository(),
 	}
 }
 
@@ -560,44 +570,78 @@ func (s *OnboardingService) buildDraftEmployeeList(drafts []models.EmployeeOnboa
 }
 
 // CompleteOnboarding finalizes the onboarding and creates the employee by draft ID
-func (s *OnboardingService) CompleteOnboarding(draftID uint, updatedBy *uint) (*models.Employee, error) {
+func (s *OnboardingService) CompleteOnboarding(draftID uint, updatedBy *uint) (*models.Employee, *UserCredentials, error) {
 	draft, err := s.draftRepo.FindByID(draftID)
 	if err != nil {
-		return nil, errors.New("draft not found")
+		return nil, nil, errors.New("draft not found")
 	}
 	return s.completeOnboardingForDraft(draft, updatedBy)
 }
 
 // CompleteOnboardingByEmployeeID finalizes the onboarding and creates the employee by employee ID
-func (s *OnboardingService) CompleteOnboardingByEmployeeID(employeeID string, tenantID *uint, updatedBy *uint) (*models.Employee, error) {
+func (s *OnboardingService) CompleteOnboardingByEmployeeID(employeeID string, tenantID *uint, updatedBy *uint) (*models.Employee, *UserCredentials, error) {
 	draft, err := s.draftRepo.FindByEmployeeIDString(employeeID, tenantID)
 	if err != nil {
-		return nil, errors.New("draft not found for this employee ID")
+		return nil, nil, errors.New("draft not found for this employee ID")
 	}
 	return s.completeOnboardingForDraft(draft, updatedBy)
 }
 
+// CompleteOnboardingResponse includes employee and credentials
+type CompleteOnboardingResponse struct {
+	Employee   *models.Employee `json:"employee"`
+	Credentials *UserCredentials `json:"credentials,omitempty"`
+}
+
+// UserCredentials contains login credentials for the new user
+type UserCredentials struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+	Username string `json:"username"`
+}
+
 // completeOnboardingForDraft is the internal method that completes onboarding
-func (s *OnboardingService) completeOnboardingForDraft(draft *models.EmployeeOnboardingDraft, updatedBy *uint) (*models.Employee, error) {
+func (s *OnboardingService) completeOnboardingForDraft(draft *models.EmployeeOnboardingDraft, updatedBy *uint) (*models.Employee, *UserCredentials, error) {
 
 	if draft.IsCompleted {
-		return nil, errors.New("onboarding already completed")
+		return nil, nil, errors.New("onboarding already completed")
 	}
 
 	// Validate required steps are completed
 	if !s.validateRequiredSteps(draft) {
-		return nil, errors.New("required steps are not completed")
+		return nil, nil, errors.New("required steps are not completed")
 	}
 
 	// Create employee from draft data
 	employee, err := s.createEmployeeFromDraft(draft)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create employee: %w", err)
+		return nil, nil, fmt.Errorf("failed to create employee: %w", err)
 	}
 
 	// Migrate all related data from draft to employee
 	if err := s.migrateDraftDataToEmployee(draft.ID, employee.ID); err != nil {
-		return nil, fmt.Errorf("failed to migrate draft data: %w", err)
+		return nil, nil, fmt.Errorf("failed to migrate draft data: %w", err)
+	}
+
+	// Create user account for the employee
+	// Check if the user performing onboarding is admin - if so, the employee might also be admin
+	var isAdminEmployee bool
+	if updatedBy != nil {
+		existingUser, err := s.userRepo.FindByID(*updatedBy)
+		if err == nil && existingUser != nil && existingUser.IsAdmin() {
+			// The person completing onboarding is admin, check if employee should also be admin
+			// For now, we'll check if user already exists and preserve their role
+			// Or we can add a flag in the future to explicitly mark admin employees
+			isAdminEmployee = false // Default to false, can be enhanced with explicit flag
+		}
+	}
+	
+	credentials, err := s.createUserForEmployee(employee, draft, updatedBy, isAdminEmployee)
+	if err != nil {
+		// Log error but don't fail onboarding - user can be created later
+		// return nil, nil, fmt.Errorf("failed to create user account: %w", err)
+		// For now, we'll continue even if user creation fails
+		credentials = nil
 	}
 
 	// Mark draft as completed
@@ -607,10 +651,10 @@ func (s *OnboardingService) completeOnboardingForDraft(draft *models.EmployeeOnb
 	draft.UpdatedBy = updatedBy
 
 	if err := s.draftRepo.Update(draft); err != nil {
-		return nil, fmt.Errorf("failed to update draft: %w", err)
+		return nil, nil, fmt.Errorf("failed to update draft: %w", err)
 	}
 
-	return employee, nil
+	return employee, credentials, nil
 }
 
 // Helper methods for each step
@@ -802,19 +846,40 @@ func (s *OnboardingService) saveStep2Employment(draft *models.EmployeeOnboarding
 		}
 	}
 
-	// Auto-generate employee ID if not provided
-	var employeeID *string
+	// Handle employee ID - preserve existing one from draft if not provided in step 2
+	// Only update if a new employee_id is explicitly provided in step 2
 	if req.EmployeeID != nil && *req.EmployeeID != "" {
-		// Use provided employee ID
-		employeeID = req.EmployeeID
+		// Normalize the provided employee ID
+		normalizedID := strings.ToUpper(strings.TrimSpace(*req.EmployeeID))
+		// Only update if it's different from what's already in the draft
+		if draft.EmployeeID == nil || *draft.EmployeeID != normalizedID {
+			draft.EmployeeID = &normalizedID
+			// Save the employee_id immediately to ensure it's persisted
+			if err := s.draftRepo.Update(draft); err != nil {
+				return fmt.Errorf("failed to save employee_id: %w", err)
+			}
+		}
 	} else {
-		// Auto-generate employee ID starting with "EMP"
-		generatedID := s.generateEmployeeID()
-		employeeID = &generatedID
+		// If employee_id is not provided in step 2, ensure draft has one from step 1
+		// If draft doesn't have employee_id, generate one (shouldn't happen if step 1 was saved)
+		if draft.EmployeeID == nil || *draft.EmployeeID == "" {
+			generatedID := s.generateEmployeeID()
+			draft.EmployeeID = &generatedID
+			// Save the generated employee_id immediately
+			if err := s.draftRepo.Update(draft); err != nil {
+				return fmt.Errorf("failed to save generated employee_id: %w", err)
+			}
+		} else {
+			// Normalize existing employee_id to ensure consistency
+			normalizedID := strings.ToUpper(strings.TrimSpace(*draft.EmployeeID))
+			if *draft.EmployeeID != normalizedID {
+				draft.EmployeeID = &normalizedID
+				if err := s.draftRepo.Update(draft); err != nil {
+					return fmt.Errorf("failed to normalize employee_id: %w", err)
+				}
+			}
+		}
 	}
-
-	// Store employee ID in draft (will be used when creating employee)
-	draft.EmployeeID = employeeID
 
 	// Check if employment details already exist for this draft
 	existingDetails, err := s.employmentDetailsRepo.FindByDraftID(draft.ID)
@@ -1475,4 +1540,172 @@ func (s *OnboardingService) generateEmployeeID() string {
 	
 	// Fallback: use timestamp with nanoseconds if all attempts fail
 	return fmt.Sprintf("EMP%06d", time.Now().UnixNano()%1000000)
+}
+
+// generateSecurePassword generates a secure random password
+func (s *OnboardingService) generateSecurePassword() (string, error) {
+	// Generate 16 random bytes
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", fmt.Errorf("failed to generate random password: %w", err)
+	}
+	// Convert to base64 and take first 12 characters, then add some complexity
+	password := base64.URLEncoding.EncodeToString(bytes)[:12]
+	// Ensure password has at least one uppercase, lowercase, number, and special char
+	// For simplicity, we'll use a pattern: 8 random chars + 1 uppercase + 1 number + 1 special
+	password = password[:8] + "A" + "1" + "!"
+	return password, nil
+}
+
+// createUserForEmployee creates a user account for the employee
+// isAdminEmployee indicates if the employee should have admin role (for admin employees)
+func (s *OnboardingService) createUserForEmployee(employee *models.Employee, draft *models.EmployeeOnboardingDraft, updatedBy *uint, isAdminEmployee bool) (*UserCredentials, error) {
+	// Get employee's work email from employment details
+	employmentDetails, err := s.employmentDetailsRepo.FindByEmployeeID(employee.ID)
+	if err != nil {
+		// Try to get from draft if not migrated yet
+		employmentDetails, err = s.employmentDetailsRepo.FindByDraftID(draft.ID)
+		if err != nil {
+			return nil, fmt.Errorf("employment details not found: %w", err)
+		}
+	}
+
+	if employmentDetails.OfficialEmail == nil || *employmentDetails.OfficialEmail == "" {
+		return nil, errors.New("employee work email is required to create user account")
+	}
+
+	email := *employmentDetails.OfficialEmail
+
+	// Check if user already exists with this email
+	existingUser, err := s.userRepo.FindByEmail(email)
+	if err == nil && existingUser != nil {
+		// User already exists - link employee to existing user and preserve their roles
+		employee.UserID = &existingUser.ID
+		if err := s.employeeRepo.Update(employee); err != nil {
+			// Log error but don't fail
+			_ = err
+		}
+		
+		// If existing user is admin, ensure they also get "employee" role from roles table
+		if existingUser.IsAdmin() {
+			// Admin user is being onboarded as employee - assign employee role
+			employeeRole, err := s.roleRepo.FindByCode("employee")
+			if err == nil && employeeRole != nil {
+				// Check if user already has this role
+				userRoles, _ := s.roleRepo.GetUserRoles(existingUser.ID)
+				hasEmployeeRole := false
+				for _, role := range userRoles {
+					if role.Code == "employee" {
+						hasEmployeeRole = true
+						break
+					}
+				}
+				if !hasEmployeeRole {
+					// Assign employee role to admin user
+					_ = s.roleRepo.AssignUserRole(existingUser.ID, employeeRole.ID, updatedBy)
+				}
+			}
+		}
+		
+		// Return nil credentials (user already exists, uses existing account)
+		return nil, nil
+	}
+
+	// Get basic info for name
+	basicInfo, _ := s.basicInfoRepo.FindByEmployeeID(employee.ID)
+	if basicInfo == nil {
+		basicInfo, _ = s.basicInfoRepo.FindByDraftID(draft.ID)
+	}
+
+	firstName := employee.FirstName
+	lastName := employee.LastName
+	if basicInfo != nil {
+		firstName = basicInfo.FirstName
+		lastName = basicInfo.LastName
+	}
+
+	// Generate username from email
+	emailParts := strings.Split(email, "@")
+	username := emailParts[0]
+	username = strings.ToLower(strings.ReplaceAll(username, ".", ""))
+	username = strings.ReplaceAll(username, "_", "")
+	username = strings.ReplaceAll(username, "-", "")
+
+	// Generate secure password
+	plainPassword, err := s.generateSecurePassword()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate password: %w", err)
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(plainPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Determine user role
+	// If isAdminEmployee is true, assign admin role; otherwise default to user role
+	userRole := userModels.RoleUser
+	if isAdminEmployee {
+		userRole = userModels.RoleAdmin
+	}
+
+	// Create user with determined role
+	user := &userModels.User{
+		TenantID:      employee.TenantID,
+		Username:      username,
+		Email:         email,
+		Password:      string(hashedPassword),
+		FirstName:     firstName,
+		LastName:      lastName,
+		Role:          userRole, // Admin if isAdminEmployee is true, otherwise user
+		Status:        "active",
+		EmailVerified: false,
+		IsActive:      true,
+		UpdatedBy:     updatedBy,
+	}
+
+	if err := s.userRepo.Create(user); err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	// Link user to employee
+	employee.UserID = &user.ID
+	if err := s.employeeRepo.Update(employee); err != nil {
+		// Log error but don't fail - user is created
+		_ = err
+	}
+
+	// Assign "employee" role from roles table (if exists)
+	// This allows users to have multiple roles (e.g., admin + employee)
+	employeeRole, err := s.roleRepo.FindByCode("employee")
+	if err == nil && employeeRole != nil {
+		// Assign role via user_roles table
+		if err := s.roleRepo.AssignUserRole(user.ID, employeeRole.ID, updatedBy); err != nil {
+			// Log but don't fail - user is created with their primary role
+			_ = err
+		}
+	}
+	
+	// If user is admin, also try to assign "system_admin" or "admin" role from roles table
+	// This allows admin employees to have both admin (UserRole enum) and system_admin (roles table) roles
+	if userRole == userModels.RoleAdmin {
+		// Try to find and assign system_admin role from roles table
+		systemAdminRole, err := s.roleRepo.FindByCode("system_admin")
+		if err == nil && systemAdminRole != nil {
+			_ = s.roleRepo.AssignUserRole(user.ID, systemAdminRole.ID, updatedBy)
+		}
+		// Also try "admin" role from roles table
+		adminRole, err := s.roleRepo.FindByCode("admin")
+		if err == nil && adminRole != nil {
+			_ = s.roleRepo.AssignUserRole(user.ID, adminRole.ID, updatedBy)
+		}
+	}
+
+	// Return credentials
+	return &UserCredentials{
+		Email:    email,
+		Password: plainPassword,
+		Username: username,
+	}, nil
 }

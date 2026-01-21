@@ -337,3 +337,15 @@ func (h *PostOnboardingTaskHandler) ListEmployeesWithTaskCompletion(c *gin.Conte
 		TotalPages: totalPages,
 	})
 }
+
+// GetStatistics handles getting post-onboarding statistics
+func (h *PostOnboardingTaskHandler) GetStatistics(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+	stats, err := h.service.GetStatistics(tenantID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Post-onboarding statistics retrieved successfully", stats)
+}

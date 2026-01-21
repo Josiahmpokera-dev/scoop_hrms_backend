@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/services"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
@@ -344,4 +345,22 @@ func (h *EmployeeHandler) ReactivateEmployee(c *gin.Context) {
 	}
 
 	response.Success(c, "Employee reactivated successfully", employee)
+}
+
+// ListManagers handles listing all potential reporting managers
+// @Summary List reporting managers
+// @Description Get list of all active employees who can be reporting managers
+// @Tags Employees
+// @Produce json
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/employees/managers [get]
+func (h *EmployeeHandler) ListManagers(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+	managers, err := h.employeeService.ListManagers(tenantID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Managers retrieved successfully", managers)
 }
