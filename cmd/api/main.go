@@ -23,6 +23,7 @@ import (
 	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
 	roleRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
+	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
 	teamModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/models"
 	tenantModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/tenants/models"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
@@ -97,6 +98,11 @@ func main() {
 		// Biometric models
 		&biometricModels.BioTimeConfig{},
 		&biometricModels.BioTimeTransaction{},
+		// Shifts & Rosters models
+		&shiftModels.Shift{},
+		&shiftModels.ShiftLocation{}, // Join table for shifts and locations
+		&shiftModels.RosterAssignment{},
+		&shiftModels.SwapRequest{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}

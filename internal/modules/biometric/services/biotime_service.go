@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -172,7 +174,7 @@ func (s *BioTimeService) Authenticate() (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		errorMsg := fmt.Sprintf("authentication failed with status %d: %s", resp.StatusCode, string(body))
 		_ = s.configRepo.UpdateLastError(s.tenantID, errorMsg)
-		return "", fmt.Errorf(errorMsg)
+		return "", fmt.Errorf("%s", errorMsg)
 	}
 
 	// Parse response
@@ -188,7 +190,7 @@ func (s *BioTimeService) Authenticate() (string, error) {
 		}
 		errorMsg := fmt.Sprintf("failed to parse auth response: %v", err)
 		_ = s.configRepo.UpdateLastError(s.tenantID, errorMsg)
-		return "", fmt.Errorf(errorMsg)
+		return "", fmt.Errorf("%s", errorMsg)
 	}
 
 	if authResp.Token == "" {
@@ -357,7 +359,7 @@ func (s *BioTimeService) RefreshToken() (string, error) {
 	if resp.StatusCode != http.StatusOK {
 		errorMsg := fmt.Sprintf("authentication failed with status %d: %s", resp.StatusCode, string(body))
 		_ = s.configRepo.UpdateLastError(s.tenantID, errorMsg)
-		return "", fmt.Errorf(errorMsg)
+		return "", fmt.Errorf("%s", errorMsg)
 	}
 
 	// Parse response
@@ -373,7 +375,7 @@ func (s *BioTimeService) RefreshToken() (string, error) {
 		}
 		errorMsg := fmt.Sprintf("failed to parse auth response: %v", err)
 		_ = s.configRepo.UpdateLastError(s.tenantID, errorMsg)
-		return "", fmt.Errorf(errorMsg)
+		return "", fmt.Errorf("%s", errorMsg)
 	}
 
 	if authResp.Token == "" {
@@ -532,21 +534,21 @@ type Transaction struct {
 	ID                 IntOrString `json:"id"`
 	EmpCode            string      `json:"emp_code"`
 	FirstName          string      `json:"first_name"`
-	LastName           string      `json:"last_name"`
+	LastName           *string     `json:"last_name"`
 	Department         string      `json:"department"`
-	Position           string      `json:"position"`
+	Position           *string     `json:"position"`
 	PunchTime          string      `json:"punch_time"`
 	PunchState         string      `json:"punch_state"`
 	PunchStateDisplay  string      `json:"punch_state_display"`
 	VerifyType         IntOrString `json:"verify_type"`
 	VerifyTypeDisplay  string      `json:"verify_type_display"`
 	WorkCode           string      `json:"work_code"`
-	GPSLocation        string      `json:"gps_location"`
+	GPSLocation        *string     `json:"gps_location"`
 	AreaAlias          *string     `json:"area_alias"`
 	TerminalSN         string      `json:"terminal_sn"`
 	Temperature        float64     `json:"temperature"`
 	TerminalAlias      *string     `json:"terminal_alias"`
-	UploadTime         string      `json:"upload_time"`
+	UploadTime         *string     `json:"upload_time"`
 }
 
 // TransactionsResponse represents the BioTime API response for transactions
@@ -576,36 +578,36 @@ func (s *BioTimeService) GetTransactions(params *GetTransactionsParams) (*Transa
 		return nil, errors.New("BioTime integration is disabled")
 	}
 
-	// Build query string
-	queryParams := make([]string, 0)
+	// Build query string using url.Values for proper encoding
+	queryValues := url.Values{}
 	if params != nil {
 		if params.Page != nil {
-			queryParams = append(queryParams, fmt.Sprintf("page=%d", *params.Page))
+			queryValues.Set("page", fmt.Sprintf("%d", *params.Page))
 		}
 		if params.PageSize != nil {
-			queryParams = append(queryParams, fmt.Sprintf("page_size=%d", *params.PageSize))
+			queryValues.Set("page_size", fmt.Sprintf("%d", *params.PageSize))
 		}
 		if params.EmpCode != nil && *params.EmpCode != "" {
-			queryParams = append(queryParams, fmt.Sprintf("emp_code=%s", *params.EmpCode))
+			queryValues.Set("emp_code", *params.EmpCode)
 		}
 		if params.TerminalSN != nil && *params.TerminalSN != "" {
-			queryParams = append(queryParams, fmt.Sprintf("terminal_sn=%s", *params.TerminalSN))
+			queryValues.Set("terminal_sn", *params.TerminalSN)
 		}
 		if params.TerminalAlias != nil && *params.TerminalAlias != "" {
-			queryParams = append(queryParams, fmt.Sprintf("terminal_alias=%s", *params.TerminalAlias))
+			queryValues.Set("terminal_alias", *params.TerminalAlias)
 		}
 		if params.StartTime != nil && *params.StartTime != "" {
-			queryParams = append(queryParams, fmt.Sprintf("start_time=%s", *params.StartTime))
+			queryValues.Set("start_time", *params.StartTime)
 		}
 		if params.EndTime != nil && *params.EndTime != "" {
-			queryParams = append(queryParams, fmt.Sprintf("end_time=%s", *params.EndTime))
+			queryValues.Set("end_time", *params.EndTime)
 		}
 	}
 
-	// Build endpoint URL with query parameters
+	// Build endpoint URL with query parameters (properly encoded)
 	endpoint := "/iclock/api/transactions/"
-	if len(queryParams) > 0 {
-		endpoint += "?" + strings.Join(queryParams, "&")
+	if len(queryValues) > 0 {
+		endpoint += "?" + queryValues.Encode()
 	}
 
 	// Make authenticated request to BioTime API
@@ -635,7 +637,47 @@ func (s *BioTimeService) GetTransactions(params *GetTransactionsParams) (*Transa
 		return nil, fmt.Errorf("BioTime API error: code %d, message: %s", transactionsResp.Code, transactionsResp.Message)
 	}
 
+	// Sort transactions by punch_time in descending order (newest first)
+	// This ensures the latest data appears first by default
+	if len(transactionsResp.Data) > 0 {
+		sort.Slice(transactionsResp.Data, func(i, j int) bool {
+			// Parse punch_time strings and compare
+			timeI, errI := parsePunchTime(transactionsResp.Data[i].PunchTime)
+			timeJ, errJ := parsePunchTime(transactionsResp.Data[j].PunchTime)
+			
+			// If parsing fails, keep original order
+			if errI != nil || errJ != nil {
+				return false
+			}
+			
+			// Sort descending (newest first)
+			return timeI.After(timeJ)
+		})
+	}
+
 	return &transactionsResp, nil
+}
+
+// parsePunchTime parses the punch_time string from BioTime API
+// Supports multiple formats that BioTime might return
+func parsePunchTime(timeStr string) (time.Time, error) {
+	// Common formats from BioTime API
+	layouts := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05Z",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05.000000",
+		time.RFC3339,
+		time.RFC3339Nano,
+	}
+
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, timeStr); err == nil {
+			return t, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("unable to parse time: %s", timeStr)
 }
 
 // GetTransactionByID fetches a single transaction by ID from BioTime API

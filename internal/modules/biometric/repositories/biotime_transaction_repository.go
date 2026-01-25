@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
@@ -169,6 +170,114 @@ func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startT
 	offset := (page - 1) * pageSize
 	err := query.Order("date DESC, emp_code ASC").Offset(offset).Limit(pageSize).Scan(&records).Error
 	if err != nil {
+		return nil, 0, err
+	}
+
+	return records, total, nil
+}
+
+// LateArrivalRecord represents a late arrival record for an employee
+type LateArrivalRecord struct {
+	EmpCode     string     `json:"emp_code"`
+	FirstName   string     `json:"first_name"`
+	LastName    string     `json:"last_name"`
+	Date        time.Time  `json:"date"`
+	CheckIn     *time.Time `json:"check_in"`
+	MinutesLate int        `json:"minutes_late"`
+}
+
+// GetLateArrivals gets employees who checked in more than 30 minutes after 08:00 (i.e., after 08:30)
+// Filters by datetime range but groups by date for daily summaries
+func (r *BioTimeTransactionRepository) GetLateArrivals(tenantID *uint, startTime, endTime time.Time, empCode *string, page, pageSize int) ([]LateArrivalRecord, int64, error) {
+	var records []LateArrivalRecord
+	var total int64
+
+	// Build base SQL query - filter by datetime range, group by date, and filter for late arrivals
+	// Late arrival = check-in time (MIN punch_time) is after 08:30 (08:00 + 30 minutes)
+	// minutes_late = (check_in_time - 08:30) in minutes
+	// Use CTE to first get the min punch_time, then calculate minutes_late
+	baseSQL := `
+		WITH daily_checkins AS (
+			SELECT 
+				emp_code,
+				first_name,
+				last_name,
+				DATE(punch_time)::date as date,
+				MIN(punch_time)::timestamp as check_in
+			FROM biotime_transactions
+			WHERE punch_time >= ? AND punch_time <= ?
+	`
+	args := []interface{}{startTime, endTime}
+
+	// Apply tenant filter
+	if tenantID != nil {
+		baseSQL += " AND tenant_id = ?"
+		args = append(args, *tenantID)
+	} else {
+		baseSQL += " AND tenant_id IS NULL"
+	}
+
+	// Apply employee code filter if provided
+	if empCode != nil && *empCode != "" {
+		baseSQL += " AND emp_code = ?"
+		args = append(args, *empCode)
+	}
+
+	baseSQL += `
+			GROUP BY emp_code, first_name, last_name, DATE(punch_time)
+			HAVING MIN(punch_time)::time > TIME '08:30:00'
+		)
+		SELECT 
+			emp_code,
+			first_name,
+			last_name,
+			date,
+			check_in,
+			(EXTRACT(EPOCH FROM (check_in - (date::timestamp + INTERVAL '8 hours 30 minutes'))) / 60)::integer as minutes_late
+		FROM daily_checkins
+	`
+
+	// Count query
+	countSQL := `
+		SELECT COUNT(*) as count FROM (
+			SELECT emp_code, DATE(punch_time) as date
+			FROM biotime_transactions
+			WHERE punch_time >= ? AND punch_time <= ?
+	`
+	countArgs := []interface{}{startTime, endTime}
+
+	if tenantID != nil {
+		countSQL += " AND tenant_id = ?"
+		countArgs = append(countArgs, *tenantID)
+	} else {
+		countSQL += " AND tenant_id IS NULL"
+	}
+
+	if empCode != nil && *empCode != "" {
+		countSQL += " AND emp_code = ?"
+		countArgs = append(countArgs, *empCode)
+	}
+
+	countSQL += `
+			GROUP BY emp_code, DATE(punch_time)
+			HAVING MIN(punch_time)::time > TIME '08:30:00'
+		) as late_arrivals
+	`
+
+	var countResult struct {
+		Count int64
+	}
+	if err := r.db.Raw(countSQL, countArgs...).Scan(&countResult).Error; err != nil {
+		return nil, 0, err
+	}
+	total = countResult.Count
+
+	// Apply pagination and ordering
+	offset := (page - 1) * pageSize
+	baseSQL += " ORDER BY date DESC, minutes_late DESC, emp_code ASC"
+	baseSQL += fmt.Sprintf(" LIMIT %d OFFSET %d", pageSize, offset)
+
+	if err := r.db.Raw(baseSQL, args...).Scan(&records).Error; err != nil {
 		return nil, 0, err
 	}
 

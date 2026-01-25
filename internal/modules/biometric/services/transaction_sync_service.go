@@ -47,21 +47,34 @@ func (s *TransactionSyncService) SyncTransactions(tenantID *uint, transactions [
 		}
 
 		// Convert BioTime transaction to database model
+		lastName := ""
+		if txn.LastName != nil {
+			lastName = *txn.LastName
+		}
+		position := ""
+		if txn.Position != nil {
+			position = *txn.Position
+		}
+		gpsLocation := ""
+		if txn.GPSLocation != nil {
+			gpsLocation = *txn.GPSLocation
+		}
+
 		dbTxn := models.BioTimeTransaction{
 			TenantID:            tenantID,
 			BioTimeTransactionID: txn.ID.Value,
 			EmpCode:             txn.EmpCode,
 			FirstName:           txn.FirstName,
-			LastName:            txn.LastName,
+			LastName:            lastName,
 			Department:          txn.Department,
-			Position:            txn.Position,
+			Position:            position,
 			PunchTime:           s.parsePunchTime(txn.PunchTime),
 			PunchState:          txn.PunchState,
 			PunchStateDisplay:   txn.PunchStateDisplay,
 			VerifyType:          txn.VerifyType.Value,
 			VerifyTypeDisplay:   txn.VerifyTypeDisplay,
 			WorkCode:            txn.WorkCode,
-			GPSLocation:         txn.GPSLocation,
+			GPSLocation:         gpsLocation,
 			TerminalSN:          txn.TerminalSN,
 			Temperature:         txn.Temperature,
 			SyncedAt:            now,
@@ -74,8 +87,8 @@ func (s *TransactionSyncService) SyncTransactions(tenantID *uint, transactions [
 		if txn.TerminalAlias != nil {
 			dbTxn.TerminalAlias = txn.TerminalAlias
 		}
-		if txn.UploadTime != "" {
-			if uploadTime := s.parsePunchTime(txn.UploadTime); !uploadTime.IsZero() {
+		if txn.UploadTime != nil && *txn.UploadTime != "" {
+			if uploadTime := s.parsePunchTime(*txn.UploadTime); !uploadTime.IsZero() {
 				dbTxn.UploadTime = &uploadTime
 			}
 		}

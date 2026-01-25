@@ -14,6 +14,7 @@ import (
 	organizationUnitHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/handlers"
 	organizationHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/handlers"
 	positionHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/handlers"
+	shiftHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/handlers"
 	teamHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/handlers"
 	"github.com/gin-gonic/gin"
 )
@@ -413,11 +414,62 @@ func SetupRoutes(r *gin.Engine) {
 			biometric.GET("/biotime/token", biotimeHandler.GetToken)
 			biometric.POST("/biotime/refresh-token", biotimeHandler.RefreshToken)
 			biometric.GET("/biotime/terminals", biotimeHandler.GetTerminals)
+			biometric.GET("/biotime/device-status", biotimeHandler.GetDeviceStatus)
 			biometric.GET("/biotime/transactions", biotimeHandler.GetTransactions)
 			biometric.GET("/biotime/transactions/:id", biotimeHandler.GetTransaction)
 			biometric.POST("/biotime/backfill", biotimeHandler.BackfillTransactions)
 			// Daily attendance from database
 			biometric.GET("/attendance/daily", biotimeHandler.GetDailyAttendance)
+			// Late arrivals (exceptional cases)
+			biometric.GET("/attendance/exceptional", biotimeHandler.GetExceptional)
+		}
+
+		// Shifts & Rosters routes
+		shiftHandler := shiftHandlers.NewShiftHandler()
+		rosterHandler := shiftHandlers.NewRosterHandler()
+		swapRequestHandler := shiftHandlers.NewSwapRequestHandler()
+		
+		shifts := v1.Group("/shifts")
+		shifts.Use(middleware.AuthMiddleware(), middleware.HRMiddleware()) // Require HR/Admin
+		{
+			// Statistics
+			shifts.GET("/statistics", shiftHandler.GetStatistics)
+			
+			// Shift management
+			shifts.GET("", shiftHandler.ListShifts)
+			shifts.GET("/:shift_id", shiftHandler.GetShift)
+			shifts.POST("", shiftHandler.CreateShift)
+			shifts.PUT("/:shift_id", shiftHandler.UpdateShift)
+			shifts.POST("/:shift_id/duplicate", shiftHandler.DuplicateShift)
+			shifts.DELETE("/:shift_id", shiftHandler.DeleteShift)
+		}
+
+		rosters := v1.Group("/rosters")
+		rosters.Use(middleware.AuthMiddleware(), middleware.HRMiddleware()) // Require HR/Admin
+		{
+			// Roster assignments
+			rosters.GET("/assignments", rosterHandler.ListRosterAssignments)
+			rosters.GET("/assignments/:assignment_id", rosterHandler.GetRosterAssignment)
+			rosters.POST("/assignments", rosterHandler.CreateRosterAssignment)
+			rosters.POST("/assignments/bulk", rosterHandler.BulkCreateRosterAssignments)
+			rosters.PUT("/assignments/:assignment_id", rosterHandler.UpdateRosterAssignment)
+			rosters.DELETE("/assignments/:assignment_id", rosterHandler.DeleteRosterAssignment)
+			
+			// Weekly roster view
+			rosters.GET("/weekly", rosterHandler.GetWeeklyRosterView)
+			
+			// Auto-schedule
+			rosters.POST("/auto-schedule", rosterHandler.AutoSchedule)
+			
+			// Publish roster
+			rosters.POST("/publish", rosterHandler.PublishRoster)
+			
+			// Swap requests
+			rosters.GET("/swap-requests", swapRequestHandler.ListSwapRequests)
+			rosters.GET("/swap-requests/:request_id", swapRequestHandler.GetSwapRequest)
+			rosters.POST("/swap-requests", swapRequestHandler.CreateSwapRequest)
+			rosters.POST("/swap-requests/:request_id/approve", swapRequestHandler.ApproveSwapRequest)
+			rosters.POST("/swap-requests/:request_id/reject", swapRequestHandler.RejectSwapRequest)
 		}
 	}
 }

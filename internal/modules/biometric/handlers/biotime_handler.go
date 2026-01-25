@@ -93,6 +93,25 @@ func (h *BioTimeHandler) GetTerminals(c *gin.Context) {
 	response.Success(c, "Terminals retrieved successfully", terminalsResp)
 }
 
+// GetDeviceStatus handles fetching device status from BioTime API
+// @Summary Get device status
+// @Description Get the status of all BioTime terminal devices
+// @Tags Biometric
+// @Produce json
+// @Success 200 {object} response.APIResponse{data=services.TerminalsResponse}
+// @Failure 500 {object} response.APIResponse
+// @Router /api/v1/biometric/biotime/device-status [get]
+func (h *BioTimeHandler) GetDeviceStatus(c *gin.Context) {
+	service := h.getService(c)
+	terminalsResp, err := service.GetTerminals()
+	if err != nil {
+		response.InternalServerError(c, "Failed to fetch device status from BioTime", err.Error())
+		return
+	}
+
+	response.Success(c, "Device status retrieved successfully", terminalsResp)
+}
+
 // GetTransactions handles fetching transactions from BioTime API
 // @Summary Get BioTime transactions
 // @Description Fetch attendance/transaction records from BioTime API with optional filters
@@ -331,6 +350,12 @@ func (h *BioTimeHandler) GetDailyAttendance(c *gin.Context) {
 	}
 	params.EndTime = endTime
 
+	// Source selection:
+	// - source=biotime -> fetch direct from BioTime API (real-time)
+	// - source=db      -> fetch from local database (synced data)
+	// Default: biotime (to avoid empty results when DB is not yet synced)
+	source := strings.ToLower(strings.TrimSpace(c.DefaultQuery("source", "biotime")))
+
 	// Employee code (optional)
 	if empCode := c.Query("emp_code"); empCode != "" {
 		params.EmpCode = &empCode
@@ -359,7 +384,14 @@ func (h *BioTimeHandler) GetDailyAttendance(c *gin.Context) {
 	}
 
 	// Get attendance data
-	attendance, total, err := attendanceService.GetDailyAttendance(tenantID, params)
+	var attendance []services.DailyAttendanceResponse
+	var total int64
+	var err error
+	if source == "db" {
+		attendance, total, err = attendanceService.GetDailyAttendance(tenantID, params)
+	} else {
+		attendance, total, err = attendanceService.GetDailyAttendanceFromBioTime(tenantID, params)
+	}
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
@@ -373,6 +405,103 @@ func (h *BioTimeHandler) GetDailyAttendance(c *gin.Context) {
 
 	response.Success(c, "Daily attendance retrieved successfully", map[string]interface{}{
 		"data":       attendance,
+		"pagination": map[string]interface{}{
+			"page":        params.Page,
+			"page_size":   params.PageSize,
+			"total":       total,
+			"total_pages": totalPages,
+		},
+	})
+}
+
+// GetExceptional handles getting late arrivals (exceptional cases)
+// @Summary Get late arrivals (exceptional)
+// @Description Get employees who checked in more than 30 minutes after 08:00 (after 08:30) from biotime_transactions table
+// @Tags Biometric
+// @Produce json
+// @Param start_time query string true "Start time (YYYY-MM-DD or YYYY-MM-DD HH:MM:SS)"
+// @Param end_time query string true "End time (YYYY-MM-DD or YYYY-MM-DD HH:MM:SS)"
+// @Param emp_code query string false "Filter by employee code"
+// @Param page query int false "Page number (default: 1)"
+// @Param page_size query int false "Page size (default: 50, max: 100)"
+// @Success 200 {object} response.APIResponse{data=object{data=[]services.LateArrivalResponse,pagination=object{page=int,page_size=int,total=int,total_pages=int}}}
+// @Failure 400 {object} response.APIResponse
+// @Failure 500 {object} response.APIResponse
+// @Router /api/v1/biometric/attendance/exceptional [get]
+func (h *BioTimeHandler) GetExceptional(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+	attendanceService := services.NewAttendanceService()
+
+	params := services.GetLateArrivalsParams{}
+
+	// Start time (required) - supports both date and datetime
+	startTime := c.Query("start_time")
+	if startTime == "" {
+		// Try legacy parameter name for backward compatibility
+		if startDate := c.Query("start_date"); startDate != "" {
+			startTime = startDate
+		} else {
+			response.BadRequest(c, "start_time is required (format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS)", nil)
+			return
+		}
+	}
+	params.StartTime = startTime
+
+	// End time (required) - supports both date and datetime
+	endTime := c.Query("end_time")
+	if endTime == "" {
+		// Try legacy parameter name for backward compatibility
+		if endDate := c.Query("end_date"); endDate != "" {
+			endTime = endDate
+		} else {
+			response.BadRequest(c, "end_time is required (format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS)", nil)
+			return
+		}
+	}
+	params.EndTime = endTime
+
+	// Employee code (optional)
+	if empCode := c.Query("emp_code"); empCode != "" {
+		params.EmpCode = &empCode
+	}
+
+	// Page (optional, default: 1)
+	if pageStr := c.Query("page"); pageStr != "" {
+		if page, err := strconv.Atoi(pageStr); err == nil && page > 0 {
+			params.Page = page
+		} else {
+			params.Page = 1
+		}
+	} else {
+		params.Page = 1
+	}
+
+	// Page size (optional, default: 50)
+	if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
+		if pageSize, err := strconv.Atoi(pageSizeStr); err == nil && pageSize > 0 {
+			params.PageSize = pageSize
+		} else {
+			params.PageSize = 50
+		}
+	} else {
+		params.PageSize = 50
+	}
+
+	// Get late arrivals data
+	lateArrivals, total, err := attendanceService.GetLateArrivals(tenantID, params)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	// Calculate pagination metadata
+	totalPages := int((total + int64(params.PageSize) - 1) / int64(params.PageSize))
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	response.Success(c, "Late arrivals retrieved successfully", map[string]interface{}{
+		"data":       lateArrivals,
 		"pagination": map[string]interface{}{
 			"page":        params.Page,
 			"page_size":   params.PageSize,
