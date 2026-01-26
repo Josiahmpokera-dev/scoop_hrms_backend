@@ -103,6 +103,7 @@ func main() {
 		&shiftModels.ShiftLocation{}, // Join table for shifts and locations
 		&shiftModels.RosterAssignment{},
 		&shiftModels.SwapRequest{},
+		&shiftModels.RosterChangeRequest{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}

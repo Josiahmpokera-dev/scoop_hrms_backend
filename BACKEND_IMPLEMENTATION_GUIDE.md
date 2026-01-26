@@ -1,6 +1,9 @@
 # Shifts & Rosters API Documentation
 
-This document outlines the API endpoints for the Shifts & Rosters module, including shift management, roster assignments, and swap requests.
+This document outlines the API endpoints for the Shifts & Rosters module, including shift management, roster assignments, swap requests, and roster change requests.
+
+**Related Documentation:**
+- [Roster Change Request API](./ROSTER_CHANGE_REQUEST_API.md) - Employee requests to change roster assignments
 
 ---
 
@@ -38,6 +41,14 @@ All endpoints use: `{{BASE_URL}}/api/v1/shifts` or `{{BASE_URL}}/api/v1/rosters`
 | POST | `/api/v1/rosters/swap-requests` | Create swap request |
 | POST | `/api/v1/rosters/swap-requests/:request_id/approve` | Approve swap request |
 | POST | `/api/v1/rosters/swap-requests/:request_id/reject` | Reject swap request |
+| GET | `/api/v1/self-service/rosters/assignments` | List my roster assignments (Employee) |
+| GET | `/api/v1/self-service/rosters/assignments/:assignment_id` | Get my roster assignment (Employee) |
+| POST | `/api/v1/self-service/rosters/change-requests` | Create change request (Employee) |
+| GET | `/api/v1/self-service/rosters/change-requests` | List my change requests (Employee) |
+| GET | `/api/v1/rosters/change-requests` | List all change requests (HR/Admin) |
+| GET | `/api/v1/rosters/change-requests/:request_id` | Get change request |
+| POST | `/api/v1/rosters/change-requests/:request_id/approve` | Approve change request |
+| POST | `/api/v1/rosters/change-requests/:request_id/reject` | Reject change request |
 
 ---
 
@@ -1772,3 +1783,46 @@ Valid values (lowercase):
 8. **Tenant Isolation:** All endpoints automatically filter data by tenant ID from the authenticated user.
 9. **Soft Deletes:** Deleted shifts and roster assignments are soft-deleted and can be recovered if needed.
 10. **Working Hours Calculation:** Working hours are automatically calculated from start_time and end_time. Cross-day shifts are supported.
+
+---
+
+## 6. Roster Change Requests
+
+**Note:** For detailed documentation on roster change requests, see [Roster Change Request API](./ROSTER_CHANGE_REQUEST_API.md).
+
+### Quick Reference
+
+**Employee Endpoints:**
+- `POST /api/v1/self-service/rosters/change-requests` - Create change request
+- `GET /api/v1/self-service/rosters/change-requests` - List my change requests
+- `GET /api/v1/self-service/rosters/change-requests/:request_id` - Get my change request
+
+**HR/Admin Endpoints:**
+- `GET /api/v1/rosters/change-requests` - List all change requests
+- `GET /api/v1/rosters/change-requests/:request_id` - Get change request
+- `POST /api/v1/rosters/change-requests/:request_id/approve` - Approve request
+- `POST /api/v1/rosters/change-requests/:request_id/reject` - Reject request
+
+### Example: Employee Request Flow
+
+**1. Employee creates change request:**
+```bash
+POST /api/v1/self-service/rosters/change-requests
+{
+  "assignment_id": 5,
+  "requested_shift_id": 2,
+  "requested_date": "2026-01-25",
+  "reason": "Need to attend training"
+}
+```
+
+**2. HR approves:**
+```bash
+POST /api/v1/rosters/change-requests/1/approve
+{
+  "notify_employee": true,
+  "notes": "Approved"
+}
+```
+
+**Result:** The assignment is automatically updated with the requested changes.

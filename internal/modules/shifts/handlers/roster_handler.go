@@ -73,6 +73,50 @@ func (h *RosterHandler) toRosterResponse(assignment *models.RosterAssignment) ma
 	return response
 }
 
+// toEmployeeRosterResponse converts RosterAssignment to employee-friendly response format
+// Includes change request status information
+func (h *RosterHandler) toEmployeeRosterResponse(assignment *models.RosterAssignment, hasPendingChangeRequest bool) map[string]interface{} {
+	employee, _ := h.employeeRepo.FindByEmployeeID(assignment.EmployeeID)
+
+	response := map[string]interface{}{
+		"id":            assignment.ID,
+		"employee_id":   assignment.EmployeeID,
+		"employee_name": getEmployeeFullName(employee),
+		"date":          assignment.Date.Format("2006-01-02"),
+		"shift_id":      assignment.ShiftID,
+		"status":        assignment.Status,
+		"created_at":    assignment.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		"updated_at":    assignment.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		"can_request_change": !hasPendingChangeRequest && assignment.Status != "swapped",
+		"has_pending_change_request": hasPendingChangeRequest,
+	}
+
+	if assignment.Shift != nil {
+		response["shift_name"] = assignment.Shift.ShiftName
+		response["shift_code"] = assignment.Shift.ShiftCode
+		response["shift_timing"] = assignment.Shift.StartTime + " - " + assignment.Shift.EndTime
+		response["shift_type"] = assignment.Shift.ShiftType
+	}
+
+	if assignment.Location != nil {
+		response["location_id"] = assignment.Location.ID
+		response["location_name"] = assignment.Location.Name
+	}
+
+	if employee != nil {
+		response["employee_photo"] = getEmployeePhoto(employee)
+		// Get department name
+		if employee.DepartmentID != nil {
+			dept, err := h.departmentRepo.FindByID(*employee.DepartmentID)
+			if err == nil && dept != nil {
+				response["department"] = dept.Name
+			}
+		}
+	}
+
+	return response
+}
+
 // ListRosterAssignments handles listing roster assignments
 func (h *RosterHandler) ListRosterAssignments(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -377,4 +421,149 @@ func (h *RosterHandler) PublishRoster(c *gin.Context) {
 		"published_at":    time.Now().Format("2006-01-02T15:04:05Z07:00"),
 		"published_by":    publishedBy,
 	})
+}
+
+// GetMyRosterAssignments handles employees viewing their own roster assignments
+func (h *RosterHandler) GetMyRosterAssignments(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	tenantID := middleware.GetTenantID(c)
+
+	// Get employee ID from authenticated user
+	user, _ := c.Get("user")
+	var employeeID string
+	if userObj, ok := user.(*userModels.User); ok {
+		employee, err := h.employeeRepo.FindByUserID(userObj.ID)
+		if err != nil || employee == nil {
+			response.BadRequest(c, "Employee not found for user", nil)
+			return
+		}
+		employeeID = employee.EmployeeID
+	} else {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	// Build filters - automatically filter by employee ID
+	filters := make(map[string]interface{})
+	filters["employee_id"] = employeeID
+
+	// Optional date range filters
+	if startDate := c.Query("start_date"); startDate != "" {
+		filters["start_date"] = startDate
+	}
+	if endDate := c.Query("end_date"); endDate != "" {
+		filters["end_date"] = endDate
+	}
+	if status := c.Query("status"); status != "" {
+		filters["status"] = status
+	}
+
+	assignments, total, err := h.service.ListRosterAssignments(tenantID, page, pageSize, filters)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve roster assignments", err.Error())
+		return
+	}
+
+	// Check for pending change requests for each assignment
+	changeRequestService := services.NewRosterChangeRequestService()
+	assignmentIDs := make([]uint, len(assignments))
+	for i, assignment := range assignments {
+		assignmentIDs[i] = assignment.ID
+	}
+
+	// Get all pending change requests for these assignments
+	// We'll check each assignment individually
+	pendingMap := make(map[uint]bool)
+	for _, assignment := range assignments {
+		// Check if there's a pending change request for this assignment
+		filters := map[string]interface{}{
+			"assignment_id": assignment.ID,
+			"status":        "pending",
+		}
+		_, _, err := changeRequestService.ListRosterChangeRequests(tenantID, 1, 1, filters)
+		if err == nil {
+			// If we get results, there's a pending request
+			requests, _, _ := changeRequestService.ListRosterChangeRequests(tenantID, 1, 1, filters)
+			if len(requests) > 0 {
+				pendingMap[assignment.ID] = true
+			}
+		}
+	}
+
+
+	// Convert to response format with change request status
+	assignmentResponses := make([]map[string]interface{}, len(assignments))
+	for i, assignment := range assignments {
+		hasPending := pendingMap[assignment.ID]
+		assignmentResponses[i] = h.toEmployeeRosterResponse(&assignment, hasPending)
+	}
+
+	totalPages := (total + int64(pageSize) - 1) / int64(pageSize)
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	response.Success(c, "Roster assignments retrieved successfully", map[string]interface{}{
+		"data": assignmentResponses,
+		"meta": map[string]interface{}{
+			"page":       page,
+			"per_page":   pageSize,
+			"total":      total,
+			"total_pages": totalPages,
+		},
+	})
+}
+
+// GetMyRosterAssignment handles employees viewing a specific roster assignment
+func (h *RosterHandler) GetMyRosterAssignment(c *gin.Context) {
+	idStr := c.Param("assignment_id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid assignment ID", nil)
+		return
+	}
+
+	// Get employee ID from authenticated user
+	user, _ := c.Get("user")
+	var employeeID string
+	if userObj, ok := user.(*userModels.User); ok {
+		employee, err := h.employeeRepo.FindByUserID(userObj.ID)
+		if err != nil || employee == nil {
+			response.BadRequest(c, "Employee not found for user", nil)
+			return
+		}
+		employeeID = employee.EmployeeID
+	} else {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	assignment, err := h.service.GetRosterAssignmentByID(uint(id))
+	if err != nil {
+		response.NotFound(c, "Roster assignment not found")
+		return
+	}
+
+	// Verify assignment belongs to the employee
+	if assignment.EmployeeID != employeeID {
+		response.Forbidden(c, "You can only view your own roster assignments")
+		return
+	}
+
+	// Check for pending change request
+	tenantID := middleware.GetTenantID(c)
+	changeRequestService := services.NewRosterChangeRequestService()
+	filters := map[string]interface{}{
+		"assignment_id": assignment.ID,
+		"status":        "pending",
+	}
+	requests, _, _ := changeRequestService.ListRosterChangeRequests(tenantID, 1, 1, filters)
+	hasPending := len(requests) > 0
+
+	response.Success(c, "Roster assignment retrieved successfully", h.toEmployeeRosterResponse(assignment, hasPending))
 }

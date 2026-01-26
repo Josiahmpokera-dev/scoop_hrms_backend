@@ -428,6 +428,7 @@ func SetupRoutes(r *gin.Engine) {
 		shiftHandler := shiftHandlers.NewShiftHandler()
 		rosterHandler := shiftHandlers.NewRosterHandler()
 		swapRequestHandler := shiftHandlers.NewSwapRequestHandler()
+		changeRequestHandler := shiftHandlers.NewRosterChangeRequestHandler()
 		
 		shifts := v1.Group("/shifts")
 		shifts.Use(middleware.AuthMiddleware(), middleware.HRMiddleware()) // Require HR/Admin
@@ -470,6 +471,27 @@ func SetupRoutes(r *gin.Engine) {
 			rosters.POST("/swap-requests", swapRequestHandler.CreateSwapRequest)
 			rosters.POST("/swap-requests/:request_id/approve", swapRequestHandler.ApproveSwapRequest)
 			rosters.POST("/swap-requests/:request_id/reject", swapRequestHandler.RejectSwapRequest)
+			
+			// Roster change requests (HR/Admin - view all)
+			rosters.GET("/change-requests", changeRequestHandler.ListRosterChangeRequests)
+			rosters.GET("/change-requests/:request_id", changeRequestHandler.GetRosterChangeRequest)
+			rosters.POST("/change-requests/:request_id/approve", changeRequestHandler.ApproveRosterChangeRequest)
+			rosters.POST("/change-requests/:request_id/reject", changeRequestHandler.RejectRosterChangeRequest)
+		}
+
+		// Employee self-service routes for roster change requests
+		employeeRosters := v1.Group("/self-service/rosters")
+		employeeRosters.Use(middleware.AuthMiddleware()) // Only authentication required (all employees)
+		{
+			// Employee can view their own roster assignments
+			employeeRosters.GET("/assignments", rosterHandler.GetMyRosterAssignments)
+			employeeRosters.GET("/assignments/:assignment_id", rosterHandler.GetMyRosterAssignment)
+			
+			// Employee can create roster change requests
+			employeeRosters.POST("/change-requests", changeRequestHandler.CreateRosterChangeRequest)
+			// Employee can view their own change requests
+			employeeRosters.GET("/change-requests", changeRequestHandler.ListRosterChangeRequests)
+			employeeRosters.GET("/change-requests/:request_id", changeRequestHandler.GetRosterChangeRequest)
 		}
 	}
 }
