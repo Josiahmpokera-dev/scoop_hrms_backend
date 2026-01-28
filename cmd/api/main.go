@@ -24,6 +24,7 @@ import (
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
 	roleRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
 	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
+	leaveModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
 	teamModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/models"
 	tenantModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/tenants/models"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
@@ -104,6 +105,14 @@ func main() {
 		&shiftModels.RosterAssignment{},
 		&shiftModels.SwapRequest{},
 		&shiftModels.RosterChangeRequest{},
+		// Leave Management models
+		&leaveModels.LeaveType{},
+		&leaveModels.LeavePolicy{},
+		&leaveModels.LeaveRequest{},
+		&leaveModels.LeaveApproval{},
+		&leaveModels.LeaveDocument{},
+		&leaveModels.LeaveBalance{},
+		&leaveModels.Holiday{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}

@@ -16,6 +16,7 @@ import (
 	positionHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/handlers"
 	shiftHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/handlers"
 	teamHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/handlers"
+	leaveHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/handlers"
 	"github.com/gin-gonic/gin"
 )
 
@@ -492,6 +493,84 @@ func SetupRoutes(r *gin.Engine) {
 			// Employee can view their own change requests
 			employeeRosters.GET("/change-requests", changeRequestHandler.ListRosterChangeRequests)
 			employeeRosters.GET("/change-requests/:request_id", changeRequestHandler.GetRosterChangeRequest)
+		}
+
+		// Leave Management routes
+		leaveTypeHandler := leaveHandlers.NewLeaveTypeHandler()
+		leavePolicyHandler := leaveHandlers.NewLeavePolicyHandler()
+		leaveRequestHandler := leaveHandlers.NewLeaveRequestHandler()
+		holidayHandler := leaveHandlers.NewHolidayHandler()
+		leaveCalendarHandler := leaveHandlers.NewLeaveCalendarHandler()
+
+		// Leave Types (Admin/HR)
+		leaveTypes := v1.Group("/leave/types")
+		leaveTypes.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			leaveTypes.GET("", leaveTypeHandler.ListLeaveTypes)
+			leaveTypes.GET("/:type_id", leaveTypeHandler.GetLeaveType)
+			leaveTypes.POST("", leaveTypeHandler.CreateLeaveType)
+			leaveTypes.PUT("/:type_id", leaveTypeHandler.UpdateLeaveType)
+			leaveTypes.DELETE("/:type_id", leaveTypeHandler.DeleteLeaveType)
+		}
+
+		// Leave Policies (Admin/HR)
+		leavePolicies := v1.Group("/leave/policies")
+		leavePolicies.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			leavePolicies.GET("", leavePolicyHandler.ListLeavePolicies)
+			leavePolicies.GET("/:policy_id", leavePolicyHandler.GetLeavePolicy)
+			leavePolicies.POST("", leavePolicyHandler.CreateLeavePolicy)
+			leavePolicies.PUT("/:policy_id", leavePolicyHandler.UpdateLeavePolicy)
+			leavePolicies.DELETE("/:policy_id", leavePolicyHandler.DeleteLeavePolicy)
+		}
+
+		// Leave Requests - Employee endpoints
+		leaveRequests := v1.Group("/leave")
+		leaveRequests.Use(middleware.AuthMiddleware())
+		{
+			// Employee info and balances
+			leaveRequests.GET("/employee-info", leaveRequestHandler.GetEmployeeInfo)
+			leaveRequests.GET("/balances", leaveRequestHandler.GetEmployeeLeaveBalances)
+			leaveRequests.GET("/policies/guidelines", leavePolicyHandler.GetPolicyGuidelines)
+			
+			// Calculate days
+			leaveRequests.POST("/calculate-days", leaveRequestHandler.CalculateLeaveDays)
+			
+			// Leave requests
+			leaveRequests.POST("/applications", leaveRequestHandler.CreateLeaveRequest)
+			leaveRequests.GET("/requests", leaveRequestHandler.ListLeaveRequests)
+			leaveRequests.GET("/requests/:request_id", leaveRequestHandler.GetLeaveRequest)
+			leaveRequests.PUT("/requests/:request_id", leaveRequestHandler.UpdateLeaveRequest)
+			leaveRequests.POST("/requests/:request_id/cancel", leaveRequestHandler.CancelLeaveRequest)
+			leaveRequests.DELETE("/requests/:request_id", leaveRequestHandler.DeleteLeaveRequest)
+		}
+
+		// Leave Requests - HR/Admin approval endpoints
+		leaveApprovals := v1.Group("/leave/requests")
+		leaveApprovals.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			leaveApprovals.POST("/:request_id/approve", leaveRequestHandler.ApproveLeaveRequest)
+			leaveApprovals.POST("/:request_id/reject", leaveRequestHandler.RejectLeaveRequest)
+		}
+
+		// Holidays (Admin/HR)
+		holidays := v1.Group("/holidays")
+		holidays.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			holidays.GET("", holidayHandler.ListHolidays)
+			holidays.GET("/:holiday_id", holidayHandler.GetHoliday)
+			holidays.POST("", holidayHandler.CreateHoliday)
+			holidays.PUT("/:holiday_id", holidayHandler.UpdateHoliday)
+			holidays.DELETE("/:holiday_id", holidayHandler.DeleteHoliday)
+		}
+
+		// Leave Calendar (All authenticated users)
+		leaveCalendar := v1.Group("/leave/calendar")
+		leaveCalendar.Use(middleware.AuthMiddleware())
+		{
+			leaveCalendar.GET("", leaveCalendarHandler.GetLeaveCalendar)
+			leaveCalendar.GET("/today", leaveCalendarHandler.GetEmployeesOnLeaveToday)
+			leaveCalendar.GET("/week", leaveCalendarHandler.GetWeeklyCalendar)
 		}
 	}
 }
