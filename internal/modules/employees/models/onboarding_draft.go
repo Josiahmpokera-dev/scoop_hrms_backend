@@ -28,6 +28,7 @@ type EmployeeOnboardingDraft struct {
 	ID              uint           `json:"id" gorm:"primaryKey"`
 	TenantID        *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	EmployeeID      *string        `json:"employee_id,omitempty" gorm:"size:50"`                              // Employee ID (if assigned)
+	LinkedUserID    *uint          `json:"linked_user_id,omitempty" gorm:"index"`                               // When set: onboarding an existing user; no credentials created at end
 	StepData        string         `json:"step_data,omitempty" gorm:"column:step_data;type:text"`             // JSON object storing step 1 and step 2 data
 	CompletedSteps  string         `json:"completed_steps,omitempty" gorm:"column:completed_steps;type:text"` // JSON array of completed step numbers (e.g., "[1,2,3]")
 	Progress        float64        `json:"progress" gorm:"column:progress;type:decimal(5,2);default:0"`       // Completion percentage (0-100)

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mime/multipart"
 	"strconv"
+	"strings"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
@@ -45,15 +46,28 @@ func (h *OnboardingHandler) CreateDraft(c *gin.Context) {
 		createdBy = &userObj.ID
 	}
 
-	// Parse optional request body for step data
+	// Parse optional request body for step data and existing-user onboarding opts
 	var req models.CreateDraftRequest
 	var stepData map[string]interface{}
 	var stepNumber int = 0
-	
+	var createDraftOpts *services.CreateDraftOpts
+
 	if c.Request.ContentLength > 0 {
 		// Try to parse as CreateDraftRequest or SaveDraftRequest format
 		var rawData map[string]interface{}
 		if err := c.ShouldBindJSON(&rawData); err == nil {
+			// Optional: onboard existing user (no credentials at end)
+			if lid, ok := rawData["linked_user_id"]; ok && lid != nil {
+				switch v := lid.(type) {
+				case float64:
+					uid := uint(v)
+					createDraftOpts = &services.CreateDraftOpts{LinkedUserID: &uid}
+				}
+			} else if em, ok := rawData["existing_user_email"]; ok && em != nil {
+				if s, ok := em.(string); ok && s != "" {
+					createDraftOpts = &services.CreateDraftOpts{ExistingUserEmail: &s}
+				}
+			}
 			// Check if it's in SaveDraftRequest format (has "step" and "data" fields)
 			if stepVal, hasStep := rawData["step"]; hasStep {
 				// It's in SaveDraftRequest format
@@ -71,12 +85,17 @@ func (h *OnboardingHandler) CreateDraft(c *gin.Context) {
 				}
 			} else if err := c.ShouldBindJSON(&req); err == nil {
 				// Try to parse as CreateDraftRequest
+				if req.LinkedUserID != nil {
+					createDraftOpts = &services.CreateDraftOpts{LinkedUserID: req.LinkedUserID}
+				} else if req.ExistingUserEmail != nil && *req.ExistingUserEmail != "" {
+					createDraftOpts = &services.CreateDraftOpts{ExistingUserEmail: req.ExistingUserEmail}
+				}
 				if req.Step != nil && *req.Step >= 1 && *req.Step <= 10 {
 					stepNumber = *req.Step
-					if req.Data != nil && len(req.Data) > 0 {
+					if len(req.Data) > 0 {
 						stepData = req.Data
 					}
-				} else if req.Step1Data != nil && len(req.Step1Data) > 0 {
+				} else if len(req.Step1Data) > 0 {
 					// Legacy: step1_data field
 					stepNumber = 1
 					stepData = req.Step1Data
@@ -91,8 +110,8 @@ func (h *OnboardingHandler) CreateDraft(c *gin.Context) {
 		}
 	}
 
-	// Create draft
-	draft, err := h.onboardingService.CreateDraft(tenantID, createdBy)
+	// Create draft (opts = nil for new person; opts set for existing user onboarding)
+	draft, err := h.onboardingService.CreateDraft(tenantID, createdBy, createDraftOpts)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
@@ -316,9 +335,12 @@ func (h *OnboardingHandler) CompleteOnboarding(c *gin.Context) {
 		return
 	}
 
-	// Prepare response with employee and credentials
+	// Prepare response: credentials_created and linked_to_existing_user so frontend can show the right message
+	credentialsCreated := credentials != nil
 	responseData := map[string]interface{}{
-		"employee": employee,
+		"employee":                 employee,
+		"credentials_created":      credentialsCreated,
+		"linked_to_existing_user":  !credentialsCreated,
 	}
 	if credentials != nil {
 		responseData["credentials"] = credentials
@@ -357,15 +379,61 @@ func (h *OnboardingHandler) CompleteOnboardingByEmployeeID(c *gin.Context) {
 		return
 	}
 
-	// Prepare response with employee and credentials
+	credentialsCreated := credentials != nil
 	responseData := map[string]interface{}{
-		"employee": employee,
+		"employee":                employee,
+		"credentials_created":     credentialsCreated,
+		"linked_to_existing_user": !credentialsCreated,
 	}
 	if credentials != nil {
 		responseData["credentials"] = credentials
 	}
 
 	response.Created(c, "Employee onboarding completed successfully", responseData)
+}
+
+// ListNonEmployeeUsers lists users who are not yet linked to any employee (for starting "onboard existing user" flow).
+// Use the returned user id as linked_user_id when calling POST /employees/onboarding/draft with { "linked_user_id": <id> }.
+// @Summary List non-employee users
+// @Description Get users who are not yet employees; use their id to start onboarding with linked_user_id
+// @Tags Employee Onboarding
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20) maximum(100)
+// @Param search query string false "Search by email, first name, last name, username"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/employees/onboarding/non-employee-users [get]
+func (h *OnboardingHandler) ListNonEmployeeUsers(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+
+	page := 1
+	if p := c.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	pageSize := 20
+	if ps := c.Query("page_size"); ps != "" {
+		if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 && parsed <= 100 {
+			pageSize = parsed
+		}
+	}
+	search := strings.TrimSpace(c.Query("search"))
+
+	users, total, err := h.onboardingService.ListNonEmployeeUsers(tenantID, page, pageSize, search)
+	if err != nil {
+		response.InternalServerError(c, "Failed to list non-employee users", err.Error())
+		return
+	}
+
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	meta := &response.Meta{
+		Page:       page,
+		PerPage:    pageSize,
+		Total:      total,
+		TotalPages: totalPages,
+	}
+	response.SuccessWithMeta(c, "Non-employee users retrieved successfully", users, meta)
 }
 
 // ListDrafts lists all onboarding drafts for the tenant

@@ -63,8 +63,14 @@ func NewOnboardingService() *OnboardingService {
 	}
 }
 
-// CreateDraft creates a new onboarding draft
-func (s *OnboardingService) CreateDraft(tenantID *uint, createdBy *uint) (*models.EmployeeOnboardingDraft, error) {
+// CreateDraftOpts optional params for creating a draft (e.g. for existing user onboarding)
+type CreateDraftOpts struct {
+	LinkedUserID      *uint   // Onboard this existing user; no credentials at end
+	ExistingUserEmail *string // Resolve to user and set LinkedUserID
+}
+
+// CreateDraft creates a new onboarding draft. Pass opts with LinkedUserID or ExistingUserEmail to onboard an existing user (no credentials at end).
+func (s *OnboardingService) CreateDraft(tenantID *uint, createdBy *uint, opts *CreateDraftOpts) (*models.EmployeeOnboardingDraft, error) {
 	draft := &models.EmployeeOnboardingDraft{
 		TenantID:       tenantID,
 		CompletedSteps: "[]",
@@ -73,11 +79,28 @@ func (s *OnboardingService) CreateDraft(tenantID *uint, createdBy *uint) (*model
 		CreatedBy:      createdBy,
 		UpdatedBy:      createdBy,
 	}
-
+	if opts != nil {
+		if opts.LinkedUserID != nil {
+			existingEmp, _ := s.employeeRepo.FindByUserID(*opts.LinkedUserID)
+			if existingEmp != nil {
+				return nil, fmt.Errorf("user is already onboarded as an employee (employee_id: %s)", existingEmp.EmployeeID)
+			}
+			draft.LinkedUserID = opts.LinkedUserID
+		} else if opts.ExistingUserEmail != nil && *opts.ExistingUserEmail != "" {
+			user, err := s.userRepo.FindByEmail(*opts.ExistingUserEmail)
+			if err != nil || user == nil {
+				return nil, fmt.Errorf("no user found with email %s", *opts.ExistingUserEmail)
+			}
+			existingEmp, _ := s.employeeRepo.FindByUserID(user.ID)
+			if existingEmp != nil {
+				return nil, fmt.Errorf("user is already onboarded as an employee")
+			}
+			draft.LinkedUserID = &user.ID
+		}
+	}
 	if err := s.draftRepo.Create(draft); err != nil {
 		return nil, fmt.Errorf("failed to create draft: %w", err)
 	}
-
 	return draft, nil
 }
 
@@ -249,14 +272,22 @@ func (s *OnboardingService) GetDraft(draftID uint) (*models.GetDraftResponse, er
 	}
 
 	response := &models.GetDraftResponse{
-		DraftID:        draft.ID,
-		EmployeeID:     draft.EmployeeID,
-		Progress:       draft.Progress,
-		CompletedSteps: draft.GetCompletedStepsList(),
-		IsCompleted:    draft.IsCompleted,
-		Steps:          make(map[string]interface{}),
-		CreatedAt:      draft.CreatedAt,
-		UpdatedAt:      draft.UpdatedAt,
+		DraftID:                    draft.ID,
+		EmployeeID:                 draft.EmployeeID,
+		LinkedUserID:               draft.LinkedUserID,
+		IsExistingUserOnboarding:   draft.LinkedUserID != nil,
+		Progress:                   draft.Progress,
+		CompletedSteps:             draft.GetCompletedStepsList(),
+		IsCompleted:                 draft.IsCompleted,
+		Steps:                      make(map[string]interface{}),
+		CreatedAt:                  draft.CreatedAt,
+		UpdatedAt:                  draft.UpdatedAt,
+	}
+	if draft.LinkedUserID != nil {
+		linkedUser, _ := s.userRepo.FindByID(*draft.LinkedUserID)
+		if linkedUser != nil {
+			response.LinkedUserEmail = &linkedUser.Email
+		}
 	}
 
 	// Load all step data
@@ -299,6 +330,12 @@ func (s *OnboardingService) GetDraftSummary(draftID uint) (*models.EmployeeOnboa
 // ListDrafts lists all drafts for a tenant
 func (s *OnboardingService) ListDrafts(tenantID *uint) ([]models.EmployeeOnboardingDraft, error) {
 	return s.draftRepo.FindByTenantID(tenantID)
+}
+
+// ListNonEmployeeUsers returns users who are not yet linked to any employee (for onboarding existing users).
+// Use the returned user id as linked_user_id when creating an onboarding draft.
+func (s *OnboardingService) ListNonEmployeeUsers(tenantID *uint, page, pageSize int, search string) ([]userModels.User, int64, error) {
+	return s.userRepo.ListNonEmployeeUsers(tenantID, page, pageSize, search)
 }
 
 // ListDraftEmployees lists all incomplete draft employees with their filled details
@@ -1576,38 +1613,35 @@ func (s *OnboardingService) createUserForEmployee(employee *models.Employee, dra
 
 	email := *employmentDetails.OfficialEmail
 
-	// Check if user already exists with this email
+	// Check if user already exists with this email (existing user being onboarded as employee)
 	existingUser, err := s.userRepo.FindByEmail(email)
 	if err == nil && existingUser != nil {
-		// User already exists - link employee to existing user and preserve their roles
+		// User already exists - ensure they are not already linked to another employee
+		existingEmp, _ := s.employeeRepo.FindByUserID(existingUser.ID)
+		if existingEmp != nil && existingEmp.ID != employee.ID {
+			return nil, fmt.Errorf("user is already onboarded as an employee (employee_id: %s)", existingEmp.EmployeeID)
+		}
+		// Link employee to existing user; no new credentials
 		employee.UserID = &existingUser.ID
 		if err := s.employeeRepo.Update(employee); err != nil {
-			// Log error but don't fail
 			_ = err
 		}
-		
-		// If existing user is admin, ensure they also get "employee" role from roles table
-		if existingUser.IsAdmin() {
-			// Admin user is being onboarded as employee - assign employee role
-			employeeRole, err := s.roleRepo.FindByCode("employee")
-			if err == nil && employeeRole != nil {
-				// Check if user already has this role
-				userRoles, _ := s.roleRepo.GetUserRoles(existingUser.ID)
-				hasEmployeeRole := false
-				for _, role := range userRoles {
-					if role.Code == "employee" {
-						hasEmployeeRole = true
-						break
-					}
-				}
-				if !hasEmployeeRole {
-					// Assign employee role to admin user
-					_ = s.roleRepo.AssignUserRole(existingUser.ID, employeeRole.ID, updatedBy)
+		// Assign "employee" role from roles table for ALL existing users (admin, hr, or user) so they have employee access
+		employeeRole, err := s.roleRepo.FindByCode("employee")
+		if err == nil && employeeRole != nil {
+			userRoles, _ := s.roleRepo.GetUserRoles(existingUser.ID)
+			hasEmployeeRole := false
+			for _, role := range userRoles {
+				if role.Code == "employee" {
+					hasEmployeeRole = true
+					break
 				}
 			}
+			if !hasEmployeeRole {
+				_ = s.roleRepo.AssignUserRole(existingUser.ID, employeeRole.ID, updatedBy)
+			}
 		}
-		
-		// Return nil credentials (user already exists, uses existing account)
+		// Return nil credentials (user already exists; they use their existing login)
 		return nil, nil
 	}
 

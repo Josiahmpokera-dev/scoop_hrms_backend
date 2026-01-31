@@ -11,30 +11,29 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/config"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	assetModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/models"
+	auditModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/models"
 	biometricModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/models"
 	biometricWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/workers"
 	costCenterModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/models"
-	helpdeskModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/models"
 	departmentModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/models"
 	employeeModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
+	helpdeskModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/models"
+	leaveModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
 	locationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/models"
 	organizationUnitModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/models"
 	organizationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/models"
 	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
-	roleRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
 	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
-	leaveModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
 	teamModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/models"
 	tenantModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/tenants/models"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
-	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
 	appRouter "github.com/Josiahmpokera-dev/hrms-backend/internal/router"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/seed"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/types"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"golang.org/x/crypto/bcrypt"
 )
 
 func main() {
@@ -113,16 +112,14 @@ func main() {
 		&leaveModels.LeaveDocument{},
 		&leaveModels.LeaveBalance{},
 		&leaveModels.Holiday{},
+		// Security & Audit
+		&auditModels.AuditLog{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
 	// Seed initial data (only in development)
-	if config.AppConfig.Server.Env == "development" {
-		seedDefaultPermissions()
-		seedDefaultRoles()
-		seedAdminUser("admin", "admin@hrms.com", "admin123", "Admin", "User")
-	}
+	seed.Run()
 
 	// Setup graceful shutdown
 	setupGracefulShutdown()
@@ -302,134 +299,4 @@ func setupGracefulShutdown() {
 		}
 		os.Exit(0)
 	}()
-}
-
-// seedAdminUser creates an initial admin user if it doesn't exist
-func seedAdminUser(username, email, password, firstName, lastName string) {
-	userRepo := userRepos.NewUserRepository()
-
-	// Check if admin already exists
-	if userRepo.ExistsByEmail(email) {
-		log.Println("Admin user already exists, skipping seed")
-		return
-	}
-
-	// Hash password
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		log.Printf("Warning: Failed to hash password for admin user: %v", err)
-		return
-	}
-
-	// Create admin user
-	admin := &userModels.User{
-		Username:  username,
-		Email:     email,
-		Password:  string(hashedPassword),
-		FirstName: firstName,
-		LastName:  lastName,
-		Role:      userModels.RoleAdmin,
-		IsActive:  true,
-	}
-
-	if err := userRepo.Create(admin); err != nil {
-		log.Printf("Warning: Failed to create admin user: %v", err)
-		return
-	}
-
-	log.Printf("✅ Admin user created successfully: %s (%s)", username, email)
-}
-
-// seedDefaultPermissions seeds default permissions for the system
-func seedDefaultPermissions() {
-	permRepo := roleRepos.NewPermissionRepository()
-	if err := permRepo.SeedDefaultPermissions(); err != nil {
-		log.Printf("Warning: Failed to seed default permissions: %v", err)
-	} else {
-		log.Println("✅ Default permissions seeded successfully")
-	}
-}
-
-// seedDefaultRoles seeds default roles for the system
-func seedDefaultRoles() {
-	roleRepo := roleRepos.NewRoleRepository()
-
-	// Define default roles
-	defaultRoles := []struct {
-		Code        string
-		Name        string
-		Description string
-		Permissions []string
-	}{
-		{
-			Code:        "admin",
-			Name:        "Administrator",
-			Description: "Full system access with all permissions",
-			Permissions: []string{
-				"employee:read", "employee:create", "employee:update", "employee:delete",
-				"department:read", "department:create", "department:update", "department:delete",
-				"payroll:run", "attendance:approve",
-				"user:read", "user:create", "user:update", "user:delete",
-			},
-		},
-		{
-			Code:        "hr",
-			Name:        "HR Manager",
-			Description: "HR management with employee and department access",
-			Permissions: []string{
-				"employee:read", "employee:create", "employee:update",
-				"department:read", "payroll:run", "attendance:approve",
-				"user:read",
-			},
-		},
-		{
-			Code:        "employee",
-			Name:        "Employee",
-			Description: "Basic employee access",
-			Permissions: []string{
-				"employee:read",
-			},
-		},
-	}
-
-	permRepo := roleRepos.NewPermissionRepository()
-
-	for _, roleData := range defaultRoles {
-		// Check if role exists
-		existingRole, err := roleRepo.FindByCode(roleData.Code)
-		if err == nil && existingRole != nil {
-			continue // Role already exists
-		}
-
-		// Create role
-		role := &roleModels.Role{
-			Code:        roleData.Code,
-			Name:        roleData.Name,
-			Description: &roleData.Description,
-		}
-
-		if err := roleRepo.Create(role); err != nil {
-			log.Printf("Warning: Failed to create role %s: %v", roleData.Code, err)
-			continue
-		}
-
-		// Assign permissions
-		var permissionIDs []uint
-		for _, permCode := range roleData.Permissions {
-			perm, err := permRepo.FindByCode(permCode)
-			if err == nil && perm != nil {
-				permissionIDs = append(permissionIDs, perm.ID)
-			}
-		}
-
-		if len(permissionIDs) > 0 {
-			if err := roleRepo.AssignPermissions(role.ID, permissionIDs); err != nil {
-				log.Printf("Warning: Failed to assign permissions to role %s: %v", roleData.Code, err)
-			}
-		}
-
-		log.Printf("✅ Role created: %s", roleData.Code)
-	}
-
-	log.Println("✅ Default roles seeded successfully")
 }

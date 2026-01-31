@@ -26,13 +26,14 @@ type AuthResponse struct {
 
 // UserInfo represents user information in response
 type UserInfo struct {
-	ID        uint   `json:"id"`
-	Username  string `json:"username"`
-	Email     string `json:"email"`
-	FirstName string `json:"first_name"`
-	LastName  string `json:"last_name"`
-	Role      string `json:"role"`
-	IsActive  bool   `json:"is_active"`
+	ID        uint     `json:"id"`
+	Username  string   `json:"username"`
+	Email     string   `json:"email"`
+	FirstName string   `json:"first_name"`
+	LastName  string   `json:"last_name"`
+	Role      string   `json:"role"`   // Primary/legacy role (backward compatible)
+	Roles     []string `json:"roles"` // All roles, e.g. ["user", "admin"]
+	IsActive  bool     `json:"is_active"`
 }
 
 // ChangePasswordRequest represents change password request

@@ -69,3 +69,105 @@ func (r *UserRepository) FindByRole(role models.UserRole) ([]models.User, error)
 	err := r.db.Where("user_type = ?", role).Find(&users).Error
 	return users, err
 }
+
+// List returns users with pagination and optional filters (tenant, role, search).
+func (r *UserRepository) List(tenantID *uint, page, pageSize int, role string, search string) ([]models.User, int64, error) {
+	var users []models.User
+	var total int64
+
+	query := r.db.Model(&models.User{})
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	if role != "" {
+		query = query.Where("user_type = ?", role)
+	}
+	if search != "" {
+		term := "%" + search + "%"
+		query = query.Where(
+			"email ILIKE ? OR first_name ILIKE ? OR last_name ILIKE ? OR username ILIKE ?",
+			term, term, term, term,
+		)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+
+// ListByRoles returns users whose user_type is in the given roles (e.g. admin, hr, it).
+func (r *UserRepository) ListByRoles(tenantID *uint, page, pageSize int, roles []string, search string) ([]models.User, int64, error) {
+	if len(roles) == 0 {
+		return []models.User{}, 0, nil
+	}
+	var users []models.User
+	var total int64
+
+	query := r.db.Model(&models.User{}).Where("user_type IN ?", roles)
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	if search != "" {
+		term := "%" + search + "%"
+		query = query.Where(
+			"email ILIKE ? OR first_name ILIKE ? OR last_name ILIKE ? OR username ILIKE ?",
+			term, term, term, term,
+		)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}
+
+// ListNonEmployeeUsers returns users who are not yet linked to any employee (for onboarding existing users).
+// Supports tenant filter, pagination, and search by email, first_name, last_name, username.
+func (r *UserRepository) ListNonEmployeeUsers(tenantID *uint, page, pageSize int, search string) ([]models.User, int64, error) {
+	var users []models.User
+	var total int64
+
+	// Use Model so GORM generates correct column names; LEFT JOIN employees and keep only users with no employee
+	query := r.db.Model(&models.User{}).
+		Joins("LEFT JOIN employees ON users.id = employees.user_id AND employees.deleted_at IS NULL").
+		Where("employees.id IS NULL")
+
+	if tenantID != nil {
+		query = query.Where("users.tenant_id = ?", *tenantID)
+	}
+	if search != "" {
+		term := "%" + search + "%"
+		query = query.Where(
+			"users.email ILIKE ? OR users.first_name ILIKE ? OR users.last_name ILIKE ? OR users.username ILIKE ?",
+			term, term, term, term,
+		)
+	}
+
+	query = query.Where("users.is_active = ?", true)
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	if err := query.Order("users.created_at DESC").Offset(offset).Limit(pageSize).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+
+	return users, total, nil
+}

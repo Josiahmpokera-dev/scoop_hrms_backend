@@ -13,6 +13,14 @@ const (
 	RoleAdmin UserRole = "admin"
 	RoleHR    UserRole = "hr"
 	RoleUser  UserRole = "user"
+	RoleIT    UserRole = "it"
+)
+
+// User status values (Status field). Blocked/suspended users cannot login.
+const (
+	UserStatusActive    = "active"
+	UserStatusSuspended = "suspended"
+	UserStatusBlocked   = "blocked"
 )
 
 // User represents a user in the system
@@ -62,4 +70,12 @@ func (u *User) FullName() string {
 // GetTenantID returns the tenant ID for middleware compatibility
 func (u *User) GetTenantID() *uint {
 	return u.TenantID
+}
+
+// CanLogin returns true if the user is allowed to login (active and not suspended/blocked).
+func (u *User) CanLogin() bool {
+	if !u.IsActive {
+		return false
+	}
+	return u.Status == UserStatusActive
 }

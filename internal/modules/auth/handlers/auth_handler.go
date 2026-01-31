@@ -100,3 +100,20 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 
 	response.Success(c, "Profile retrieved successfully", profile)
 }
+
+// Logout handles user logout.
+// The client should discard the access token (e.g. remove from storage). JWTs are stateless;
+// this endpoint returns success so the client can clear the token and optionally log the action in audit.
+//
+// @Summary Logout
+// @Description Logout the current user. Client must discard the access token after calling this.
+// @Tags Authentication
+// @Security BearerAuth
+// @Produce json
+// @Success 200 {object} response.APIResponse
+// @Failure 401 {object} response.APIResponse
+// @Router /api/v1/auth/logout [post]
+func (h *AuthHandler) Logout(c *gin.Context) {
+	// Optional: could invalidate token in a blacklist here if you add one later
+	response.Success(c, "Logged out successfully. Please discard the access token on the client.", gin.H{"logged_out": true})
+}

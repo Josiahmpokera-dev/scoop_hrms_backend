@@ -154,10 +154,13 @@ type Step10NotesRequest struct {
 
 // CreateDraftRequest represents a request to create a new onboarding draft
 // Optionally accepts step data to create draft and save a step in one call
+// When linked_user_id or existing_user_email is set, this is "onboard existing user" flow: no credentials created at completion.
 type CreateDraftRequest struct {
-	Step1Data map[string]interface{} `json:"step1_data,omitempty"` // Optional: Step 1 data to save immediately (legacy)
-	Step      *int                   `json:"step,omitempty"`      // Optional: Step number (1-10) if providing step data
-	Data      map[string]interface{} `json:"data,omitempty"`      // Optional: Step data (requires step number)
+	Step1Data         map[string]interface{} `json:"step1_data,omitempty"`         // Optional: Step 1 data to save immediately (legacy)
+	Step              *int                   `json:"step,omitempty"`               // Optional: Step number (1-10) if providing step data
+	Data              map[string]interface{} `json:"data,omitempty"`              // Optional: Step data (requires step number)
+	LinkedUserID      *uint                  `json:"linked_user_id,omitempty"`    // Optional: Onboard this existing user (no credentials at end)
+	ExistingUserEmail *string                `json:"existing_user_email,omitempty"` // Optional: Onboard user with this email (no credentials at end)
 }
 
 // SaveDraftRequest represents a request to save a draft for a specific step
@@ -168,16 +171,19 @@ type SaveDraftRequest struct {
 
 // GetDraftResponse represents the draft data with progress
 type GetDraftResponse struct {
-	DraftID         uint                   `json:"draft_id"`
-	EmployeeID      *string                `json:"employee_id,omitempty"`
-	Progress        float64                `json:"progress"` // Completion percentage (0-100)
-	CompletedSteps  []int                  `json:"completed_steps"`
-	FinishedSteps   []int                  `json:"finished_steps"`   // Steps that have data saved
-	UnfinishedSteps []int                  `json:"unfinished_steps"` // Steps that don't have data yet
-	IsCompleted     bool                   `json:"is_completed"`
-	Steps           map[string]interface{} `json:"steps"` // Step data keyed by step number
-	CreatedAt       time.Time              `json:"created_at"`
-	UpdatedAt       time.Time              `json:"updated_at"`
+	DraftID          uint                   `json:"draft_id"`
+	EmployeeID       *string                `json:"employee_id,omitempty"`
+	LinkedUserID     *uint                  `json:"linked_user_id,omitempty"`     // When set: onboarding existing user; no credentials at completion
+	LinkedUserEmail  *string                `json:"linked_user_email,omitempty"`   // Pre-fill Step 2 official_email with this when linked_user_id is set
+	IsExistingUserOnboarding bool          `json:"is_existing_user_onboarding"`   // True when draft is for an existing user (no credentials at end)
+	Progress         float64                `json:"progress"`                     // Completion percentage (0-100)
+	CompletedSteps   []int                  `json:"completed_steps"`
+	FinishedSteps    []int                  `json:"finished_steps"`   // Steps that have data saved
+	UnfinishedSteps  []int                  `json:"unfinished_steps"` // Steps that don't have data yet
+	IsCompleted      bool                   `json:"is_completed"`
+	Steps            map[string]interface{} `json:"steps"` // Step data keyed by step number
+	CreatedAt        time.Time              `json:"created_at"`
+	UpdatedAt        time.Time              `json:"updated_at"`
 }
 
 // CompleteOnboardingRequest represents the final request to complete onboarding

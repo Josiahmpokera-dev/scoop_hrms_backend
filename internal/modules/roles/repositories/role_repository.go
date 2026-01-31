@@ -58,7 +58,9 @@ func (r *RoleRepository) Delete(id uint) error {
 	return r.db.Delete(&models.Role{}, id).Error
 }
 
-// List returns all roles with pagination
+// List returns all roles with pagination.
+// When tenantID is set, returns roles that are global (tenant_id IS NULL) or belong to that tenant,
+// so seeded/default roles (e.g. admin, hr, it, employee) always appear.
 func (r *RoleRepository) List(tenantID *uint, page, pageSize int) ([]models.Role, int64, error) {
 	var roles []models.Role
 	var total int64
@@ -67,7 +69,7 @@ func (r *RoleRepository) List(tenantID *uint, page, pageSize int) ([]models.Role
 	query := r.db.Model(&models.Role{})
 
 	if tenantID != nil {
-		query = query.Where("tenant_id = ?", *tenantID)
+		query = query.Where("tenant_id IS NULL OR tenant_id = ?", *tenantID)
 	}
 
 	// Count total
@@ -100,6 +102,17 @@ func (r *RoleRepository) GetUserRoles(userID uint) ([]models.Role, error) {
 		Preload("Permissions").
 		Find(&roles).Error
 	return roles, err
+}
+
+// GetUserRoleCodes returns role codes for a user (from user_roles + roles table)
+func (r *RoleRepository) GetUserRoleCodes(userID uint) ([]string, error) {
+	var codes []string
+	err := r.db.Table("roles").
+		Select("roles.code").
+		Joins("JOIN user_roles ON roles.id = user_roles.role_id").
+		Where("user_roles.user_id = ? AND user_roles.deleted_at IS NULL", userID).
+		Pluck("roles.code", &codes).Error
+	return codes, err
 }
 
 // HasPermission checks if a role has a specific permission

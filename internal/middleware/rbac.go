@@ -79,6 +79,9 @@ func checkLegacyRolePermission(role models.UserRole, permissionCode string) bool
 		models.RoleUser: {
 			"employee:read",
 		},
+		models.RoleIT: {
+			"employee:read",
+		},
 	}
 
 	permissions, exists := rolePermissions[role]

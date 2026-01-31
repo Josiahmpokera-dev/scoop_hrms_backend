@@ -3,20 +3,23 @@ package router
 import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
 	assetHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/handlers"
+	auditHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/handlers"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/auth/handlers"
 	biometricHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/handlers"
-	helpdeskHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/handlers"
 	costCenterHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/handlers"
 	departmentHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/handlers"
 	employeeHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/handlers"
+	helpdeskHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/handlers"
+	leaveHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/handlers"
 	locationHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/handlers"
 	orgChartHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization/handlers"
 	organizationUnitHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/handlers"
 	organizationHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/handlers"
 	positionHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/handlers"
+	roleHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/handlers"
 	shiftHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/handlers"
 	teamHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/handlers"
-	leaveHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/handlers"
+	userHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/handlers"
 	"github.com/gin-gonic/gin"
 )
 
@@ -34,9 +37,13 @@ func SetupRoutes(r *gin.Engine) {
 	positionHandler := positionHandlers.NewJobPositionHandler()
 	locationHandler := locationHandlers.NewLocationHandler()
 	costCenterHandler := costCenterHandlers.NewCostCenterHandler()
+	userHandler := userHandlers.NewUserHandler()
+	roleHandler := roleHandlers.NewRoleHandler()
+	auditHandler := auditHandlers.NewAuditHandler()
 
-	// API v1 routes
+	// API v1 routes (audit middleware logs every request)
 	v1 := r.Group("/api/v1")
+	v1.Use(middleware.AuditMiddleware())
 	{
 		// Authentication routes (public)
 		auth := v1.Group("/auth")
@@ -50,7 +57,36 @@ func SetupRoutes(r *gin.Engine) {
 
 			// Protected routes
 			auth.GET("/profile", middleware.AuthMiddleware(), authHandler.GetProfile)
+			auth.POST("/logout", middleware.AuthMiddleware(), authHandler.Logout)
 			auth.GET("/setup-wizard/status", middleware.AuthMiddleware(), onboardingHandler.GetSetupWizardStatus)
+		}
+
+		// Users routes (require authentication; list requires HR/Admin, transfer-role allows admin or role holder)
+		users := v1.Group("/users")
+		users.Use(middleware.AuthMiddleware())
+		{
+			users.GET("/special-roles", middleware.HRMiddleware(), userHandler.ListSpecialRoleUsers) // List IT, HR, Admin users (HR/Admin only)
+			users.GET("", middleware.HRMiddleware(), userHandler.ListUsers)                          // List users (HR/Admin only, for transfer-role pickers)
+			users.POST("/transfer-role", userHandler.TransferRole)                                  // Transfer role from one user to another (unchanged)
+			users.POST("/assign-role", middleware.AdminMiddleware(), userHandler.AssignRole)        // Assign admin/hr/it to a normal user (Admin only)
+			users.POST("/:id/suspend", middleware.HRMiddleware(), userHandler.SuspendUser)         // Suspend user (HR/Admin only; user cannot login)
+			users.POST("/:id/unsuspend", middleware.HRMiddleware(), userHandler.UnsuspendUser)     // Unsuspend user (HR/Admin only; restores login)
+			users.POST("/:id/block", middleware.HRMiddleware(), userHandler.BlockUser)             // Block user (HR/Admin only; user cannot login)
+			users.POST("/:id/unblock", middleware.HRMiddleware(), userHandler.UnblockUser)        // Unblock user (HR/Admin only; restores login)
+		}
+
+		// Roles routes (RBAC roles list; HR/Admin only)
+		roles := v1.Group("/roles")
+		roles.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			roles.GET("", roleHandler.ListRoles) // List roles
+		}
+
+		// Security & Audit routes (Admin only)
+		security := v1.Group("/security")
+		security.Use(middleware.AuthMiddleware(), middleware.AdminMiddleware())
+		{
+			security.GET("/audit", auditHandler.ListAuditLogs) // List audit logs with pagination, search, filters
 		}
 
 		// Admin routes (require admin role)
@@ -198,6 +234,7 @@ func SetupRoutes(r *gin.Engine) {
 				onboarding.POST("/delete-document", fileUploadHandler.DeleteDocument) // Delete document by ID (database + storage)
 
 				// Specific routes first (to avoid conflicts with :employee_id)
+				onboarding.GET("/non-employee-users", onboardingHandler.ListNonEmployeeUsers)            // List users not yet employees (for onboard existing user)
 				onboarding.POST("/draft", onboardingHandler.CreateDraft)                                 // Create new draft
 				onboarding.GET("/drafts", onboardingHandler.ListDrafts)                                  // List all drafts
 				onboarding.GET("/draft-employees", onboardingHandler.ListDraftEmployees)                 // List incomplete draft employees with details
@@ -374,7 +411,7 @@ func SetupRoutes(r *gin.Engine) {
 		// Helpdesk routes
 		helpdeskHandler := helpdeskHandlers.NewTicketHandler()
 		helpdeskAgentHandler := helpdeskHandlers.NewTicketAgentHandler()
-		
+
 		// Employee helpdesk routes (self-service)
 		helpdesk := v1.Group("/helpdesk")
 		helpdesk.Use(middleware.AuthMiddleware())
@@ -430,13 +467,13 @@ func SetupRoutes(r *gin.Engine) {
 		rosterHandler := shiftHandlers.NewRosterHandler()
 		swapRequestHandler := shiftHandlers.NewSwapRequestHandler()
 		changeRequestHandler := shiftHandlers.NewRosterChangeRequestHandler()
-		
+
 		shifts := v1.Group("/shifts")
 		shifts.Use(middleware.AuthMiddleware(), middleware.HRMiddleware()) // Require HR/Admin
 		{
 			// Statistics
 			shifts.GET("/statistics", shiftHandler.GetStatistics)
-			
+
 			// Shift management
 			shifts.GET("", shiftHandler.ListShifts)
 			shifts.GET("/:shift_id", shiftHandler.GetShift)
@@ -456,23 +493,23 @@ func SetupRoutes(r *gin.Engine) {
 			rosters.POST("/assignments/bulk", rosterHandler.BulkCreateRosterAssignments)
 			rosters.PUT("/assignments/:assignment_id", rosterHandler.UpdateRosterAssignment)
 			rosters.DELETE("/assignments/:assignment_id", rosterHandler.DeleteRosterAssignment)
-			
+
 			// Weekly roster view
 			rosters.GET("/weekly", rosterHandler.GetWeeklyRosterView)
-			
+
 			// Auto-schedule
 			rosters.POST("/auto-schedule", rosterHandler.AutoSchedule)
-			
+
 			// Publish roster
 			rosters.POST("/publish", rosterHandler.PublishRoster)
-			
+
 			// Swap requests
 			rosters.GET("/swap-requests", swapRequestHandler.ListSwapRequests)
 			rosters.GET("/swap-requests/:request_id", swapRequestHandler.GetSwapRequest)
 			rosters.POST("/swap-requests", swapRequestHandler.CreateSwapRequest)
 			rosters.POST("/swap-requests/:request_id/approve", swapRequestHandler.ApproveSwapRequest)
 			rosters.POST("/swap-requests/:request_id/reject", swapRequestHandler.RejectSwapRequest)
-			
+
 			// Roster change requests (HR/Admin - view all)
 			rosters.GET("/change-requests", changeRequestHandler.ListRosterChangeRequests)
 			rosters.GET("/change-requests/:request_id", changeRequestHandler.GetRosterChangeRequest)
@@ -487,7 +524,7 @@ func SetupRoutes(r *gin.Engine) {
 			// Employee can view their own roster assignments
 			employeeRosters.GET("/assignments", rosterHandler.GetMyRosterAssignments)
 			employeeRosters.GET("/assignments/:assignment_id", rosterHandler.GetMyRosterAssignment)
-			
+
 			// Employee can create roster change requests
 			employeeRosters.POST("/change-requests", changeRequestHandler.CreateRosterChangeRequest)
 			// Employee can view their own change requests
@@ -532,10 +569,10 @@ func SetupRoutes(r *gin.Engine) {
 			leaveRequests.GET("/employee-info", leaveRequestHandler.GetEmployeeInfo)
 			leaveRequests.GET("/balances", leaveRequestHandler.GetEmployeeLeaveBalances)
 			leaveRequests.GET("/policies/guidelines", leavePolicyHandler.GetPolicyGuidelines)
-			
+
 			// Calculate days
 			leaveRequests.POST("/calculate-days", leaveRequestHandler.CalculateLeaveDays)
-			
+
 			// Leave requests
 			leaveRequests.POST("/applications", leaveRequestHandler.CreateLeaveRequest)
 			leaveRequests.GET("/requests", leaveRequestHandler.ListLeaveRequests)

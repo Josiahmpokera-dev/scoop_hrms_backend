@@ -9,6 +9,7 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/auth/models"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
+	roleRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -16,13 +17,49 @@ import (
 // AuthService handles authentication business logic
 type AuthService struct {
 	userRepo *repositories.UserRepository
+	roleRepo *roleRepos.RoleRepository
 }
 
 // NewAuthService creates a new authentication service
 func NewAuthService() *AuthService {
 	return &AuthService{
 		userRepo: repositories.NewUserRepository(),
+		roleRepo: roleRepos.NewRoleRepository(),
 	}
+}
+
+// buildUserRoles returns a deduplicated slice of role strings: legacy user_type plus assigned role codes.
+func (s *AuthService) buildUserRoles(user *userModels.User) []string {
+	seen := make(map[string]bool)
+	var roles []string
+	legacy := strings.ToLower(string(user.Role))
+	if legacy != "" && !seen[legacy] {
+		seen[legacy] = true
+		roles = append(roles, legacy)
+	}
+	codes, err := s.roleRepo.GetUserRoleCodes(user.ID)
+	if err == nil {
+		for _, code := range codes {
+			c := strings.ToLower(strings.TrimSpace(code))
+			if c != "" && !seen[c] {
+				seen[c] = true
+				roles = append(roles, c)
+			}
+		}
+	}
+	if len(roles) == 0 {
+		roles = append(roles, "user")
+	}
+	return roles
+}
+
+// primaryRole returns the first role for backward compatibility.
+func (s *AuthService) primaryRole(user *userModels.User) string {
+	roles := s.buildUserRoles(user)
+	if len(roles) > 0 {
+		return roles[0]
+	}
+	return string(user.Role)
 }
 
 // Register creates a new user account
@@ -84,6 +121,7 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.AuthRespons
 		return nil, errors.New("failed to generate token")
 	}
 
+	roles := s.buildUserRoles(user)
 	return &models.AuthResponse{
 		User: &models.UserInfo{
 			ID:        user.ID,
@@ -91,7 +129,8 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.AuthRespons
 			Email:     user.Email,
 			FirstName: user.FirstName,
 			LastName:  user.LastName,
-			Role:      string(user.Role),
+			Role:      s.primaryRole(user),
+			Roles:     roles,
 			IsActive:  user.IsActive,
 		},
 		AccessToken: token,
@@ -108,9 +147,19 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 		return nil, errors.New("invalid email or password")
 	}
 
-	// Check if user is active
-	if !user.IsActive {
-		return nil, errors.New("account is deactivated")
+	// Check if user can login (active, not suspended or blocked)
+	if !user.CanLogin() {
+		if !user.IsActive {
+			return nil, errors.New("account is deactivated")
+		}
+		switch user.Status {
+		case "suspended":
+			return nil, errors.New("account is suspended")
+		case "blocked":
+			return nil, errors.New("account is blocked")
+		default:
+			return nil, errors.New("account is not active")
+		}
 	}
 
 	// Verify password
@@ -127,6 +176,7 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 		return nil, errors.New("failed to generate token")
 	}
 
+	roles := s.buildUserRoles(user)
 	return &models.AuthResponse{
 		User: &models.UserInfo{
 			ID:        user.ID,
@@ -134,7 +184,8 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 			Email:     user.Email,
 			FirstName: user.FirstName,
 			LastName:  user.LastName,
-			Role:      string(user.Role),
+			Role:      s.primaryRole(user),
+			Roles:     roles,
 			IsActive:  user.IsActive,
 		},
 		AccessToken: token,
@@ -150,13 +201,15 @@ func (s *AuthService) GetProfile(userID uint) (*models.UserInfo, error) {
 		return nil, errors.New("user not found")
 	}
 
+	roles := s.buildUserRoles(user)
 	return &models.UserInfo{
 		ID:        user.ID,
 		Username:  user.Username,
 		Email:     user.Email,
 		FirstName: user.FirstName,
 		LastName:  user.LastName,
-		Role:      string(user.Role),
+		Role:      s.primaryRole(user),
+		Roles:     roles,
 		IsActive:  user.IsActive,
 	}, nil
 }
@@ -172,11 +225,15 @@ func (s *AuthService) generateToken(user *userModels.User) (string, int64, error
 	expiresAt := time.Now().Add(expiryDuration)
 	expiresIn := int64(expiryDuration.Seconds())
 
-	// Create claims
+	roles := s.buildUserRoles(user)
+	primary := s.primaryRole(user)
+
+	// Create claims (role = primary for backward compat, roles = full array)
 	claims := jwt.MapClaims{
 		"user_id": user.ID,
 		"email":   user.Email,
-		"role":    string(user.Role),
+		"role":    primary,
+		"roles":   roles,
 		"exp":     expiresAt.Unix(),
 		"iat":     time.Now().Unix(),
 	}
