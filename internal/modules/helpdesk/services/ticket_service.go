@@ -6,18 +6,26 @@ import (
 	"fmt"
 	"time"
 
+	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/models"
 	helpdeskRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/repositories"
-	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
-	"gorm.io/gorm"
 )
+
+// AttachmentInput is used when adding attachments to a ticket
+type AttachmentInput struct {
+	Name string
+	URL  string
+	Size int64
+	Type string
+}
 
 // TicketService handles ticket business logic
 type TicketService struct {
 	ticketRepo     *helpdeskRepos.TicketRepository
 	commentRepo    *helpdeskRepos.CommentRepository
 	attachmentRepo *helpdeskRepos.AttachmentRepository
+	categoryRepo   *helpdeskRepos.TicketCategoryRepository
 	employeeRepo   *employeeRepos.EmployeeRepository
 	userRepo       *userRepos.UserRepository
 }
@@ -28,22 +36,14 @@ func NewTicketService() *TicketService {
 		ticketRepo:     helpdeskRepos.NewTicketRepository(),
 		commentRepo:    helpdeskRepos.NewCommentRepository(),
 		attachmentRepo: helpdeskRepos.NewAttachmentRepository(),
+		categoryRepo:   helpdeskRepos.NewTicketCategoryRepository(),
 		employeeRepo:   employeeRepos.NewEmployeeRepository(),
 		userRepo:       userRepos.NewUserRepository(),
 	}
 }
 
-// CreateTicket creates a new ticket for an employee
+// CreateTicket creates a new ticket for any authenticated user (employee or user-only e.g. Admin)
 func (s *TicketService) CreateTicket(userID uint, tenantID *uint, title, description, category string, subCategory *string, priority string, channel string, tags []string, updatedBy *uint) (*models.Ticket, error) {
-	// Get employee by user ID
-	employee, err := s.employeeRepo.FindByUserID(userID)
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("employee record not found for this user")
-		}
-		return nil, fmt.Errorf("failed to get employee: %w", err)
-	}
-
 	// Validate priority
 	validPriority := models.TicketPriority(priority)
 	if validPriority != models.TicketPriorityLow && validPriority != models.TicketPriorityMedium && validPriority != models.TicketPriorityHigh && validPriority != models.TicketPriorityCritical {
@@ -73,22 +73,39 @@ func (s *TicketService) CreateTicket(userID uint, tenantID *uint, title, descrip
 	// Calculate due date based on category (default 48 hours for first response)
 	dueDate := time.Now().Add(48 * time.Hour)
 
-	// Create ticket
 	ticket := &models.Ticket{
-		TenantID:          tenantID,
-		TicketNumber:      ticketNumber,
-		Title:             title,
-		Description:       description,
-		Category:          category,
-		SubCategory:       subCategory,
-		Priority:          validPriority,
-		Status:            models.TicketStatusOpen,
-		Channel:           validChannel,
-		RequesterID:       employee.ID,
-		RequesterEmployeeID: &employee.EmployeeID,
-		DueDate:           &dueDate,
-		TagsJSON:          tagsJSON,
-		UpdatedBy:         updatedBy,
+		TenantID:     tenantID,
+		TicketNumber: ticketNumber,
+		Title:        title,
+		Description:  description,
+		Category:     category,
+		SubCategory:  subCategory,
+		Priority:     validPriority,
+		Status:       models.TicketStatusOpen,
+		Channel:      validChannel,
+		DueDate:      &dueDate,
+		TagsJSON:     tagsJSON,
+		UpdatedBy:    updatedBy,
+	}
+
+	// Requester: use Employee if user has one, else User-only (e.g. Admin)
+	employee, err := s.employeeRepo.FindByUserID(userID)
+	if err == nil {
+		ticket.RequesterID = employee.ID
+		ticket.RequesterEmployeeID = &employee.EmployeeID
+	} else {
+		user, uErr := s.userRepo.FindByID(userID)
+		if uErr != nil {
+			return nil, errors.New("user not found")
+		}
+		ticket.RequesterID = 0
+		ticket.RequesterUserID = &userID
+		requesterName := fmt.Sprintf("%s %s", user.FirstName, user.LastName)
+		if requesterName == " " {
+			requesterName = user.Username
+		}
+		ticket.RequesterName = &requesterName
+		ticket.RequesterEmail = &user.Email
 	}
 
 	if err := s.ticketRepo.Create(ticket); err != nil {
@@ -98,21 +115,30 @@ func (s *TicketService) CreateTicket(userID uint, tenantID *uint, title, descrip
 	return ticket, nil
 }
 
-// ListMyTickets lists tickets for the authenticated employee
+// ListMyTickets lists tickets for the authenticated user (as requester: employee or user-only)
 func (s *TicketService) ListMyTickets(userID uint, tenantID *uint, page, pageSize int, filters map[string]interface{}) ([]models.Ticket, int64, error) {
-	// Get employee by user ID
+	var employeeID *uint
 	employee, err := s.employeeRepo.FindByUserID(userID)
-	if err != nil {
-		return nil, 0, errors.New("employee record not found for this user")
+	if err == nil {
+		employeeID = &employee.ID
 	}
-
-	// Get tickets
-	tickets, total, err := s.ticketRepo.FindByRequesterID(employee.ID, tenantID, page, pageSize, filters)
+	tickets, total, err := s.ticketRepo.FindByRequesterUserIDOrEmployee(userID, employeeID, tenantID, page, pageSize, filters)
 	if err != nil {
 		return nil, 0, fmt.Errorf("failed to get tickets: %w", err)
 	}
-
 	return tickets, total, err
+}
+
+// isRequester returns true if the user is the ticket requester (as employee or user-only)
+func (s *TicketService) isRequester(ticket *models.Ticket, userID uint) bool {
+	if ticket.RequesterUserID != nil && *ticket.RequesterUserID == userID {
+		return true
+	}
+	if ticket.RequesterID == 0 {
+		return false
+	}
+	employee, err := s.employeeRepo.FindByUserID(userID)
+	return err == nil && employee.ID == ticket.RequesterID
 }
 
 // GetTicketDetails gets ticket details with comments and attachments
@@ -128,12 +154,9 @@ func (s *TicketService) GetTicketDetails(ticketID uint, userID uint, tenantID *u
 		return nil, nil, nil, errors.New("ticket does not belong to your tenant")
 	}
 
-	// Verify ownership (if not agent/admin)
-	if !isAgentOrAdmin {
-		employee, err := s.employeeRepo.FindByUserID(userID)
-		if err != nil || employee.ID != ticket.RequesterID {
-			return nil, nil, nil, errors.New("unauthorized: this ticket does not belong to you")
-		}
+	// Verify ownership (if not agent/admin): requester is this user (employee or user-only)
+	if !isAgentOrAdmin && !s.isRequester(ticket, userID) {
+		return nil, nil, nil, errors.New("unauthorized: this ticket does not belong to you")
 	}
 
 	// Get comments (include private if agent/admin)
@@ -166,11 +189,10 @@ func (s *TicketService) AddComment(ticketID uint, userID uint, tenantID *uint, t
 
 	// Verify ownership (if not agent/admin)
 	if !isAgentOrAdmin {
-		employee, err := s.employeeRepo.FindByUserID(userID)
-		if err != nil || employee.ID != ticket.RequesterID {
+		if !s.isRequester(ticket, userID) {
 			return nil, errors.New("unauthorized: this ticket does not belong to you")
 		}
-		// Employees cannot create private comments
+		// Non-agent cannot create private comments
 		isPrivate = false
 	}
 
@@ -234,9 +256,8 @@ func (s *TicketService) CloseTicket(ticketID uint, userID uint, tenantID *uint, 
 		return errors.New("ticket does not belong to your tenant")
 	}
 
-	// Verify ownership
-	employee, err := s.employeeRepo.FindByUserID(userID)
-	if err != nil || employee.ID != ticket.RequesterID {
+	// Verify ownership (requester only can close their own ticket)
+	if !s.isRequester(ticket, userID) {
 		return errors.New("unauthorized: this ticket does not belong to you")
 	}
 
@@ -263,6 +284,96 @@ func (s *TicketService) CloseTicket(ticketID uint, userID uint, tenantID *uint, 
 	return nil
 }
 
+// GetTicketAttachments returns attachments for a ticket
+func (s *TicketService) GetTicketAttachments(ticketID uint) ([]models.Attachment, error) {
+	return s.attachmentRepo.FindByTicketID(ticketID)
+}
+
+// GetTicketCommentsCount returns the count of (non-private) comments for a ticket
+func (s *TicketService) GetTicketCommentsCount(ticketID uint) (int, error) {
+	count, err := s.commentRepo.CountByTicketID(ticketID)
+	return int(count), err
+}
+
+// ListTicketCategories returns all ticket categories for the tenant (for Create Ticket form)
+func (s *TicketService) ListTicketCategories(tenantID *uint) ([]models.TicketCategory, error) {
+	return s.categoryRepo.ListAll(tenantID)
+}
+
+// AddAttachments adds one or more attachments to a ticket (after files are uploaded to storage)
+func (s *TicketService) AddAttachments(ticketID uint, userID uint, tenantID *uint, inputs []AttachmentInput) ([]models.Attachment, error) {
+	ticket, err := s.ticketRepo.FindByID(ticketID)
+	if err != nil {
+		return nil, errors.New("ticket not found")
+	}
+	if tenantID != nil && ticket.TenantID != nil && *ticket.TenantID != *tenantID {
+		return nil, errors.New("ticket does not belong to your tenant")
+	}
+	if !s.isRequester(ticket, userID) {
+		return nil, errors.New("unauthorized: this ticket does not belong to you")
+	}
+
+	out := make([]models.Attachment, 0, len(inputs))
+	now := time.Now()
+	for _, in := range inputs {
+		att := &models.Attachment{
+			TenantID:   tenantID,
+			TicketID:   ticketID,
+			Name:       in.Name,
+			URL:        in.URL,
+			Size:       in.Size,
+			Type:       in.Type,
+			UploadedBy: userID,
+			UploadedAt: now,
+		}
+		if err := s.attachmentRepo.Create(att); err != nil {
+			return nil, fmt.Errorf("failed to create attachment: %w", err)
+		}
+		out = append(out, *att)
+	}
+	return out, nil
+}
+
+// GetRequesterInfo returns requester details for a ticket by employee ID (when requester is an employee)
+func (s *TicketService) GetRequesterInfo(employeeID uint) (employeeIDStr, name, email, phone, department string, err error) {
+	employee, err := s.employeeRepo.FindByID(employeeID)
+	if err != nil {
+		return "", "", "", "", "", err
+	}
+	employeeIDStr = employee.EmployeeID
+	name = employee.FirstName + " " + employee.LastName
+	if name == " " {
+		name = employee.EmployeeID
+	}
+	if employee.WorkEmail != nil && *employee.WorkEmail != "" {
+		email = *employee.WorkEmail
+	} else if employee.PersonalEmail != nil && *employee.PersonalEmail != "" {
+		email = *employee.PersonalEmail
+	}
+	if employee.PhoneNumber != nil {
+		phone = *employee.PhoneNumber
+	}
+	return employeeIDStr, name, email, phone, department, nil
+}
+
+// GetRequesterInfoForTicket returns requester details from the ticket (employee or user-only e.g. Admin)
+func (s *TicketService) GetRequesterInfoForTicket(ticket *models.Ticket) (id, name, email, phone, department string, err error) {
+	if ticket.RequesterUserID != nil {
+		id = fmt.Sprintf("USER-%d", *ticket.RequesterUserID)
+		if ticket.RequesterName != nil {
+			name = *ticket.RequesterName
+		}
+		if ticket.RequesterEmail != nil {
+			email = *ticket.RequesterEmail
+		}
+		return id, name, email, "", "", nil
+	}
+	if ticket.RequesterID != 0 {
+		return s.GetRequesterInfo(ticket.RequesterID)
+	}
+	return "", "", "", "", "", errors.New("no requester on ticket")
+}
+
 // SubmitCSAT submits CSAT rating for a ticket
 func (s *TicketService) SubmitCSAT(ticketID uint, userID uint, tenantID *uint, rating int, comment *string) error {
 	// Get ticket
@@ -276,9 +387,8 @@ func (s *TicketService) SubmitCSAT(ticketID uint, userID uint, tenantID *uint, r
 		return errors.New("ticket does not belong to your tenant")
 	}
 
-	// Verify ownership
-	employee, err := s.employeeRepo.FindByUserID(userID)
-	if err != nil || employee.ID != ticket.RequesterID {
+	// Verify ownership (requester only)
+	if !s.isRequester(ticket, userID) {
 		return errors.New("unauthorized: this ticket does not belong to you")
 	}
 

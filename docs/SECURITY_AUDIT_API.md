@@ -15,12 +15,15 @@ The system logs **every API request** to the `audit_logs` table (who did what, w
 
 Returns paginated audit logs with optional filters and search. Results are ordered by **newest first**.
 
+**Default:** All audit logs are returned (no tenant filter), so admins see every request to `/api/v1/*`, including unauthenticated ones (e.g. login, register, refresh) which have `tenant_id` null.
+
 ### Query parameters
 
 | Parameter   | Type   | Default | Description |
 |-------------|--------|--------|-------------|
 | `page`      | int    | 1      | Page number |
 | `page_size` | int    | 20     | Items per page (max 100) |
+| `tenant_id` | int    | —      | Optional: filter by tenant ID (omit to see all) |
 | `user_id`   | int    | —      | Filter by user ID (who performed the action) |
 | `action`    | string | —      | Filter by action (partial, case-insensitive) |
 | `resource`  | string | —      | Filter by resource (partial, case-insensitive) |
@@ -97,11 +100,14 @@ Authorization: Bearer <admin_token>
 | `method`    | HTTP method (GET, POST, etc.) |
 | `path`      | Request path |
 | `status_code` | HTTP response status |
-| `ip`        | Client IP |
-| `user_agent` | Client user agent |
-| `details`   | Optional JSON or text details |
-| `reason`    | Optional reason/notes |
-| `created_at` | When the action occurred (UTC) |
+| `ip`        | Client IP (see below) |
+| `user_agent` | Client User-Agent header |
+| `created_at` | When the request was logged |
+
+### Client IP (`ip`)
+
+- **Localhost / same machine:** When the client and API run on the same host (e.g. browser and backend both on your machine), the stored IP is **`::1`** (IPv6 loopback) or **`127.0.0.1`** (IPv4 loopback). That is expected.
+- **Behind a reverse proxy:** The API uses, in order: **X-Forwarded-For** (first IP), **X-Real-IP**, or **CF-Connecting-IP** (Cloudflare). Ensure your proxy (nginx, Caddy, load balancer, etc.) sets one of these so the real client IP is recorded.
 
 ---
 

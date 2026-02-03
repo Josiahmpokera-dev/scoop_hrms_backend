@@ -18,10 +18,17 @@ type RegisterRequest struct {
 
 // AuthResponse represents authentication response
 type AuthResponse struct {
-	User        *UserInfo `json:"user"`
-	AccessToken string    `json:"access_token"`
-	TokenType   string    `json:"token_type"`
-	ExpiresIn   int64     `json:"expires_in"`
+	User             *UserInfo `json:"user"`
+	AccessToken      string    `json:"access_token"`
+	RefreshToken     string    `json:"refresh_token,omitempty"`
+	TokenType        string    `json:"token_type"`
+	ExpiresIn        int64     `json:"expires_in"`
+	RefreshExpiresIn int64     `json:"refresh_expires_in,omitempty"`
+}
+
+// RefreshTokenRequest represents refresh token request payload
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
 }
 
 // UserInfo represents user information in response
@@ -31,7 +38,7 @@ type UserInfo struct {
 	Email     string   `json:"email"`
 	FirstName string   `json:"first_name"`
 	LastName  string   `json:"last_name"`
-	Role      string   `json:"role"`   // Primary/legacy role (backward compatible)
+	Role      string   `json:"role"`  // Primary/legacy role (backward compatible)
 	Roles     []string `json:"roles"` // All roles, e.g. ["user", "admin"]
 	IsActive  bool     `json:"is_active"`
 }

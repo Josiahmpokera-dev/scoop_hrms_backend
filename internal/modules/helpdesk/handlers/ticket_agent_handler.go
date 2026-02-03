@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/csv"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
@@ -93,21 +95,23 @@ func (h *TicketAgentHandler) ListTickets(c *gin.Context) {
 		return
 	}
 
-	// Format response (similar to employee handler)
-	formattedTickets := []map[string]interface{}{}
-	for _, ticket := range tickets {
-		ticketMap := formatTicketResponseHelper(&ticket, false)
-		formattedTickets = append(formattedTickets, ticketMap)
+	formattedTickets := make([]map[string]interface{}, 0, len(tickets))
+	for i := range tickets {
+		ticket := &tickets[i]
+		formattedTickets = append(formattedTickets, FormatTicketResponse(ticket, false, nil, BuildAssignedToFromTicket(ticket)))
 	}
 
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	meta := &response.Meta{
-		Page:       page,
-		PerPage:    pageSize,
-		Total:      total,
-		TotalPages: totalPages,
+	payload := map[string]interface{}{
+		"data": formattedTickets,
+		"meta": map[string]interface{}{
+			"page":        page,
+			"per_page":    pageSize,
+			"total":       total,
+			"total_pages": totalPages,
+		},
 	}
-	response.SuccessWithMeta(c, "Tickets retrieved successfully", formattedTickets, meta)
+	response.Success(c, "Tickets retrieved successfully", payload)
 }
 
 // AssignTicket handles assigning a ticket
@@ -166,17 +170,13 @@ func (h *TicketAgentHandler) AssignTicket(c *gin.Context) {
 		return
 	}
 
+	at := BuildAssignedToFromTicket(ticket)
+	assignedToMap := map[string]interface{}{"name": at.Name, "email": at.Email, "team": at.Team, "id": at.ID}
 	responseData := map[string]interface{}{
-		"ticket_id": ticket.ID,
-		"assigned_to": map[string]interface{}{
-			"id":    ticket.AssignedToID,
-			"name":  ticket.AssignedToName,
-			"email": ticket.AssignedToEmail,
-			"team":  ticket.AssignedToTeam,
-		},
-		"updated_at": ticket.UpdatedAt,
+		"ticket_id":  ticket.ID,
+		"assignedTo": assignedToMap,
+		"updatedAt":  ticket.UpdatedAt,
 	}
-
 	response.Success(c, "Ticket assigned successfully", responseData)
 }
 
@@ -238,9 +238,8 @@ func (h *TicketAgentHandler) UpdateTicketStatus(c *gin.Context) {
 	responseData := map[string]interface{}{
 		"ticket_id": ticket.ID,
 		"status":    string(ticket.Status),
-		"updated_at": ticket.UpdatedAt,
+		"updatedAt": ticket.UpdatedAt,
 	}
-
 	response.Success(c, "Ticket status updated successfully", responseData)
 }
 
@@ -297,11 +296,10 @@ func (h *TicketAgentHandler) ResolveTicket(c *gin.Context) {
 	}
 
 	responseData := map[string]interface{}{
-		"ticket_id": ticket.ID,
-		"status":    string(ticket.Status),
-		"resolved_at": ticket.ResolvedAt,
+		"ticket_id":  ticket.ID,
+		"status":     string(ticket.Status),
+		"resolvedAt": ticket.ResolvedAt,
 	}
-
 	response.Success(c, "Ticket resolved successfully", responseData)
 }
 
@@ -359,7 +357,30 @@ func (h *TicketAgentHandler) GetStatistics(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, "Statistics retrieved successfully", stats)
+	// Map to camelCase and doc shape: totalTickets, openTickets, inProgress, resolved, closed, avgFirstResponseTime, avgResolutionTime, slaCompliance, csatScore, ticketsByCategory, ticketsByPriority, topAgents
+	byStatus, _ := stats["tickets_by_status"].(map[string]int64)
+	getStatus := func(s string) int {
+		if byStatus == nil {
+			return 0
+		}
+		c, _ := byStatus[s]
+		return int(c)
+	}
+	payload := map[string]interface{}{
+		"totalTickets":         stats["total_tickets"],
+		"openTickets":          getStatus("Open"),
+		"inProgress":           getStatus("In Progress"),
+		"resolved":             getStatus("Resolved"),
+		"closed":               getStatus("Closed"),
+		"avgFirstResponseTime": "0 minutes",
+		"avgResolutionTime":    "0 hours",
+		"slaCompliance":        0,
+		"csatScore":            0,
+		"ticketsByCategory":    stats["tickets_by_category"],
+		"ticketsByPriority":    stats["tickets_by_priority"],
+		"topAgents":            []interface{}{},
+	}
+	response.Success(c, "Helpdesk statistics retrieved successfully", payload)
 }
 
 // GetRecentTickets handles getting recent tickets
@@ -386,11 +407,111 @@ func (h *TicketAgentHandler) GetRecentTickets(c *gin.Context) {
 		return
 	}
 
-	formattedTickets := []map[string]interface{}{}
-	for _, ticket := range tickets {
-		ticketMap := formatTicketResponseHelper(&ticket, false)
+	formattedTickets := make([]map[string]interface{}, 0, len(tickets))
+	for i := range tickets {
+		ticket := &tickets[i]
+		ticketMap := FormatTicketResponse(ticket, false, nil, BuildAssignedToFromTicket(ticket))
 		formattedTickets = append(formattedTickets, ticketMap)
 	}
-
 	response.Success(c, "Recent tickets retrieved successfully", formattedTickets)
+}
+
+// ExportReport exports helpdesk report as CSV or XLSX
+// GET /helpdesk/reports/export?format=csv&date_range=thisMonth&from=...&to=...
+func (h *TicketAgentHandler) ExportReport(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+
+	format := strings.ToLower(c.DefaultQuery("format", "csv"))
+	if format != "csv" && format != "xlsx" {
+		format = "csv"
+	}
+
+	dateRange := c.Query("date_range")
+	var fromDate, toDate *time.Time
+	now := time.Now()
+	switch dateRange {
+	case "today":
+		start := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+		fromDate = &start
+		toDate = &now
+	case "thisWeek":
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		start := now.AddDate(0, 0, -weekday+1)
+		start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, start.Location())
+		fromDate = &start
+		toDate = &now
+	case "thisMonth":
+		start := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		fromDate = &start
+		toDate = &now
+	case "custom":
+		if fromStr := c.Query("from"); fromStr != "" {
+			if parsed, err := time.Parse("2006-01-02", fromStr); err == nil {
+				fromDate = &parsed
+			}
+		}
+		if toStr := c.Query("to"); toStr != "" {
+			if parsed, err := time.Parse("2006-01-02", toStr); err == nil {
+				toDate = &parsed
+			}
+		}
+	}
+
+	tickets, err := h.service.GetTicketsForExport(tenantID, fromDate, toDate)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	if format == "csv" {
+		c.Header("Content-Type", "text/csv")
+		c.Header("Content-Disposition", "attachment; filename=\"helpdesk_report.csv\"")
+		w := csv.NewWriter(c.Writer)
+		_ = w.Write([]string{"ID", "Ticket Number", "Title", "Category", "Priority", "Status", "Channel", "Created At", "Updated At"})
+		for _, t := range tickets {
+			_ = w.Write([]string{
+				strconv.FormatUint(uint64(t.ID), 10),
+				t.TicketNumber,
+				escapeCSV(t.Title),
+				t.Category,
+				string(t.Priority),
+				string(t.Status),
+				string(t.Channel),
+				t.CreatedAt.Format(time.RFC3339),
+				t.UpdatedAt.Format(time.RFC3339),
+			})
+		}
+		w.Flush()
+		return
+	}
+
+	// XLSX: return CSV with .xlsx filename for now (real XLSX would need excelize)
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", "attachment; filename=\"helpdesk_report.xlsx\"")
+	w := csv.NewWriter(c.Writer)
+	_ = w.Write([]string{"ID", "Ticket Number", "Title", "Category", "Priority", "Status", "Channel", "Created At", "Updated At"})
+	for _, t := range tickets {
+		_ = w.Write([]string{
+			strconv.FormatUint(uint64(t.ID), 10),
+			t.TicketNumber,
+			escapeCSV(t.Title),
+			t.Category,
+			string(t.Priority),
+			string(t.Status),
+			string(t.Channel),
+			t.CreatedAt.Format(time.RFC3339),
+			t.UpdatedAt.Format(time.RFC3339),
+		})
+	}
+	w.Flush()
+}
+
+func escapeCSV(s string) string {
+	if strings.Contains(s, ",") || strings.Contains(s, "\"") || strings.Contains(s, "\n") {
+		return "\"" + strings.ReplaceAll(s, "\"", "\"\"") + "\""
+	}
+	return s
 }

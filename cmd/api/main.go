@@ -134,7 +134,7 @@ func main() {
 	// Initialize Gin router
 	router := gin.New()
 
-	// Configure CORS middleware
+	// Configure CORS middleware — allow all origins
 	corsConfig := cors.Config{
 		AllowOrigins:     config.AppConfig.CORS.AllowedOrigins,
 		AllowMethods:     config.AppConfig.CORS.AllowedMethods,
@@ -142,6 +142,7 @@ func main() {
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
+		AllowOriginFunc:  func(origin string) bool { return true },
 	}
 	router.Use(cors.New(corsConfig))
 

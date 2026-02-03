@@ -192,6 +192,16 @@ func (s *TicketAgentService) GetRecentTickets(tenantID *uint, limit int) ([]mode
 	return s.ticketRepo.GetRecentTickets(tenantID, limit)
 }
 
+// GetTicketsForExport returns tickets in date range for report export (CSV/XLSX)
+func (s *TicketAgentService) GetTicketsForExport(tenantID *uint, fromDate, toDate *time.Time) ([]models.Ticket, error) {
+	filters := map[string]interface{}{
+		"from_date": fromDate,
+		"to_date":   toDate,
+	}
+	tickets, _, err := s.ticketRepo.ListAll(tenantID, 1, 10000, filters)
+	return tickets, err
+}
+
 // isValidStatusTransition validates status transitions
 func isValidStatusTransition(currentStatus, newStatus models.TicketStatus) bool {
 	validTransitions := map[models.TicketStatus][]models.TicketStatus{
@@ -199,8 +209,8 @@ func isValidStatusTransition(currentStatus, newStatus models.TicketStatus) bool 
 		models.TicketStatusPending:    {models.TicketStatusInProgress, models.TicketStatusResolved},
 		models.TicketStatusInProgress: {models.TicketStatusPending, models.TicketStatusResolved},
 		models.TicketStatusResolved:   {models.TicketStatusClosed, models.TicketStatusOpen}, // Reopen
-		models.TicketStatusClosed:     {}, // Cannot transition from closed
-		models.TicketStatusCancelled:  {}, // Cannot transition from cancelled
+		models.TicketStatusClosed:     {},                                                   // Cannot transition from closed
+		models.TicketStatusCancelled:  {},                                                   // Cannot transition from cancelled
 	}
 
 	allowed, ok := validTransitions[currentStatus]

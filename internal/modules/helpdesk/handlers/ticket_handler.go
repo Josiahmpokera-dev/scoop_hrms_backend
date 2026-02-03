@@ -1,26 +1,31 @@
 package handlers
 
 import (
+	"encoding/json"
+	"fmt"
+	"mime/multipart"
 	"strconv"
 	"strings"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
-	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/services"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/storage"
 	"github.com/gin-gonic/gin"
 )
 
 // TicketHandler handles ticket HTTP requests for employees
 type TicketHandler struct {
-	service *services.TicketService
+	service        *services.TicketService
+	storageService *storage.StorageService
 }
 
 // NewTicketHandler creates a new ticket handler
 func NewTicketHandler() *TicketHandler {
 	return &TicketHandler{
-		service: services.NewTicketService(),
+		service:        services.NewTicketService(),
+		storageService: storage.NewStorageService(),
 	}
 }
 
@@ -90,14 +95,12 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 		return
 	}
 
-	// Format response
 	responseData := map[string]interface{}{
 		"id":           ticket.ID,
-		"ticket_number": ticket.TicketNumber,
+		"ticketNumber": ticket.TicketNumber,
 		"status":       string(ticket.Status),
-		"created_at":   ticket.CreatedAt,
+		"createdAt":    ticket.CreatedAt,
 	}
-
 	response.Success(c, "Ticket created successfully", responseData)
 }
 
@@ -156,8 +159,18 @@ func (h *TicketHandler) ListMyTickets(c *gin.Context) {
 	if category := c.Query("category"); category != "" {
 		filters["category"] = category
 	}
+	// Map camelCase sort_by from doc to DB column names
 	if sortBy := c.Query("sort_by"); sortBy != "" {
-		filters["sort_by"] = sortBy
+		switch sortBy {
+		case "createdAt":
+			filters["sort_by"] = "created_at"
+		case "updatedAt":
+			filters["sort_by"] = "updated_at"
+		case "dueDate":
+			filters["sort_by"] = "due_date"
+		default:
+			filters["sort_by"] = sortBy
+		}
 	}
 	if sortDir := c.Query("sort_dir"); sortDir != "" {
 		filters["sort_dir"] = sortDir
@@ -169,21 +182,34 @@ func (h *TicketHandler) ListMyTickets(c *gin.Context) {
 		return
 	}
 
-	// Format response
-	formattedTickets := []map[string]interface{}{}
-	for _, ticket := range tickets {
-		ticketMap := formatTicketResponse(&ticket, false)
+	// Format response with requester enrichment and camelCase
+	formattedTickets := make([]map[string]interface{}, 0, len(tickets))
+	for i := range tickets {
+		ticket := &tickets[i]
+		var requester *RequesterInfo
+		if eid, name, email, phone, dept, err := h.service.GetRequesterInfoForTicket(ticket); err == nil {
+			requester = &RequesterInfo{ID: eid, Name: name, Email: email, Phone: phone, Department: dept}
+		}
+		ticketMap := FormatTicketResponse(ticket, false, requester, BuildAssignedToFromTicket(ticket))
+		// Add list-only fields: attachments summary, commentsCount
+		attachments, _ := h.service.GetTicketAttachments(ticket.ID)
+		commentsCount, _ := h.service.GetTicketCommentsCount(ticket.ID)
+		ticketMap["attachments"] = formatAttachmentsForList(attachments)
+		ticketMap["commentsCount"] = commentsCount
 		formattedTickets = append(formattedTickets, ticketMap)
 	}
 
 	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
-	meta := &response.Meta{
-		Page:       page,
-		PerPage:    pageSize,
-		Total:      total,
-		TotalPages: totalPages,
+	payload := map[string]interface{}{
+		"data": formattedTickets,
+		"meta": map[string]interface{}{
+			"page":        page,
+			"per_page":    pageSize,
+			"total":       total,
+			"total_pages": totalPages,
+		},
 	}
-	response.SuccessWithMeta(c, "Tickets retrieved successfully", formattedTickets, meta)
+	response.Success(c, "Tickets retrieved successfully", payload)
 }
 
 // GetTicketDetails handles getting ticket details
@@ -222,39 +248,27 @@ func (h *TicketHandler) GetTicketDetails(c *gin.Context) {
 		return
 	}
 
-	// Format response
-	responseData := formatTicketResponse(ticket, true)
-	
-	// Add comments
-	formattedComments := []map[string]interface{}{}
+	var requester *RequesterInfo
+	if eid, name, email, phone, dept, err := h.service.GetRequesterInfoForTicket(ticket); err == nil {
+		requester = &RequesterInfo{ID: eid, Name: name, Email: email, Phone: phone, Department: dept}
+	}
+	responseData := FormatTicketResponse(ticket, true, requester, BuildAssignedToFromTicket(ticket))
+
+	formattedComments := make([]map[string]interface{}, 0, len(comments))
 	for _, comment := range comments {
 		formattedComments = append(formattedComments, map[string]interface{}{
-			"id":          comment.ID,
-			"author":      comment.AuthorName,
-			"author_type": string(comment.AuthorType),
-			"text":        comment.Text,
-			"timestamp":   comment.Timestamp,
-			"is_private":  comment.IsPrivate,
+			"id":         comment.ID,
+			"author":     comment.AuthorName,
+			"authorType": string(comment.AuthorType),
+			"text":       comment.Text,
+			"timestamp":  comment.Timestamp,
+			"isPrivate":  comment.IsPrivate,
 		})
 	}
 	responseData["comments"] = formattedComments
-	responseData["comments_count"] = len(formattedComments)
+	responseData["attachments"] = formatAttachmentsForList(attachments)
 
-	// Add attachments
-	formattedAttachments := []map[string]interface{}{}
-	for _, att := range attachments {
-		formattedAttachments = append(formattedAttachments, map[string]interface{}{
-			"id":          att.ID,
-			"name":        att.Name,
-			"url":         att.URL,
-			"size":        att.Size,
-			"type":        att.Type,
-			"uploaded_at": att.UploadedAt,
-		})
-	}
-	responseData["attachments"] = formattedAttachments
-
-	response.Success(c, "Ticket details retrieved successfully", responseData)
+	response.Success(c, "Ticket retrieved successfully", responseData)
 }
 
 // AddComment handles adding a comment to a ticket
@@ -313,16 +327,89 @@ func (h *TicketHandler) AddComment(c *gin.Context) {
 	}
 
 	responseData := map[string]interface{}{
-		"id":          comment.ID,
-		"ticket_id":   comment.TicketID,
-		"author":      comment.AuthorName,
-		"author_type": string(comment.AuthorType),
-		"text":        comment.Text,
-		"timestamp":   comment.Timestamp,
-		"is_private":  comment.IsPrivate,
+		"id":         comment.ID,
+		"ticket_id":  comment.TicketID,
+		"author":     comment.AuthorName,
+		"authorType": string(comment.AuthorType),
+		"text":       comment.Text,
+		"timestamp":  comment.Timestamp,
+		"isPrivate":  comment.IsPrivate,
+	}
+	response.Success(c, "Comment posted successfully", responseData)
+}
+
+// UploadAttachments handles uploading attachments to a ticket (multipart/form-data, attachments[] or file)
+// @Summary Upload attachments to ticket
+// @Tags Helpdesk (Employee)
+// @Accept multipart/form-data
+// @Produce json
+// @Param ticket_id path int true "Ticket ID"
+// @Param attachments[] formData file true "Files"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/helpdesk/tickets/:ticket_id/attachments [post]
+func (h *TicketHandler) UploadAttachments(c *gin.Context) {
+	user, exists := c.Get("user")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	userObj, ok := user.(*userModels.User)
+	if !ok {
+		response.Unauthorized(c, "Invalid user context")
+		return
+	}
+	tenantID := middleware.GetTenantID(c)
+
+	ticketIDStr := c.Param("ticket_id")
+	ticketID, err := strconv.ParseUint(ticketIDStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid ticket ID", nil)
+		return
 	}
 
-	response.Success(c, "Comment posted successfully", responseData)
+	form, err := c.MultipartForm()
+	if err != nil {
+		response.BadRequest(c, "multipart form required", nil)
+		return
+	}
+	files := form.File["attachments[]"]
+	if len(files) == 0 {
+		files = form.File["attachments"]
+	}
+	if len(files) == 0 {
+		// Single file as "file"
+		if f, _ := c.FormFile("file"); f != nil {
+			files = []*multipart.FileHeader{f}
+		}
+	}
+	if len(files) == 0 {
+		response.BadRequest(c, "at least one file (attachments[] or file) is required", nil)
+		return
+	}
+
+	var inputs []services.AttachmentInput
+	for _, fileHeader := range files {
+		url, size, contentType, uploadErr := h.storageService.UploadFile(fileHeader, "helpdesk", fmt.Sprintf("%d", ticketID))
+		if uploadErr != nil {
+			response.BadRequest(c, uploadErr.Error(), nil)
+			return
+		}
+		inputs = append(inputs, services.AttachmentInput{
+			Name: fileHeader.Filename,
+			URL:  url,
+			Size: size,
+			Type: contentType,
+		})
+	}
+
+	attachments, err := h.service.AddAttachments(uint(ticketID), userObj.ID, tenantID, inputs)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	formatted := formatAttachmentsForList(attachments)
+	response.Success(c, "Attachments uploaded successfully", formatted)
 }
 
 // CloseTicket handles closing a ticket
@@ -433,7 +520,57 @@ func (h *TicketHandler) SubmitCSAT(c *gin.Context) {
 	response.Success(c, "CSAT submitted successfully", nil)
 }
 
-// formatTicketResponse formats a ticket for response (exported for use in other handlers)
-func formatTicketResponse(ticket *models.Ticket, includeDetails bool) map[string]interface{} {
-	return formatTicketResponseHelper(ticket, includeDetails)
+// GetTicketCategories returns ticket categories for Create Ticket form (dropdowns, SLA info)
+// @Summary Get ticket categories
+// @Tags Helpdesk (Employee)
+// @Produce json
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/helpdesk/ticket-categories [get]
+func (h *TicketHandler) GetTicketCategories(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+
+	categories, err := h.service.ListTicketCategories(tenantID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	formatted := make([]map[string]interface{}, 0, len(categories))
+	for i := range categories {
+		cat := &categories[i]
+		sla := map[string]interface{}{}
+		if cat.SLAFirstResponseMinutes != nil {
+			sla["firstResponse"] = strconv.Itoa(*cat.SLAFirstResponseMinutes)
+		}
+		if cat.SLAResolutionHours != nil {
+			sla["resolution"] = strconv.Itoa(*cat.SLAResolutionHours)
+		}
+		item := map[string]interface{}{
+			"id":              cat.ID,
+			"name":            cat.Name,
+			"description":     nil,
+			"sla":             sla,
+			"defaultPriority": nil,
+			"requiredFields":  []string{},
+			"templates":       []interface{}{},
+		}
+		if cat.Description != nil {
+			item["description"] = *cat.Description
+		}
+		if cat.DefaultPriority != nil {
+			item["defaultPriority"] = *cat.DefaultPriority
+		}
+		if cat.RequiredFieldsJSON != nil && *cat.RequiredFieldsJSON != "" {
+			var rf []string
+			_ = json.Unmarshal([]byte(*cat.RequiredFieldsJSON), &rf)
+			item["requiredFields"] = rf
+		}
+		if cat.TemplatesJSON != nil && *cat.TemplatesJSON != "" {
+			var tpl []map[string]interface{}
+			_ = json.Unmarshal([]byte(*cat.TemplatesJSON), &tpl)
+			item["templates"] = tpl
+		}
+		formatted = append(formatted, item)
+	}
+	response.Success(c, "Ticket categories retrieved successfully", formatted)
 }

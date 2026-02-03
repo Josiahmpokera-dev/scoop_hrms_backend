@@ -11,12 +11,19 @@ import (
 
 // Config holds all configuration for the application
 type Config struct {
-	Server   ServerConfig
-	Database DatabaseConfig
-	JWT      JWTConfig
-	CORS     CORSConfig
-	BioTime  BioTimeConfig
-	RabbitMQ RabbitMQConfig
+	Server         ServerConfig
+	Database       DatabaseConfig
+	JWT            JWTConfig
+	CORS           CORSConfig
+	BioTime        BioTimeConfig
+	RabbitMQ       RabbitMQConfig
+	LoginRateLimit LoginRateLimitConfig
+}
+
+// LoginRateLimitConfig holds login rate limiting (failed attempts → block) configuration
+type LoginRateLimitConfig struct {
+	MaxAttempts    int // Max failed login attempts before blocking (default 5)
+	LockoutMinutes int // Minutes to lock account (0 = block until admin unblocks)
 }
 
 // ServerConfig holds server configuration
@@ -37,8 +44,9 @@ type DatabaseConfig struct {
 
 // JWTConfig holds JWT configuration
 type JWTConfig struct {
-	Secret string
-	Expiry string
+	Secret        string
+	Expiry        string // Access token expiry, e.g. "24h"
+	RefreshExpiry string // Refresh token expiry, e.g. "168h" (7 days)
 }
 
 // CORSConfig holds CORS configuration
@@ -87,13 +95,14 @@ func LoadConfig() (*Config, error) {
 			SSLMode:  getEnv("DB_SSLMODE", "disable"),
 		},
 		JWT: JWTConfig{
-			Secret: getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
-			Expiry: getEnv("JWT_EXPIRY", "24h"),
+			Secret:        getEnv("JWT_SECRET", "your-secret-key-change-in-production"),
+			Expiry:        getEnv("JWT_EXPIRY", "24h"),
+			RefreshExpiry: getEnv("JWT_REFRESH_EXPIRY", "168h"), // 7 days default
 		},
 		CORS: CORSConfig{
-			AllowedOrigins: getEnvSlice("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173"}),
+			AllowedOrigins: getEnvSlice("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"}),
 			AllowedMethods: getEnvSlice("CORS_ALLOWED_METHODS", []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"}),
-			AllowedHeaders: getEnvSlice("CORS_ALLOWED_HEADERS", []string{"Content-Type", "Authorization", "X-Tenant-ID"}),
+			AllowedHeaders: getEnvSlice("CORS_ALLOWED_HEADERS", []string{"Content-Type", "Authorization", "X-Tenant-ID", "Accept", "Accept-Language"}),
 		},
 		BioTime: BioTimeConfig{
 			BaseURL:  getEnv("BIOTIME_BASE_URL", "http://10.4.9.24:8087"),
@@ -108,6 +117,10 @@ func LoadConfig() (*Config, error) {
 			Queue:              getEnv("RABBITMQ_QUEUE", "biotime_transactions"),
 			ProcessingInterval: getEnvInt("RABBITMQ_PROCESSING_INTERVAL", 0), // 0 = immediate, or seconds (e.g., 5, 300)
 			BatchSize:          getEnvInt("RABBITMQ_BATCH_SIZE", 0),          // 0 = one at a time, or batch size
+		},
+		LoginRateLimit: LoginRateLimitConfig{
+			MaxAttempts:    getEnvInt("LOGIN_MAX_ATTEMPTS", 5),    // Block after N failed attempts
+			LockoutMinutes: getEnvInt("LOGIN_LOCKOUT_MINUTES", 0), // 0 = block until admin unblocks
 		},
 	}
 

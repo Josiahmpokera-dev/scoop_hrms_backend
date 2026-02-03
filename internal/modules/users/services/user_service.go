@@ -3,7 +3,9 @@ package services
 import (
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/config"
 	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
@@ -35,6 +37,54 @@ func (s *UserService) ListUsers(tenantID *uint, page, pageSize int, role, search
 func (s *UserService) ListSpecialRoleUsers(tenantID *uint, page, pageSize int, search string) ([]models.User, int64, error) {
 	roles := []string{string(models.RoleAdmin), string(models.RoleHR), string(models.RoleIT)}
 	return s.userRepo.ListByRoles(tenantID, page, pageSize, roles, search)
+}
+
+// ListBlockedUsers returns users blocked from login (rate-limit or manual block). Optionally includes suspended.
+func (s *UserService) ListBlockedUsers(tenantID *uint, page, pageSize int, includeSuspended bool) ([]models.User, int64, error) {
+	return s.userRepo.ListBlockedUsers(tenantID, page, pageSize, includeSuspended)
+}
+
+// RateLimitStatus holds login rate-limit state for a user (admin view).
+type RateLimitStatus struct {
+	Email             string     `json:"email"`
+	Blocked           bool       `json:"blocked"`
+	Suspended         bool       `json:"suspended"`
+	FailedLoginCount  int        `json:"failedLoginCount"`
+	MaxAttempts       int        `json:"maxAttempts"`
+	AttemptsRemaining int        `json:"attemptsRemaining"`
+	LockedUntil       *time.Time `json:"lockedUntil,omitempty"`
+	CanLogin          bool       `json:"canLogin"`
+}
+
+// GetRateLimitStatus returns rate-limit status for an email (admin only). If user not found, returns generic to avoid enumeration.
+func (s *UserService) GetRateLimitStatus(email string) (*RateLimitStatus, error) {
+	maxAttempts := 5
+	if config.AppConfig != nil && config.AppConfig.LoginRateLimit.MaxAttempts > 0 {
+		maxAttempts = config.AppConfig.LoginRateLimit.MaxAttempts
+	}
+	user, err := s.userRepo.FindByEmail(email)
+	if err != nil || user == nil {
+		return &RateLimitStatus{
+			Email:             email,
+			MaxAttempts:       maxAttempts,
+			AttemptsRemaining: maxAttempts,
+			CanLogin:          true,
+		}, nil
+	}
+	attemptsRemaining := maxAttempts - user.FailedLoginCount
+	if attemptsRemaining < 0 {
+		attemptsRemaining = 0
+	}
+	return &RateLimitStatus{
+		Email:             user.Email,
+		Blocked:           user.Status == models.UserStatusBlocked,
+		Suspended:         user.Status == models.UserStatusSuspended,
+		FailedLoginCount:  user.FailedLoginCount,
+		MaxAttempts:       maxAttempts,
+		AttemptsRemaining: attemptsRemaining,
+		LockedUntil:       user.LockedUntil,
+		CanLogin:          user.CanLogin(),
+	}, nil
 }
 
 // TransferRoleResult holds the result of a role transfer.
@@ -121,9 +171,9 @@ func (s *UserService) TransferRole(callerUserID uint, role string, targetUserID 
 
 // AssignRoleResult holds the result of assigning a special role to a user.
 type AssignRoleResult struct {
-	User            *models.User `json:"user"`              // User who was assigned the role
-	Role            string       `json:"role"`              // Role that was assigned (admin, hr, or it)
-	PositionUpdated bool         `json:"position_updated"`  // True if employee's position was updated (optional position_id was provided and user has employee record)
+	User            *models.User `json:"user"`             // User who was assigned the role
+	Role            string       `json:"role"`             // Role that was assigned (admin, hr, or it)
+	PositionUpdated bool         `json:"position_updated"` // True if employee's position was updated (optional position_id was provided and user has employee record)
 }
 
 // AssignRole assigns or reassigns a role (admin, hr, it, or employee) to any user.
@@ -232,6 +282,10 @@ func (s *UserService) setUserStatus(callerUserID, targetUserID uint, status, act
 		return nil, errors.New("user not found")
 	}
 	target.Status = status
+	if status == models.UserStatusActive {
+		target.FailedLoginCount = 0
+		target.LockedUntil = nil
+	}
 	if err := s.userRepo.Update(target); err != nil {
 		return nil, fmt.Errorf("failed to %s user: %w", action, err)
 	}

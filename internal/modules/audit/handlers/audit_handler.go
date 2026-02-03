@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/services"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-gonic/gin"
@@ -40,8 +39,7 @@ func NewAuditHandler() *AuditHandler {
 // @Success 200 {object} response.APIResponse
 // @Router /api/v1/security/audit [get]
 func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
-	tenantID := middleware.GetTenantID(c)
-
+	// Do not filter by tenant so admins see all audit logs (including unauthenticated requests with tenant_id = nil)
 	page := 1
 	if p := c.Query("page"); p != "" {
 		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
@@ -56,13 +54,19 @@ func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 	}
 
 	filter := services.ListFilter{
-		TenantID: tenantID,
+		TenantID: nil, // Default: show all logs; optional ?tenant_id= for scoping
 		Action:   strings.TrimSpace(c.Query("action")),
 		Resource: strings.TrimSpace(c.Query("resource")),
 		Method:   strings.TrimSpace(c.Query("method")),
 		Search:   strings.TrimSpace(c.Query("search")),
 	}
 
+	if tid := c.Query("tenant_id"); tid != "" {
+		if parsed, err := strconv.ParseUint(tid, 10, 32); err == nil {
+			tidUint := uint(parsed)
+			filter.TenantID = &tidUint
+		}
+	}
 	if u := c.Query("user_id"); u != "" {
 		if parsed, err := strconv.ParseUint(u, 10, 32); err == nil {
 			uid := uint(parsed)

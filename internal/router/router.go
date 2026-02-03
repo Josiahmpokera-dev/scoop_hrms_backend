@@ -54,6 +54,7 @@ func SetupRoutes(r *gin.Engine) {
 			// Regular auth endpoints
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/login", authHandler.Login)
+			auth.POST("/refresh", authHandler.Refresh)
 
 			// Protected routes
 			auth.GET("/profile", middleware.AuthMiddleware(), authHandler.GetProfile)
@@ -67,12 +68,12 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			users.GET("/special-roles", middleware.HRMiddleware(), userHandler.ListSpecialRoleUsers) // List IT, HR, Admin users (HR/Admin only)
 			users.GET("", middleware.HRMiddleware(), userHandler.ListUsers)                          // List users (HR/Admin only, for transfer-role pickers)
-			users.POST("/transfer-role", userHandler.TransferRole)                                  // Transfer role from one user to another (unchanged)
-			users.POST("/assign-role", middleware.AdminMiddleware(), userHandler.AssignRole)        // Assign admin/hr/it to a normal user (Admin only)
-			users.POST("/:id/suspend", middleware.HRMiddleware(), userHandler.SuspendUser)         // Suspend user (HR/Admin only; user cannot login)
-			users.POST("/:id/unsuspend", middleware.HRMiddleware(), userHandler.UnsuspendUser)     // Unsuspend user (HR/Admin only; restores login)
-			users.POST("/:id/block", middleware.HRMiddleware(), userHandler.BlockUser)             // Block user (HR/Admin only; user cannot login)
-			users.POST("/:id/unblock", middleware.HRMiddleware(), userHandler.UnblockUser)        // Unblock user (HR/Admin only; restores login)
+			users.POST("/transfer-role", userHandler.TransferRole)                                   // Transfer role from one user to another (unchanged)
+			users.POST("/assign-role", middleware.AdminMiddleware(), userHandler.AssignRole)         // Assign admin/hr/it to a normal user (Admin only)
+			users.POST("/:id/suspend", middleware.HRMiddleware(), userHandler.SuspendUser)           // Suspend user (HR/Admin only; user cannot login)
+			users.POST("/:id/unsuspend", middleware.HRMiddleware(), userHandler.UnsuspendUser)       // Unsuspend user (HR/Admin only; restores login)
+			users.POST("/:id/block", middleware.HRMiddleware(), userHandler.BlockUser)               // Block user (HR/Admin only; user cannot login)
+			users.POST("/:id/unblock", middleware.HRMiddleware(), userHandler.UnblockUser)           // Unblock user (HR/Admin only; restores login)
 		}
 
 		// Roles routes (RBAC roles list; HR/Admin only)
@@ -86,7 +87,9 @@ func SetupRoutes(r *gin.Engine) {
 		security := v1.Group("/security")
 		security.Use(middleware.AuthMiddleware(), middleware.AdminMiddleware())
 		{
-			security.GET("/audit", auditHandler.ListAuditLogs) // List audit logs with pagination, search, filters
+			security.GET("/audit", auditHandler.ListAuditLogs)                 // List audit logs with pagination, search, filters
+			security.GET("/blocked-users", userHandler.ListBlockedUsers)       // List users blocked from login (rate-limit or manual)
+			security.GET("/rate-limit/status", userHandler.GetRateLimitStatus) // Get rate-limit status for an email
 		}
 
 		// Admin routes (require admin role)
@@ -411,19 +414,26 @@ func SetupRoutes(r *gin.Engine) {
 		// Helpdesk routes
 		helpdeskHandler := helpdeskHandlers.NewTicketHandler()
 		helpdeskAgentHandler := helpdeskHandlers.NewTicketAgentHandler()
+		helpdeskKBHandler := helpdeskHandlers.NewKnowledgeBaseHandler()
 
 		// Employee helpdesk routes (self-service)
 		helpdesk := v1.Group("/helpdesk")
 		helpdesk.Use(middleware.AuthMiddleware())
 		{
-			// Employee ticket routes
+			helpdesk.GET("/ticket-categories", helpdeskHandler.GetTicketCategories)
 			helpdesk.GET("/tickets", helpdeskHandler.ListMyTickets)
+			helpdesk.GET("/tickets/recent", helpdeskAgentHandler.GetRecentTickets)
 			helpdesk.GET("/tickets/:ticket_id", helpdeskHandler.GetTicketDetails)
 			helpdesk.POST("/tickets", helpdeskHandler.CreateTicket)
 			helpdesk.POST("/tickets/:ticket_id/comments", helpdeskHandler.AddComment)
+			helpdesk.POST("/tickets/:ticket_id/attachments", helpdeskHandler.UploadAttachments)
 			helpdesk.POST("/tickets/:ticket_id/close", helpdeskHandler.CloseTicket)
 			helpdesk.POST("/tickets/:ticket_id/csat", helpdeskHandler.SubmitCSAT)
-			helpdesk.GET("/tickets/recent", helpdeskAgentHandler.GetRecentTickets) // Available to all authenticated users
+			// Knowledge Base
+			helpdesk.GET("/knowledge-base/categories", helpdeskKBHandler.ListCategories)
+			helpdesk.GET("/knowledge-base/articles", helpdeskKBHandler.ListArticles)
+			helpdesk.GET("/knowledge-base/articles/:article_id", helpdeskKBHandler.GetArticle)
+			helpdesk.POST("/knowledge-base/articles/:article_id/feedback", helpdeskKBHandler.SubmitFeedback)
 		}
 
 		// Agent/Admin helpdesk routes
@@ -441,6 +451,13 @@ func SetupRoutes(r *gin.Engine) {
 		helpdeskDashboard.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
 			helpdeskDashboard.GET("/statistics", helpdeskAgentHandler.GetStatistics)
+		}
+
+		// Helpdesk reports export (Agent/Admin)
+		helpdeskReports := v1.Group("/helpdesk/reports")
+		helpdeskReports.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			helpdeskReports.GET("/export", helpdeskAgentHandler.ExportReport)
 		}
 
 		// Biometric/BioTime routes

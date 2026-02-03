@@ -136,6 +136,29 @@ func (r *UserRepository) ListByRoles(tenantID *uint, page, pageSize int, roles [
 	return users, total, nil
 }
 
+// ListBlockedUsers returns users with status blocked (and optionally suspended) for rate-limit / security admin.
+func (r *UserRepository) ListBlockedUsers(tenantID *uint, page, pageSize int, includeSuspended bool) ([]models.User, int64, error) {
+	var users []models.User
+	var total int64
+	query := r.db.Model(&models.User{})
+	if includeSuspended {
+		query = query.Where("status IN ?", []string{models.UserStatusBlocked, models.UserStatusSuspended})
+	} else {
+		query = query.Where("status = ?", models.UserStatusBlocked)
+	}
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * pageSize
+	if err := query.Order("updated_at DESC").Offset(offset).Limit(pageSize).Find(&users).Error; err != nil {
+		return nil, 0, err
+	}
+	return users, total, nil
+}
+
 // ListNonEmployeeUsers returns users who are not yet linked to any employee (for onboarding existing users).
 // Supports tenant filter, pagination, and search by email, first_name, last_name, username.
 func (r *UserRepository) ListNonEmployeeUsers(tenantID *uint, page, pageSize int, search string) ([]models.User, int64, error) {

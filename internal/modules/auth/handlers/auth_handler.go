@@ -75,6 +75,34 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	response.Success(c, "Login successful", authResponse)
 }
 
+// Refresh handles refresh token request and returns new access and refresh tokens
+// @Summary Refresh token
+// @Description Exchange a valid refresh token for new access and refresh tokens to stay logged in
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param request body models.RefreshTokenRequest true "Refresh token"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 401 {object} response.APIResponse
+// @Router /api/v1/auth/refresh [post]
+func (h *AuthHandler) Refresh(c *gin.Context) {
+	var req models.RefreshTokenRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", "refresh_token is required")
+		return
+	}
+
+	authResponse, err := h.authService.RefreshToken(req.RefreshToken)
+	if err != nil {
+		response.Unauthorized(c, err.Error())
+		return
+	}
+
+	response.Success(c, "Tokens refreshed successfully", authResponse)
+}
+
 // GetProfile handles getting user profile
 // @Summary Get user profile
 // @Description Get authenticated user's profile

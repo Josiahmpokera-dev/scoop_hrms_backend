@@ -7,9 +7,9 @@ import (
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/config"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/auth/models"
+	roleRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
-	roleRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -115,10 +115,14 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.AuthRespons
 		return nil, errors.New("failed to create user")
 	}
 
-	// Generate token
-	token, expiresIn, err := s.generateToken(user)
+	// Generate access and refresh tokens
+	accessToken, expiresIn, err := s.generateToken(user)
 	if err != nil {
 		return nil, errors.New("failed to generate token")
+	}
+	refreshToken, refreshExpiresIn, err := s.generateRefreshToken(user)
+	if err != nil {
+		return nil, errors.New("failed to generate refresh token")
 	}
 
 	roles := s.buildUserRoles(user)
@@ -133,9 +137,11 @@ func (s *AuthService) Register(req *models.RegisterRequest) (*models.AuthRespons
 			Roles:     roles,
 			IsActive:  user.IsActive,
 		},
-		AccessToken: token,
-		TokenType:   "Bearer",
-		ExpiresIn:   expiresIn,
+		AccessToken:      accessToken,
+		RefreshToken:     refreshToken,
+		TokenType:        "Bearer",
+		ExpiresIn:        expiresIn,
+		RefreshExpiresIn: refreshExpiresIn,
 	}, nil
 }
 
@@ -162,18 +168,50 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 		}
 	}
 
+	// Temporarily locked (rate limit lockout window)
+	if user.LockedUntil != nil && time.Now().Before(*user.LockedUntil) {
+		return nil, errors.New("account is temporarily locked due to too many failed login attempts")
+	}
+
 	// Verify password
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		maxAttempts := 5
+		lockoutMinutes := 0
+		if config.AppConfig != nil {
+			maxAttempts = config.AppConfig.LoginRateLimit.MaxAttempts
+			if maxAttempts <= 0 {
+				maxAttempts = 5
+			}
+			lockoutMinutes = config.AppConfig.LoginRateLimit.LockoutMinutes
+		}
+		user.FailedLoginCount++
+		if user.FailedLoginCount >= maxAttempts {
+			user.Status = userModels.UserStatusBlocked
+			if lockoutMinutes > 0 {
+				until := time.Now().Add(time.Duration(lockoutMinutes) * time.Minute)
+				user.LockedUntil = &until
+			}
+		}
+		_ = s.userRepo.Update(user)
 		return nil, errors.New("invalid email or password")
 	}
+
+	// Success: clear failed attempt count and lock
+	user.FailedLoginCount = 0
+	user.LockedUntil = nil
+	_ = s.userRepo.Update(user)
 
 	// Update last login
 	_ = s.userRepo.UpdateLastLogin(user.ID)
 
-	// Generate token
-	token, expiresIn, err := s.generateToken(user)
+	// Generate access and refresh tokens
+	accessToken, expiresIn, err := s.generateToken(user)
 	if err != nil {
 		return nil, errors.New("failed to generate token")
+	}
+	refreshToken, refreshExpiresIn, err := s.generateRefreshToken(user)
+	if err != nil {
+		return nil, errors.New("failed to generate refresh token")
 	}
 
 	roles := s.buildUserRoles(user)
@@ -188,9 +226,66 @@ func (s *AuthService) Login(req *models.LoginRequest) (*models.AuthResponse, err
 			Roles:     roles,
 			IsActive:  user.IsActive,
 		},
-		AccessToken: token,
-		TokenType:   "Bearer",
-		ExpiresIn:   expiresIn,
+		AccessToken:      accessToken,
+		RefreshToken:     refreshToken,
+		TokenType:        "Bearer",
+		ExpiresIn:        expiresIn,
+		RefreshExpiresIn: refreshExpiresIn,
+	}, nil
+}
+
+// RefreshToken validates the refresh token and returns new access and refresh tokens
+func (s *AuthService) RefreshToken(refreshTokenString string) (*models.AuthResponse, error) {
+	userID, err := s.validateRefreshToken(refreshTokenString)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	if !user.CanLogin() {
+		if !user.IsActive {
+			return nil, errors.New("account is deactivated")
+		}
+		switch user.Status {
+		case "suspended":
+			return nil, errors.New("account is suspended")
+		case "blocked":
+			return nil, errors.New("account is blocked")
+		default:
+			return nil, errors.New("account is not active")
+		}
+	}
+
+	accessToken, expiresIn, err := s.generateToken(user)
+	if err != nil {
+		return nil, errors.New("failed to generate token")
+	}
+	newRefreshToken, refreshExpiresIn, err := s.generateRefreshToken(user)
+	if err != nil {
+		return nil, errors.New("failed to generate refresh token")
+	}
+
+	roles := s.buildUserRoles(user)
+	return &models.AuthResponse{
+		User: &models.UserInfo{
+			ID:        user.ID,
+			Username:  user.Username,
+			Email:     user.Email,
+			FirstName: user.FirstName,
+			LastName:  user.LastName,
+			Role:      s.primaryRole(user),
+			Roles:     roles,
+			IsActive:  user.IsActive,
+		},
+		AccessToken:      accessToken,
+		RefreshToken:     newRefreshToken,
+		TokenType:        "Bearer",
+		ExpiresIn:        expiresIn,
+		RefreshExpiresIn: refreshExpiresIn,
 	}, nil
 }
 
@@ -248,6 +343,77 @@ func (s *AuthService) generateToken(user *userModels.User) (string, int64, error
 	}
 
 	return tokenString, expiresIn, nil
+}
+
+// generateRefreshToken generates a JWT refresh token (longer-lived, type "refresh")
+func (s *AuthService) generateRefreshToken(user *userModels.User) (string, int64, error) {
+	expiryStr := config.AppConfig.JWT.RefreshExpiry
+	if expiryStr == "" {
+		expiryStr = "168h" // 7 days default
+	}
+	expiryDuration, err := time.ParseDuration(expiryStr)
+	if err != nil {
+		expiryDuration = 168 * time.Hour // 7 days
+	}
+
+	expiresAt := time.Now().Add(expiryDuration)
+	expiresIn := int64(expiryDuration.Seconds())
+
+	roles := s.buildUserRoles(user)
+	primary := s.primaryRole(user)
+
+	claims := jwt.MapClaims{
+		"user_id": user.ID,
+		"email":   user.Email,
+		"role":    primary,
+		"roles":   roles,
+		"type":    "refresh",
+		"exp":     expiresAt.Unix(),
+		"iat":     time.Now().Unix(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	tokenString, err := token.SignedString([]byte(config.AppConfig.JWT.Secret))
+	if err != nil {
+		return "", 0, err
+	}
+
+	return tokenString, expiresIn, nil
+}
+
+// validateRefreshToken parses and validates a refresh token; returns user ID
+func (s *AuthService) validateRefreshToken(tokenString string) (uint, error) {
+	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("invalid signing method")
+		}
+		return []byte(config.AppConfig.JWT.Secret), nil
+	})
+
+	if err != nil {
+		return 0, errors.New("invalid or expired refresh token")
+	}
+
+	if !token.Valid {
+		return 0, errors.New("refresh token is not valid")
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return 0, errors.New("invalid token claims")
+	}
+
+	tokenType, _ := claims["type"].(string)
+	if tokenType != "refresh" {
+		return 0, errors.New("invalid token type")
+	}
+
+	userID, ok := claims["user_id"].(float64)
+	if !ok {
+		return 0, errors.New("invalid user ID in token")
+	}
+
+	return uint(userID), nil
 }
 
 // ValidateToken validates a JWT token and returns the user ID

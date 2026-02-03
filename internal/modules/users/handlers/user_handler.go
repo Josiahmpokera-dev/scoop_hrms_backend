@@ -323,3 +323,79 @@ func (h *UserHandler) UnsuspendUser(c *gin.Context) {
 	}
 	response.Success(c, "User unsuspended successfully", user)
 }
+
+// ListBlockedUsers returns users blocked from login (rate-limit or manual). Admin only.
+//
+// @Summary List blocked users
+// @Description Get users blocked from login (failed attempts or manually blocked). Admin only.
+// @Tags Security
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20) maximum(100)
+// @Param include_suspended query bool false "Include suspended users" default(false)
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/security/blocked-users [get]
+func (h *UserHandler) ListBlockedUsers(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+	page := 1
+	if p := c.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	pageSize := 20
+	if ps := c.Query("page_size"); ps != "" {
+		if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 && parsed <= 100 {
+			pageSize = parsed
+		}
+	}
+	includeSuspended := false
+	if c.Query("include_suspended") == "true" || c.Query("include_suspended") == "1" {
+		includeSuspended = true
+	}
+	users, total, err := h.userService.ListBlockedUsers(tenantID, page, pageSize, includeSuspended)
+	if err != nil {
+		response.InternalServerError(c, "Failed to list blocked users", err.Error())
+		return
+	}
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	meta := &response.Meta{Page: page, PerPage: pageSize, Total: total, TotalPages: totalPages}
+	list := make([]map[string]interface{}, 0, len(users))
+	for _, u := range users {
+		list = append(list, map[string]interface{}{
+			"id":               u.ID,
+			"email":            u.Email,
+			"firstName":        u.FirstName,
+			"lastName":         u.LastName,
+			"username":         u.Username,
+			"status":           u.Status,
+			"failedLoginCount": u.FailedLoginCount,
+			"lockedUntil":      u.LockedUntil,
+			"updatedAt":        u.UpdatedAt,
+		})
+	}
+	response.SuccessWithMeta(c, "Blocked users retrieved successfully", list, meta)
+}
+
+// GetRateLimitStatus returns login rate-limit status for an email. Admin only.
+//
+// @Summary Get rate limit status
+// @Description Get login rate-limit status for a user by email (blocked, attempts remaining, etc.). Admin only.
+// @Tags Security
+// @Produce json
+// @Param email query string true "User email"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/security/rate-limit/status [get]
+func (h *UserHandler) GetRateLimitStatus(c *gin.Context) {
+	email := c.Query("email")
+	if email == "" {
+		response.BadRequest(c, "email is required", nil)
+		return
+	}
+	status, err := h.userService.GetRateLimitStatus(email)
+	if err != nil {
+		response.InternalServerError(c, "Failed to get rate limit status", err.Error())
+		return
+	}
+	response.Success(c, "Rate limit status retrieved", status)
+}

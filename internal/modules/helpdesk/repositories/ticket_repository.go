@@ -58,7 +58,6 @@ func (r *TicketRepository) FindByRequesterID(requesterID uint, tenantID *uint, p
 		query = query.Where("tenant_id = ?", *tenantID)
 	}
 
-	// Apply filters
 	if search, ok := filters["search"].(string); ok && search != "" {
 		query = query.Where("title ILIKE ? OR description ILIKE ? OR ticket_number ILIKE ?", "%"+search+"%", "%"+search+"%", "%"+search+"%")
 	}
@@ -72,12 +71,10 @@ func (r *TicketRepository) FindByRequesterID(requesterID uint, tenantID *uint, p
 		query = query.Where("category = ?", category)
 	}
 
-	// Count total
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	// Apply sorting
 	sortBy := "created_at"
 	sortDir := "DESC"
 	if sb, ok := filters["sort_by"].(string); ok && sb != "" {
@@ -88,7 +85,54 @@ func (r *TicketRepository) FindByRequesterID(requesterID uint, tenantID *uint, p
 	}
 	orderBy := fmt.Sprintf("%s %s", sortBy, sortDir)
 
-	// Get paginated results
+	err := query.Order(orderBy).Offset(offset).Limit(pageSize).Find(&tickets).Error
+	return tickets, total, err
+}
+
+// FindByRequesterUserIDOrEmployee finds tickets where the requester is either the user (user-only, e.g. Admin) or the user's employee
+func (r *TicketRepository) FindByRequesterUserIDOrEmployee(userID uint, employeeID *uint, tenantID *uint, page, pageSize int, filters map[string]interface{}) ([]models.Ticket, int64, error) {
+	var tickets []models.Ticket
+	var total int64
+
+	offset := (page - 1) * pageSize
+	query := r.db.Model(&models.Ticket{})
+	if employeeID != nil {
+		query = query.Where("requester_user_id = ? OR requester_id = ?", userID, *employeeID)
+	} else {
+		query = query.Where("requester_user_id = ?", userID)
+	}
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	if search, ok := filters["search"].(string); ok && search != "" {
+		query = query.Where("title ILIKE ? OR description ILIKE ? OR ticket_number ILIKE ?", "%"+search+"%", "%"+search+"%", "%"+search+"%")
+	}
+	if status, ok := filters["status"].(string); ok && status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if priority, ok := filters["priority"].(string); ok && priority != "" {
+		query = query.Where("priority = ?", priority)
+	}
+	if category, ok := filters["category"].(string); ok && category != "" {
+		query = query.Where("category = ?", category)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	sortBy := "created_at"
+	sortDir := "DESC"
+	if sb, ok := filters["sort_by"].(string); ok && sb != "" {
+		sortBy = sb
+	}
+	if sd, ok := filters["sort_dir"].(string); ok && sd != "" {
+		sortDir = sd
+	}
+	orderBy := fmt.Sprintf("%s %s", sortBy, sortDir)
+
 	err := query.Order(orderBy).Offset(offset).Limit(pageSize).Find(&tickets).Error
 	return tickets, total, err
 }
@@ -134,6 +178,12 @@ func (r *TicketRepository) ListAll(tenantID *uint, page, pageSize int, filters m
 	}
 	if queue, ok := filters["queue"].(string); ok && queue != "" {
 		query = query.Where("queue = ?", queue)
+	}
+	if fromDate, ok := filters["from_date"].(*time.Time); ok && fromDate != nil {
+		query = query.Where("created_at >= ?", *fromDate)
+	}
+	if toDate, ok := filters["to_date"].(*time.Time); ok && toDate != nil {
+		query = query.Where("created_at <= ?", *toDate)
 	}
 
 	// Count total
