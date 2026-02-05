@@ -195,6 +195,143 @@ func (h *UserHandler) AssignRole(c *gin.Context) {
 	response.Success(c, "Role assigned successfully", resp)
 }
 
+// AddRole adds an additional role to a user without removing existing roles.
+// This allows users to have multiple roles like ["admin", "employee"] or ["hr", "it"].
+// Only an Admin can call this.
+//
+// @Summary Add role to user
+// @Description Add an additional role to a user (supports multiple roles per user). Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param request body models.AddRoleRequest true "Add role request"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
+// @Router /api/v1/users/add-role [post]
+func (h *UserHandler) AddRole(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	callerID := userID.(uint)
+
+	var req models.AddRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	roles, err := h.userService.AddRoleToUser(callerID, req.UserID, req.Role)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Role added successfully", gin.H{"user_id": req.UserID, "roles": roles})
+}
+
+// RemoveRole removes a role from a user.
+// Cannot remove the last role - user must have at least one role.
+// Only an Admin can call this.
+//
+// @Summary Remove role from user
+// @Description Remove a role from a user. Cannot remove the last role. Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param request body models.RemoveRoleRequest true "Remove role request"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
+// @Router /api/v1/users/remove-role [post]
+func (h *UserHandler) RemoveRole(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	callerID := userID.(uint)
+
+	var req models.RemoveRoleRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	roles, err := h.userService.RemoveRoleFromUser(callerID, req.UserID, req.Role)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Role removed successfully", gin.H{"user_id": req.UserID, "roles": roles})
+}
+
+// SetRoles replaces all roles for a user with the specified roles.
+// At least one role must be provided.
+// Only an Admin can call this.
+//
+// @Summary Set user roles
+// @Description Replace all roles for a user with new role array. Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param request body models.SetRolesRequest true "Set roles request"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
+// @Router /api/v1/users/set-roles [post]
+func (h *UserHandler) SetRoles(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	callerID := userID.(uint)
+
+	var req models.SetRolesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	roles, err := h.userService.SetUserRoles(callerID, req.UserID, req.Roles)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Roles updated successfully", gin.H{"user_id": req.UserID, "roles": roles})
+}
+
+// GetUserRoles returns all roles for a user (combined legacy + RBAC, deduplicated).
+//
+// @Summary Get user roles
+// @Description Get all roles for a user
+// @Tags Users
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Router /api/v1/users/{id}/roles [get]
+func (h *UserHandler) GetUserRoles(c *gin.Context) {
+	targetID, ok := parseUserIDParam(c)
+	if !ok {
+		response.BadRequest(c, "Invalid user ID", nil)
+		return
+	}
+
+	roles, err := h.userService.GetUserRoles(targetID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "User roles retrieved successfully", gin.H{"user_id": targetID, "roles": roles})
+}
+
 // parseUserIDParam returns the user ID from the URL param "id". Returns 0 and false if invalid.
 func parseUserIDParam(c *gin.Context) (uint, bool) {
 	idStr := c.Param("id")

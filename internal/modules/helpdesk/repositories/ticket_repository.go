@@ -252,24 +252,34 @@ func (r *TicketRepository) GetRecentTickets(tenantID *uint, limit int) ([]models
 	return tickets, err
 }
 
-// GetStatistics gets ticket statistics
+// TopAgentStats holds statistics for a single agent
+type TopAgentStats struct {
+	ID              uint    `json:"id"`
+	Name            string  `json:"name"`
+	ResolvedCount   int64   `json:"resolved"`
+	AvgTimeMinutes  float64 `json:"-"`
+	AvgTime         string  `json:"avgTime"`
+	CSATScore       float64 `json:"csat"`
+}
+
+// GetStatistics gets ticket statistics including advanced metrics
 func (r *TicketRepository) GetStatistics(tenantID *uint, fromDate, toDate *time.Time) (map[string]interface{}, error) {
-	query := r.db.Model(&models.Ticket{})
+	baseQuery := r.db.Model(&models.Ticket{})
 	if tenantID != nil {
-		query = query.Where("tenant_id = ?", *tenantID)
+		baseQuery = baseQuery.Where("tenant_id = ?", *tenantID)
 	}
 	if fromDate != nil {
-		query = query.Where("created_at >= ?", *fromDate)
+		baseQuery = baseQuery.Where("created_at >= ?", *fromDate)
 	}
 	if toDate != nil {
-		query = query.Where("created_at <= ?", *toDate)
+		baseQuery = baseQuery.Where("created_at <= ?", *toDate)
 	}
 
 	stats := make(map[string]interface{})
 
 	// Total tickets
 	var totalTickets int64
-	query.Count(&totalTickets)
+	baseQuery.Count(&totalTickets)
 	stats["total_tickets"] = totalTickets
 
 	// Tickets by status
@@ -277,7 +287,7 @@ func (r *TicketRepository) GetStatistics(tenantID *uint, fromDate, toDate *time.
 		Status string
 		Count  int64
 	}
-	query.Select("status, COUNT(*) as count").Group("status").Scan(&statusCounts)
+	baseQuery.Select("status, COUNT(*) as count").Group("status").Scan(&statusCounts)
 	statusMap := make(map[string]int64)
 	for _, sc := range statusCounts {
 		statusMap[sc.Status] = sc.Count
@@ -289,7 +299,7 @@ func (r *TicketRepository) GetStatistics(tenantID *uint, fromDate, toDate *time.
 		Category string
 		Count    int64
 	}
-	query.Select("category, COUNT(*) as count").Group("category").Scan(&categoryCounts)
+	baseQuery.Select("category, COUNT(*) as count").Group("category").Scan(&categoryCounts)
 	categoryMap := make(map[string]int64)
 	for _, cc := range categoryCounts {
 		categoryMap[cc.Category] = cc.Count
@@ -301,12 +311,89 @@ func (r *TicketRepository) GetStatistics(tenantID *uint, fromDate, toDate *time.
 		Priority string
 		Count    int64
 	}
-	query.Select("priority, COUNT(*) as count").Group("priority").Scan(&priorityCounts)
+	baseQuery.Select("priority, COUNT(*) as count").Group("priority").Scan(&priorityCounts)
 	priorityMap := make(map[string]int64)
 	for _, pc := range priorityCounts {
 		priorityMap[pc.Priority] = pc.Count
 	}
 	stats["tickets_by_priority"] = priorityMap
 
+	// Average first response time (in minutes) for tickets with first_response_time
+	var avgFirstResponseMinutes float64
+	r.db.Model(&models.Ticket{}).
+		Where(r.buildDateFilter(tenantID, fromDate, toDate)).
+		Where("first_response_time IS NOT NULL").
+		Select("AVG(EXTRACT(EPOCH FROM (first_response_time - created_at)) / 60)").
+		Scan(&avgFirstResponseMinutes)
+	stats["avg_first_response_minutes"] = avgFirstResponseMinutes
+
+	// Average resolution time (in minutes) for resolved/closed tickets
+	var avgResolutionMinutes float64
+	r.db.Model(&models.Ticket{}).
+		Where(r.buildDateFilter(tenantID, fromDate, toDate)).
+		Where("resolved_at IS NOT NULL").
+		Select("AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 60)").
+		Scan(&avgResolutionMinutes)
+	stats["avg_resolution_minutes"] = avgResolutionMinutes
+
+	// SLA compliance: % of tickets NOT breached (where sla_status != 'Breached' or is null, among resolved/closed)
+	var slaTotal, slaCompliant int64
+	r.db.Model(&models.Ticket{}).
+		Where(r.buildDateFilter(tenantID, fromDate, toDate)).
+		Where("status IN ?", []string{"Resolved", "Closed"}).
+		Count(&slaTotal)
+	r.db.Model(&models.Ticket{}).
+		Where(r.buildDateFilter(tenantID, fromDate, toDate)).
+		Where("status IN ?", []string{"Resolved", "Closed"}).
+		Where("sla_status IS NULL OR sla_status != ?", "Breached").
+		Count(&slaCompliant)
+	slaCompliance := float64(0)
+	if slaTotal > 0 {
+		slaCompliance = float64(slaCompliant) / float64(slaTotal) * 100
+	}
+	stats["sla_compliance"] = slaCompliance
+
+	// CSAT average score (1-5) for tickets with csat_rating
+	var csatAvg float64
+	r.db.Model(&models.Ticket{}).
+		Where(r.buildDateFilter(tenantID, fromDate, toDate)).
+		Where("csat_rating IS NOT NULL").
+		Select("AVG(csat_rating)").
+		Scan(&csatAvg)
+	stats["csat_score"] = csatAvg
+
+	// Top 5 agents by resolved count
+	var topAgents []TopAgentStats
+	r.db.Model(&models.Ticket{}).
+		Select(`
+			assigned_to_id as id,
+			assigned_to_name as name,
+			COUNT(*) as resolved_count,
+			AVG(EXTRACT(EPOCH FROM (resolved_at - created_at)) / 60) as avg_time_minutes,
+			AVG(csat_rating) as csat_score
+		`).
+		Where(r.buildDateFilter(tenantID, fromDate, toDate)).
+		Where("assigned_to_id IS NOT NULL AND resolved_at IS NOT NULL").
+		Group("assigned_to_id, assigned_to_name").
+		Order("resolved_count DESC").
+		Limit(5).
+		Scan(&topAgents)
+	stats["top_agents"] = topAgents
+
 	return stats, nil
+}
+
+// buildDateFilter returns a query condition string for tenant and date range
+func (r *TicketRepository) buildDateFilter(tenantID *uint, fromDate, toDate *time.Time) string {
+	cond := "1=1"
+	if tenantID != nil {
+		cond += fmt.Sprintf(" AND tenant_id = %d", *tenantID)
+	}
+	if fromDate != nil {
+		cond += fmt.Sprintf(" AND created_at >= '%s'", fromDate.Format("2006-01-02 15:04:05"))
+	}
+	if toDate != nil {
+		cond += fmt.Sprintf(" AND created_at <= '%s'", toDate.Format("2006-01-02 15:04:05"))
+	}
+	return cond
 }

@@ -29,14 +29,19 @@ func NewAuthService() *AuthService {
 }
 
 // buildUserRoles returns a deduplicated slice of role strings: legacy user_type plus assigned role codes.
+// Always includes "user" as a base role since all system users are treated as users.
 func (s *AuthService) buildUserRoles(user *userModels.User) []string {
 	seen := make(map[string]bool)
 	var roles []string
+
+	// Add the legacy role first
 	legacy := strings.ToLower(string(user.Role))
 	if legacy != "" && !seen[legacy] {
 		seen[legacy] = true
 		roles = append(roles, legacy)
 	}
+
+	// Add RBAC roles from the database
 	codes, err := s.roleRepo.GetUserRoleCodes(user.ID)
 	if err == nil {
 		for _, code := range codes {
@@ -47,9 +52,12 @@ func (s *AuthService) buildUserRoles(user *userModels.User) []string {
 			}
 		}
 	}
-	if len(roles) == 0 {
+
+	// Always ensure "user" is in the roles array - all system users are treated as users
+	if !seen["user"] {
 		roles = append(roles, "user")
 	}
+
 	return roles
 }
 

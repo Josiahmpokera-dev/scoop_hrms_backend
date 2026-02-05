@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/config"
@@ -290,4 +291,203 @@ func (s *UserService) setUserStatus(callerUserID, targetUserID uint, status, act
 		return nil, fmt.Errorf("failed to %s user: %w", action, err)
 	}
 	return target, nil
+}
+
+// AddRoleToUser adds an additional role to a user without changing existing roles.
+// This allows a user to have multiple roles like ["admin", "employee"] or ["hr", "it"].
+// Only Admin can call this.
+func (s *UserService) AddRoleToUser(callerUserID uint, targetUserID uint, role string) ([]string, error) {
+	allowedRoles := map[string]bool{"admin": true, "hr": true, "it": true, "employee": true, "user": true}
+	role = strings.ToLower(strings.TrimSpace(role))
+	if !allowedRoles[role] {
+		return nil, errors.New("role must be admin, hr, it, employee, or user")
+	}
+
+	caller, err := s.userRepo.FindByID(callerUserID)
+	if err != nil || caller == nil {
+		return nil, errors.New("caller user not found")
+	}
+	if !caller.IsAdmin() {
+		return nil, errors.New("only an admin can add roles to users")
+	}
+
+	target, err := s.userRepo.FindByID(targetUserID)
+	if err != nil || target == nil {
+		return nil, errors.New("target user not found")
+	}
+
+	// Check if user already has this role in RBAC
+	codes, _ := s.roleRepo.GetUserRoleCodes(target.ID)
+	for _, c := range codes {
+		if strings.ToLower(c) == role {
+			return nil, fmt.Errorf("user already has role %s", role)
+		}
+	}
+
+	// Find the role in RBAC
+	rbacRole, err := s.roleRepo.FindByCode(role)
+	if err != nil || rbacRole == nil {
+		return nil, fmt.Errorf("role %s not found in system", role)
+	}
+
+	// Add the role
+	if err := s.roleRepo.AssignUserRole(target.ID, rbacRole.ID, &callerUserID); err != nil {
+		return nil, fmt.Errorf("failed to add role: %w", err)
+	}
+
+	// Return all roles for the user
+	return s.GetUserRoles(targetUserID)
+}
+
+// RemoveRoleFromUser removes a role from a user.
+// Cannot remove the last role - user must have at least one role.
+// Only Admin can call this.
+func (s *UserService) RemoveRoleFromUser(callerUserID uint, targetUserID uint, role string) ([]string, error) {
+	role = strings.ToLower(strings.TrimSpace(role))
+
+	caller, err := s.userRepo.FindByID(callerUserID)
+	if err != nil || caller == nil {
+		return nil, errors.New("caller user not found")
+	}
+	if !caller.IsAdmin() {
+		return nil, errors.New("only an admin can remove roles from users")
+	}
+
+	target, err := s.userRepo.FindByID(targetUserID)
+	if err != nil || target == nil {
+		return nil, errors.New("target user not found")
+	}
+
+	// Get current roles
+	codes, _ := s.roleRepo.GetUserRoleCodes(target.ID)
+
+	// Count total roles (legacy + RBAC)
+	totalRoles := len(codes)
+	if strings.TrimSpace(string(target.Role)) != "" {
+		// Check if legacy role is in codes to avoid double counting
+		legacyInCodes := false
+		for _, c := range codes {
+			if strings.EqualFold(c, string(target.Role)) {
+				legacyInCodes = true
+				break
+			}
+		}
+		if !legacyInCodes {
+			totalRoles++
+		}
+	}
+
+	if totalRoles <= 1 {
+		return nil, errors.New("cannot remove the last role - user must have at least one role")
+	}
+
+	// Find and remove the role from RBAC
+	rbacRole, err := s.roleRepo.FindByCode(role)
+	if err != nil || rbacRole == nil {
+		return nil, fmt.Errorf("role %s not found", role)
+	}
+
+	if err := s.roleRepo.RemoveUserRole(target.ID, rbacRole.ID); err != nil {
+		return nil, fmt.Errorf("failed to remove role: %w", err)
+	}
+
+	// If removing the legacy role, change it to "user"
+	if strings.ToLower(string(target.Role)) == role {
+		target.Role = models.RoleUser
+		_ = s.userRepo.Update(target)
+	}
+
+	// Return remaining roles
+	return s.GetUserRoles(targetUserID)
+}
+
+// GetUserRoles returns all roles for a user (legacy + RBAC combined, deduplicated).
+func (s *UserService) GetUserRoles(userID uint) ([]string, error) {
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil || user == nil {
+		return nil, errors.New("user not found")
+	}
+
+	seen := make(map[string]bool)
+	var roles []string
+
+	// Add legacy role
+	legacy := strings.ToLower(strings.TrimSpace(string(user.Role)))
+	if legacy != "" && !seen[legacy] {
+		seen[legacy] = true
+		roles = append(roles, legacy)
+	}
+
+	// Add RBAC roles
+	codes, _ := s.roleRepo.GetUserRoleCodes(user.ID)
+	for _, code := range codes {
+		c := strings.ToLower(strings.TrimSpace(code))
+		if c != "" && !seen[c] {
+			seen[c] = true
+			roles = append(roles, c)
+		}
+	}
+
+	// Always ensure "user" is in the roles array - all system users are treated as users
+	if !seen["user"] {
+		roles = append(roles, "user")
+	}
+
+	return roles, nil
+}
+
+// SetUserRoles replaces all roles for a user with the specified roles.
+// At least one role must be provided. Only Admin can call this.
+func (s *UserService) SetUserRoles(callerUserID uint, targetUserID uint, newRoles []string) ([]string, error) {
+	if len(newRoles) == 0 {
+		return nil, errors.New("at least one role must be specified")
+	}
+
+	allowedRoles := map[string]bool{"admin": true, "hr": true, "it": true, "employee": true, "user": true}
+	for i, r := range newRoles {
+		newRoles[i] = strings.ToLower(strings.TrimSpace(r))
+		if !allowedRoles[newRoles[i]] {
+			return nil, fmt.Errorf("invalid role: %s", r)
+		}
+	}
+
+	caller, err := s.userRepo.FindByID(callerUserID)
+	if err != nil || caller == nil {
+		return nil, errors.New("caller user not found")
+	}
+	if !caller.IsAdmin() {
+		return nil, errors.New("only an admin can set user roles")
+	}
+
+	target, err := s.userRepo.FindByID(targetUserID)
+	if err != nil || target == nil {
+		return nil, errors.New("target user not found")
+	}
+
+	// Remove all existing RBAC roles
+	existingCodes, _ := s.roleRepo.GetUserRoleCodes(target.ID)
+	for _, code := range existingCodes {
+		rbacRole, err := s.roleRepo.FindByCode(code)
+		if err == nil && rbacRole != nil {
+			_ = s.roleRepo.RemoveUserRole(target.ID, rbacRole.ID)
+		}
+	}
+
+	// Add new roles
+	for _, role := range newRoles {
+		rbacRole, err := s.roleRepo.FindByCode(role)
+		if err == nil && rbacRole != nil {
+			_ = s.roleRepo.AssignUserRole(target.ID, rbacRole.ID, &callerUserID)
+		}
+	}
+
+	// Set legacy role to the first role (for backward compatibility)
+	primaryRole := newRoles[0]
+	if primaryRole == "employee" {
+		primaryRole = "user"
+	}
+	target.Role = models.UserRole(primaryRole)
+	_ = s.userRepo.Update(target)
+
+	return s.GetUserRoles(targetUserID)
 }

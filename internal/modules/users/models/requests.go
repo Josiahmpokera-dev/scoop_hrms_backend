@@ -14,7 +14,30 @@ type TransferRoleRequest struct {
 // Use role "employee" to set/confirm user as normal employee (legacy user_type stays "user", RBAC gets "employee").
 // Optionally set position_id to update the user's employee record position (job position) at the same time.
 type AssignRoleRequest struct {
-	UserID     uint   `json:"user_id" binding:"required"`                      // User to assign role to (must have role "user")
+	UserID     uint   `json:"user_id" binding:"required"`                         // User to assign role to (must have role "user")
 	Role       string `json:"role" binding:"required,oneof=admin hr it employee"` // Role to assign: admin, hr, it, or employee
-	PositionID *uint  `json:"position_id,omitempty"`                             // Optional: set employee's job position (only if user has an employee record)
+	PositionID *uint  `json:"position_id,omitempty"`                              // Optional: set employee's job position (only if user has an employee record)
+}
+
+// AddRoleRequest is the request body for adding an additional role to a user.
+// This allows users to have multiple roles like ["admin", "employee"] or ["hr", "it"].
+// Only an Admin can call this.
+type AddRoleRequest struct {
+	UserID uint   `json:"user_id" binding:"required"`                              // User to add role to
+	Role   string `json:"role" binding:"required,oneof=admin hr it employee user"` // Role to add
+}
+
+// RemoveRoleRequest is the request body for removing a role from a user.
+// Cannot remove the last role - user must have at least one role.
+// Only an Admin can call this.
+type RemoveRoleRequest struct {
+	UserID uint   `json:"user_id" binding:"required"` // User to remove role from
+	Role   string `json:"role" binding:"required"`    // Role to remove
+}
+
+// SetRolesRequest is the request body for setting/replacing all roles for a user.
+// At least one role must be specified. Only an Admin can call this.
+type SetRolesRequest struct {
+	UserID uint     `json:"user_id" binding:"required"` // User to set roles for
+	Roles  []string `json:"roles" binding:"required"`   // New roles array (e.g. ["admin", "employee"])
 }

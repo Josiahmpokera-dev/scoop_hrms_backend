@@ -11,14 +11,19 @@ import (
 )
 
 // buildUserRolesSlice returns a deduplicated slice of role strings for middleware (legacy user_type + assigned role codes).
+// Always includes "user" as a base role since all system users are treated as users.
 func buildUserRolesSlice(legacyRole string, roleCodes []string) []string {
 	seen := make(map[string]bool)
 	var roles []string
+
+	// Add legacy role first
 	legacy := strings.ToLower(strings.TrimSpace(legacyRole))
 	if legacy != "" && !seen[legacy] {
 		seen[legacy] = true
 		roles = append(roles, legacy)
 	}
+
+	// Add RBAC roles from the database
 	for _, code := range roleCodes {
 		c := strings.ToLower(strings.TrimSpace(code))
 		if c != "" && !seen[c] {
@@ -26,9 +31,12 @@ func buildUserRolesSlice(legacyRole string, roleCodes []string) []string {
 			roles = append(roles, c)
 		}
 	}
-	if len(roles) == 0 {
+
+	// Always ensure "user" is in the roles array - all system users are treated as users
+	if !seen["user"] {
 		roles = append(roles, "user")
 	}
+
 	return roles
 }
 

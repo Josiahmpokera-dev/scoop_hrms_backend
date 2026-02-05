@@ -15,12 +15,14 @@ import (
 	biometricModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/models"
 	biometricWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/workers"
 	costCenterModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/models"
+	dashboardModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/dashboard/models"
 	departmentModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/models"
 	employeeModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
 	helpdeskModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/models"
 	leaveModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
 	locationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/models"
 	organizationUnitModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/models"
+	payrollModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	organizationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/models"
 	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
@@ -114,6 +116,23 @@ func main() {
 		&leaveModels.Holiday{},
 		// Security & Audit
 		&auditModels.AuditLog{},
+		// Payroll models
+		&payrollModels.PayrollRun{},
+		&payrollModels.PayrollRunEmployee{},
+		&payrollModels.SalaryStructure{},
+		&payrollModels.SalaryComponent{},
+		&payrollModels.Payslip{},
+		&payrollModels.PayslipItem{},
+		&payrollModels.Loan{},
+		&payrollModels.LoanRepayment{},
+		&payrollModels.TaxSlab{},
+		&payrollModels.StatutoryRule{},
+		&payrollModels.NHIFSchedule{},
+		&payrollModels.CompliancePayment{},
+		// Dashboard models
+		&dashboardModels.Announcement{},
+		&dashboardModels.AnnouncementAttachment{},
+		&dashboardModels.AnnouncementRead{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}

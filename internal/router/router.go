@@ -7,6 +7,7 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/auth/handlers"
 	biometricHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/handlers"
 	costCenterHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/handlers"
+	dashboardHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/dashboard/handlers"
 	departmentHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/handlers"
 	employeeHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/handlers"
 	helpdeskHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/handlers"
@@ -15,6 +16,7 @@ import (
 	orgChartHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization/handlers"
 	organizationUnitHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/handlers"
 	organizationHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/handlers"
+	payrollHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/handlers"
 	positionHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/handlers"
 	roleHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/handlers"
 	shiftHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/handlers"
@@ -40,6 +42,7 @@ func SetupRoutes(r *gin.Engine) {
 	userHandler := userHandlers.NewUserHandler()
 	roleHandler := roleHandlers.NewRoleHandler()
 	auditHandler := auditHandlers.NewAuditHandler()
+	dashboardHandler := dashboardHandlers.NewDashboardHandler()
 
 	// API v1 routes (audit middleware logs every request)
 	v1 := r.Group("/api/v1")
@@ -70,6 +73,10 @@ func SetupRoutes(r *gin.Engine) {
 			users.GET("", middleware.HRMiddleware(), userHandler.ListUsers)                          // List users (HR/Admin only, for transfer-role pickers)
 			users.POST("/transfer-role", userHandler.TransferRole)                                   // Transfer role from one user to another (unchanged)
 			users.POST("/assign-role", middleware.AdminMiddleware(), userHandler.AssignRole)         // Assign admin/hr/it to a normal user (Admin only)
+			users.POST("/add-role", middleware.AdminMiddleware(), userHandler.AddRole)               // Add role to user (supports multiple roles) (Admin only)
+			users.POST("/remove-role", middleware.AdminMiddleware(), userHandler.RemoveRole)         // Remove role from user (Admin only)
+			users.POST("/set-roles", middleware.AdminMiddleware(), userHandler.SetRoles)             // Replace all roles for user (Admin only)
+			users.GET("/:id/roles", middleware.HRMiddleware(), userHandler.GetUserRoles)             // Get all roles for a user (HR/Admin only)
 			users.POST("/:id/suspend", middleware.HRMiddleware(), userHandler.SuspendUser)           // Suspend user (HR/Admin only; user cannot login)
 			users.POST("/:id/unsuspend", middleware.HRMiddleware(), userHandler.UnsuspendUser)       // Unsuspend user (HR/Admin only; restores login)
 			users.POST("/:id/block", middleware.HRMiddleware(), userHandler.BlockUser)               // Block user (HR/Admin only; user cannot login)
@@ -90,6 +97,21 @@ func SetupRoutes(r *gin.Engine) {
 			security.GET("/audit", auditHandler.ListAuditLogs)                 // List audit logs with pagination, search, filters
 			security.GET("/blocked-users", userHandler.ListBlockedUsers)       // List users blocked from login (rate-limit or manual)
 			security.GET("/rate-limit/status", userHandler.GetRateLimitStatus) // Get rate-limit status for an email
+		}
+
+		// Dashboard routes (require authentication; role-based content)
+		dashboard := v1.Group("/dashboard")
+		dashboard.Use(middleware.AuthMiddleware())
+		{
+			dashboard.GET("/statistics", dashboardHandler.GetStatistics)                  // KPI stats (role-based: admin vs employee view)
+			dashboard.GET("/announcements", dashboardHandler.GetAnnouncements)            // Company announcements
+			dashboard.POST("/announcements/:id/read", dashboardHandler.MarkAnnouncementAsRead) // Mark announcement as read
+			dashboard.GET("/quick-actions", dashboardHandler.GetQuickActions)             // Personalized quick action links
+			dashboard.GET("/my-activity", dashboardHandler.GetMyActivity)                 // Employee's recent activities
+
+			// Admin/HR only dashboard routes
+			dashboard.GET("/events", middleware.HRMiddleware(), dashboardHandler.GetEvents)                      // Birthdays, anniversaries (HR/Admin)
+			dashboard.GET("/pending-approvals", middleware.HRMiddleware(), dashboardHandler.GetPendingApprovals) // Pending approvals (HR/Admin)
 		}
 
 		// Admin routes (require admin role)
@@ -625,6 +647,134 @@ func SetupRoutes(r *gin.Engine) {
 			leaveCalendar.GET("", leaveCalendarHandler.GetLeaveCalendar)
 			leaveCalendar.GET("/today", leaveCalendarHandler.GetEmployeesOnLeaveToday)
 			leaveCalendar.GET("/week", leaveCalendarHandler.GetWeeklyCalendar)
+		}
+
+		// ============ Payroll Management Routes ============
+		payrollHandler := payrollHandlers.NewPayrollHandler()
+		salaryStructureHandler := payrollHandlers.NewSalaryStructureHandler()
+		payslipHandler := payrollHandlers.NewPayslipHandler()
+		loanHandler := payrollHandlers.NewLoanHandler()
+		complianceHandler := payrollHandlers.NewComplianceHandler()
+		reportsHandler := payrollHandlers.NewReportsHandler()
+
+		// Payroll Dashboard (HR/Admin)
+		payrollDashboard := v1.Group("/payroll/dashboard")
+		payrollDashboard.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			payrollDashboard.GET("", payrollHandler.GetDashboard)
+		}
+
+		// Payroll Runs (HR/Admin)
+		payrollRuns := v1.Group("/payroll/runs")
+		payrollRuns.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			payrollRuns.GET("", payrollHandler.ListPayrollRuns)
+			payrollRuns.POST("", payrollHandler.CreatePayrollRun)
+			payrollRuns.GET("/current", payrollHandler.GetCurrentPayrollRun)
+			payrollRuns.GET("/:id", payrollHandler.GetPayrollRun)
+			payrollRuns.PUT("/:id", payrollHandler.UpdatePayrollRun)
+			payrollRuns.DELETE("/:id", payrollHandler.DeletePayrollRun)
+			payrollRuns.GET("/:id/summary", payrollHandler.GetPayrollRunSummary)
+			payrollRuns.GET("/:id/employees", payrollHandler.GetPayrollEmployees)
+			payrollRuns.POST("/:id/pre-check", payrollHandler.RunPreCheck)
+			payrollRuns.POST("/:id/calculate", payrollHandler.CalculatePayroll)
+			payrollRuns.POST("/:id/advance", payrollHandler.AdvancePayrollStep)
+			payrollRuns.POST("/:id/revert", payrollHandler.RevertPayrollStep)
+			payrollRuns.POST("/:id/generate-payslips", payrollHandler.GeneratePayslips)
+		}
+
+		// Salary Structures (HR/Admin)
+		salaryStructures := v1.Group("/payroll/salary-structures")
+		salaryStructures.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			salaryStructures.GET("", salaryStructureHandler.ListSalaryStructures)
+			salaryStructures.POST("", salaryStructureHandler.CreateSalaryStructure)
+			salaryStructures.GET("/:id", salaryStructureHandler.GetSalaryStructure)
+			salaryStructures.PUT("/:id", salaryStructureHandler.UpdateSalaryStructure)
+			salaryStructures.DELETE("/:id", salaryStructureHandler.DeleteSalaryStructure)
+			salaryStructures.POST("/simulate", salaryStructureHandler.SimulateSalary)
+		}
+
+		// Salary Components (HR/Admin)
+		salaryComponents := v1.Group("/payroll/salary-components")
+		salaryComponents.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			salaryComponents.GET("", salaryStructureHandler.ListSalaryComponents)
+			salaryComponents.POST("", salaryStructureHandler.CreateSalaryComponent)
+			salaryComponents.GET("/:id", salaryStructureHandler.GetSalaryComponent)
+			salaryComponents.PUT("/:id", salaryStructureHandler.UpdateSalaryComponent)
+			salaryComponents.DELETE("/:id", salaryStructureHandler.DeleteSalaryComponent)
+		}
+
+		// Payslips (HR/Admin)
+		payslips := v1.Group("/payroll/payslips")
+		payslips.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			payslips.GET("", payslipHandler.ListPayslips)
+			payslips.GET("/summary", payslipHandler.GetPayslipSummary)
+			payslips.GET("/:id", payslipHandler.GetPayslip)
+			payslips.GET("/:id/download", payslipHandler.DownloadPayslip)
+			payslips.POST("/:id/email", payslipHandler.SendPayslipEmail)
+			payslips.POST("/bulk-download", payslipHandler.BulkDownloadPayslips)
+			payslips.POST("/run/:runId/release", payslipHandler.ReleasePayslips)
+			payslips.POST("/run/:runId/bulk-email", payslipHandler.BulkEmailPayslips)
+		}
+
+		// Loans & Advances (HR/Admin)
+		loans := v1.Group("/payroll/loans")
+		loans.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			loans.GET("", loanHandler.ListLoans)
+			loans.POST("", loanHandler.CreateLoan)
+			loans.GET("/summary", loanHandler.GetLoanSummary)
+			loans.POST("/calculate-emi", loanHandler.CalculateEMI)
+			loans.GET("/:id", loanHandler.GetLoan)
+			loans.GET("/:id/schedule", loanHandler.GetRepaymentSchedule)
+			loans.POST("/:id/approve", loanHandler.ApproveLoan)
+			loans.POST("/:id/reject", loanHandler.RejectLoan)
+			loans.POST("/:id/repayment", loanHandler.RecordRepayment)
+		}
+
+		// Compliance & Tax (HR/Admin)
+		compliance := v1.Group("/payroll/compliance")
+		compliance.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			compliance.GET("/summary", complianceHandler.GetComplianceSummary)
+			compliance.GET("/rules", complianceHandler.GetAllComplianceRules)
+			compliance.GET("/tax-slabs", complianceHandler.GetTaxSlabs)
+			compliance.GET("/statutory-rules", complianceHandler.GetStatutoryRules)
+			compliance.GET("/nhif-schedule", complianceHandler.GetNHIFSchedule)
+			compliance.GET("/payments", complianceHandler.GetCompliancePayments)
+			compliance.POST("/simulate-tax", complianceHandler.SimulateTax)
+			compliance.POST("/calculate-monthly", complianceHandler.CalculateMonthlyStatutory)
+			compliance.GET("/return", complianceHandler.GenerateComplianceReturn)
+			compliance.POST("/seed", complianceHandler.SeedComplianceData)
+		}
+
+		// Payroll Reports (HR/Admin)
+		payrollReports := v1.Group("/payroll/reports")
+		payrollReports.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			payrollReports.GET("", reportsHandler.GetPayrollReport)
+			payrollReports.GET("/kpis", reportsHandler.GetPayrollKPIs)
+			payrollReports.GET("/department-cost", reportsHandler.GetDepartmentCostReport)
+			payrollReports.GET("/export", reportsHandler.ExportPayrollReport)
+			payrollReports.GET("/run/:runId/bank-file", reportsHandler.GetBankFileReport)
+		}
+
+		// Employee Self-Service Payroll Routes
+		selfServicePayroll := v1.Group("/self-service/payroll")
+		selfServicePayroll.Use(middleware.AuthMiddleware())
+		{
+			// Payslips
+			selfServicePayroll.GET("/payslips", payslipHandler.GetMyPayslips)
+			selfServicePayroll.GET("/payslips/latest", payslipHandler.GetMyLatestPayslip)
+			selfServicePayroll.GET("/payslips/summary", payslipHandler.GetMySalarySlipSummary)
+			selfServicePayroll.GET("/payslips/:id/download", payslipHandler.DownloadMyPayslip)
+
+			// Loans
+			selfServicePayroll.GET("/loans", loanHandler.GetMyLoans)
+			selfServicePayroll.POST("/loans/apply", loanHandler.ApplyForLoan)
 		}
 	}
 }

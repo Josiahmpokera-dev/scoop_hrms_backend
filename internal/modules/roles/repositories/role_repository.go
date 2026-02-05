@@ -88,7 +88,7 @@ func (r *RoleRepository) AssignPermissions(roleID uint, permissionIDs []uint) er
 	if err := r.db.Where("id IN ?", permissionIDs).Find(&permissions).Error; err != nil {
 		return err
 	}
-	
+
 	role := models.Role{ID: roleID}
 	return r.db.Model(&role).Association("Permissions").Replace(permissions)
 }
@@ -134,4 +134,9 @@ func (r *RoleRepository) AssignUserRole(userID, roleID uint, assignedBy *uint) e
 		AssignedAt: time.Now(),
 	}
 	return r.db.Create(userRole).Error
+}
+
+// RemoveUserRole removes a role from a user (soft delete)
+func (r *RoleRepository) RemoveUserRole(userID, roleID uint) error {
+	return r.db.Where("user_id = ? AND role_id = ?", userID, roleID).Delete(&models.UserRole{}).Error
 }
