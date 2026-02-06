@@ -1,0 +1,84 @@
+# Git
+.git
+.gitignore
+
+# Documentation
+*.md
+docs/
+!README.md
+
+# IDE and editor files
+.idea/
+.vscode/
+.cursor/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+.env.*
+env.example
+
+# Binaries and build outputs
+bin/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Vendor (if not committing vendor)
+vendor/
+
+# Go workspace
+go.work
+go.work.sum
+
+# Test and coverage files
+coverage.html
+*.test
+
+# Logs
+*.log
+logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Node.js (not used but may exist)
+node_modules/
+package-lock.json
+npm-debug.log
+yarn-error.log
+
+# Generated files
+*.gen.go
+internal/modules/*/repositories/query/
+
+# Storage (will be mounted as volume)
+storage/
+
+# Docker files (avoid recursive context)
+docker-compose*.yml
+Dockerfile*
+
+# Scripts that are not needed in the image
+scripts/
+
+# SQL files
+*.sql

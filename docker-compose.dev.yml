@@ -1,0 +1,59 @@
+# Development compose file - use with: docker compose -f docker-compose.dev.yml up
+# This runs only the dependencies (PostgreSQL and RabbitMQ) for local development
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: hrms-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-hrms_db}
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    networks:
+      - hrms-dev-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-hrms_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # RabbitMQ Message Broker
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: hrms-rabbitmq-dev
+    restart: unless-stopped
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    volumes:
+      - rabbitmq-dev-data:/var/lib/rabbitmq
+    networks:
+      - hrms-dev-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+# Named volumes for data persistence
+volumes:
+  postgres-dev-data:
+    driver: local
+  rabbitmq-dev-data:
+    driver: local
+
+# Network configuration
+networks:
+  hrms-dev-network:
+    driver: bridge
