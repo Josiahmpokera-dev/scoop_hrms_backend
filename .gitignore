@@ -60,6 +60,6 @@ yarn-error.log
 *.gen.go
 internal/modules/*/repositories/query/
 
-# File storage (uploaded files)
-storage/
-!storage/.gitkeep
+# File storage (uploaded files) - only root storage folder
+/storage/
+!/storage/.gitkeep
