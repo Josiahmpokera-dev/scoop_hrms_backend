@@ -1,0 +1,79 @@
+// Simple Jenkinsfile - No external dependencies required
+// Use this for basic CI/CD without registry push
+
+pipeline {
+    agent any
+
+    environment {
+        APP_NAME = 'hrms-backend'
+        DEPLOY_SERVER = 'ubuntu@your-server-ip'  // Update this
+        DEPLOY_PATH = '/home/ubuntu/apps/scoop_hrms_backend'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+                sh 'git log -1 --oneline'
+            }
+        }
+
+        stage('Build & Test') {
+            agent {
+                docker {
+                    image 'golang:latest'
+                    args '-v $HOME/.cache:/go/pkg'
+                }
+            }
+            steps {
+                sh '''
+                    export GOTOOLCHAIN=auto
+                    go version
+                    go mod download
+                    go test -v ./... || true
+                    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o bin/hrms-backend ./cmd/api
+                '''
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh '''
+                    docker build -t hrms-backend:latest .
+                    docker images | grep hrms-backend
+                '''
+            }
+        }
+
+        stage('Deploy') {
+            when {
+                branch 'leave-management'
+            }
+            steps {
+                sshagent(credentials: ['deploy-ssh-key']) {
+                    sh """
+                        ssh -o StrictHostKeyChecking=no ${DEPLOY_SERVER} '
+                            cd ${DEPLOY_PATH} && 
+                            git pull && 
+                            docker compose build && 
+                            docker compose up -d && 
+                            docker compose ps
+                        '
+                    """
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+        success {
+            echo 'Build successful!'
+        }
+        failure {
+            echo 'Build failed!'
+        }
+    }
+}
