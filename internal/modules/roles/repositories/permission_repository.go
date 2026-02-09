@@ -70,42 +70,59 @@ func (r *PermissionRepository) List(page, pageSize int) ([]models.Permission, in
 	return permissions, total, err
 }
 
-// SeedDefaultPermissions seeds default permissions for the system
+// SeedDefaultPermissions seeds default permissions for the system.
+// Permissions are derived from the feature catalog to keep a single source of truth.
 func (r *PermissionRepository) SeedDefaultPermissions() error {
-	defaultPermissions := []models.Permission{
-		{Code: "employee:read", Name: "Read Employees", Resource: "employee", Action: "read"},
-		{Code: "employee:create", Name: "Create Employees", Resource: "employee", Action: "create"},
-		{Code: "employee:update", Name: "Update Employees", Resource: "employee", Action: "update"},
-		{Code: "employee:delete", Name: "Delete Employees", Resource: "employee", Action: "delete"},
-		{Code: "department:read", Name: "Read Departments", Resource: "department", Action: "read"},
-		{Code: "department:create", Name: "Create Departments", Resource: "department", Action: "create"},
-		{Code: "department:update", Name: "Update Departments", Resource: "department", Action: "update"},
-		{Code: "department:delete", Name: "Delete Departments", Resource: "department", Action: "delete"},
-		{Code: "payroll:run", Name: "Run Payroll", Resource: "payroll", Action: "run"},
-		{Code: "attendance:approve", Name: "Approve Attendance", Resource: "attendance", Action: "approve"},
-		{Code: "user:read", Name: "Read Users", Resource: "user", Action: "read"},
-		{Code: "user:create", Name: "Create Users", Resource: "user", Action: "create"},
-		{Code: "user:update", Name: "Update Users", Resource: "user", Action: "update"},
-		{Code: "user:delete", Name: "Delete Users", Resource: "user", Action: "delete"},
-	}
+	// Build permissions from the feature catalog
+	features := models.GetAllFeatures()
+	for _, feature := range features {
+		for _, fp := range feature.Permissions {
+			// Parse resource and action from permission code (e.g., "employee:read")
+			parts := splitPermCode(fp.Code)
+			resource := feature.Code
+			action := fp.Code
+			if len(parts) == 2 {
+				resource = parts[0]
+				action = parts[1]
+			}
 
-	for _, perm := range defaultPermissions {
-		var existing models.Permission
-		// Use a silent query to avoid logging "record not found" errors during seeding
-		err := r.db.Where("code = ?", perm.Code).First(&existing).Error
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				// Permission doesn't exist, create it
-				if err := r.db.Create(&perm).Error; err != nil {
+			perm := models.Permission{
+				Code:     fp.Code,
+				Name:     fp.Name,
+				Resource: resource,
+				Action:   action,
+			}
+
+			var existing models.Permission
+			err := r.db.Where("code = ?", perm.Code).First(&existing).Error
+			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					if err := r.db.Create(&perm).Error; err != nil {
+						return err
+					}
+				} else {
 					return err
 				}
-			} else {
-				// Some other error occurred
-				return err
 			}
 		}
-		// Permission already exists, skip creation
 	}
 
 	return nil
+}
+
+// splitPermCode splits a permission code like "employee:read" into ["employee", "read"]
+func splitPermCode(code string) []string {
+	for i, ch := range code {
+		if ch == ':' {
+			return []string{code[:i], code[i+1:]}
+		}
+	}
+	return []string{code}
+}
+
+// FindAll returns all permissions (no pagination)
+func (r *PermissionRepository) FindAll() ([]models.Permission, error) {
+	var permissions []models.Permission
+	err := r.db.Order("resource, action").Find(&permissions).Error
+	return permissions, err
 }

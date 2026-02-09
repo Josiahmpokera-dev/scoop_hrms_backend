@@ -61,26 +61,56 @@ func PermissionMiddleware(permissionCode string) gin.HandlerFunc {
 	}
 }
 
-// checkLegacyRolePermission checks permissions based on legacy role system
+// checkLegacyRolePermission checks permissions based on legacy role system.
+// Admin gets all permissions; other roles get a predefined subset for backward compatibility.
 func checkLegacyRolePermission(role models.UserRole, permissionCode string) bool {
+	// Admin has full access to everything
+	if role == models.RoleAdmin {
+		return true
+	}
+
 	// Map legacy roles to permissions for backward compatibility
 	rolePermissions := map[models.UserRole][]string{
-		models.RoleAdmin: {
-			"employee:read", "employee:create", "employee:update", "employee:delete",
-			"department:read", "department:create", "department:update", "department:delete",
-			"payroll:run", "attendance:approve",
-			"user:read", "user:create", "user:update", "user:delete",
-		},
 		models.RoleHR: {
-			"employee:read", "employee:create", "employee:update",
-			"department:read", "payroll:run", "attendance:approve",
+			"dashboard:view", "dashboard:manage_announcements",
+			"employee:read", "employee:create", "employee:update", "employee:delete",
+			"employee:onboard", "employee:offboard",
+			"leave:read", "leave:create", "leave:approve",
+			"leave:manage_types", "leave:manage_policies", "leave:manage_holidays",
+			"attendance:read", "attendance:approve",
+			"shift:read", "shift:create", "shift:update", "shift:delete",
+			"shift:manage_rosters", "shift:approve_swaps",
+			"department:read", "department:create", "department:update", "department:delete",
+			"team:read", "team:create", "team:update", "team:delete",
+			"position:read", "position:create", "position:update", "position:delete",
+			"organization:read", "organization:update",
+			"organization_unit:read", "organization_unit:create", "organization_unit:update", "organization_unit:delete",
+			"location:read", "location:create", "location:update", "location:delete",
+			"cost_center:read", "cost_center:create", "cost_center:update", "cost_center:delete",
+			"payroll:read", "payroll:run", "payroll:manage_structures",
+			"payroll:manage_loans", "payroll:manage_reports",
+			"asset:read", "asset:create", "asset:update", "asset:assign",
+			"helpdesk:read", "helpdesk:create", "helpdesk:manage", "helpdesk:manage_kb",
 			"user:read",
-		},
-		models.RoleUser: {
-			"employee:read",
+			"report:view", "report:export",
 		},
 		models.RoleIT: {
+			"dashboard:view",
 			"employee:read",
+			"asset:read", "asset:create", "asset:update", "asset:assign",
+			"helpdesk:read", "helpdesk:create", "helpdesk:manage", "helpdesk:manage_kb",
+			"user:read",
+			"attendance:read", "attendance:manage_config",
+		},
+		models.RoleUser: {
+			"dashboard:view",
+			"employee:read",
+			"leave:read", "leave:create",
+			"shift:read",
+			"department:read", "team:read", "position:read",
+			"organization:read", "location:read",
+			"helpdesk:read", "helpdesk:create",
+			"payroll:read", "asset:read", "attendance:read",
 		},
 	}
 

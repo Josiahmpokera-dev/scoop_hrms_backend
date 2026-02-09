@@ -90,6 +90,17 @@ func SetupRoutes(r *gin.Engine) {
 			roles.GET("", roleHandler.ListRoles) // List roles
 		}
 
+		// Feature Access Control routes
+		featureHandler := roleHandlers.NewFeatureHandler()
+		features := v1.Group("/features")
+		features.Use(middleware.AuthMiddleware())
+		{
+			features.GET("", middleware.HRMiddleware(), featureHandler.GetAllFeatures)                   // List all features (HR/Admin)
+			features.GET("/my-access", featureHandler.GetMyFeatureAccess)                                // Get my feature access (any authenticated user)
+			features.GET("/roles/:id", middleware.HRMiddleware(), featureHandler.GetRoleFeatureAccess)    // Get role feature access (HR/Admin)
+			features.PUT("/roles/:id", middleware.AdminMiddleware(), featureHandler.UpdateRolePermissions) // Update role permissions (Admin only)
+		}
+
 		// Security & Audit routes (Admin only)
 		security := v1.Group("/security")
 		security.Use(middleware.AuthMiddleware(), middleware.AdminMiddleware())
