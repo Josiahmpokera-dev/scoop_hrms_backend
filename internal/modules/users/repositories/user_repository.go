@@ -194,3 +194,8 @@ func (r *UserRepository) ListNonEmployeeUsers(tenantID *uint, page, pageSize int
 
 	return users, total, nil
 }
+
+// Delete soft deletes a user by ID (used for rollback when employee linking fails).
+func (r *UserRepository) Delete(id uint) error {
+	return r.db.Delete(&models.User{}, id).Error
+}

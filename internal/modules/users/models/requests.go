@@ -1,5 +1,15 @@
 package models
 
+// CreateUserRequest is the request body for creating a new system user linked to an existing employee.
+// Admin or HR can call this to create login accounts for employees with a specific role (IT, HR, Manager, etc.).
+// The user's name and email are taken from the employee record automatically.
+type CreateUserRequest struct {
+	EmployeeID uint   `json:"employee_id" binding:"required"`                                    // ID of the existing employee to create a user for
+	Password   string `json:"password" binding:"required,min=6"`                                 // Login password (minimum 6 characters)
+	Role       string `json:"role" binding:"required,oneof=admin hr it manager employee user"`   // Role to assign: admin, hr, it, manager, employee, or user
+	Username   string `json:"username,omitempty" binding:"omitempty,min=3"`                       // Optional username (auto-generated from employee email if not provided)
+}
+
 // TransferRoleRequest is the request body for transferring a special role (admin, hr, it) to another user.
 // When the caller is Admin: from_user_id is required (the user who currently has the role).
 // When the caller is transferring their own role: from_user_id is ignored; the caller is the source.

@@ -349,18 +349,65 @@ func (h *EmployeeHandler) ReactivateEmployee(c *gin.Context) {
 
 // ListManagers handles listing all potential reporting managers
 // @Summary List reporting managers
-// @Description Get list of all active employees who can be reporting managers
+// @Description Get list of all active employees who can be reporting managers.
+//
+//	Optionally filter by department_id — when provided, only managers in that department
+//	are returned and the department head is flagged with is_department_head=true and is_suggested=true.
+//
 // @Tags Employees
 // @Produce json
+// @Param department_id query int false "Filter by department ID (also flags department head as suggested)"
 // @Success 200 {object} response.APIResponse
 // @Router /api/v1/employees/managers [get]
 func (h *EmployeeHandler) ListManagers(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
-	managers, err := h.employeeService.ListManagers(tenantID)
+
+	// Optional department_id filter
+	var departmentID *uint
+	if deptStr := c.Query("department_id"); deptStr != "" {
+		if deptID, err := strconv.ParseUint(deptStr, 10, 32); err == nil {
+			dID := uint(deptID)
+			departmentID = &dID
+		}
+	}
+
+	managers, err := h.employeeService.ListManagers(tenantID, departmentID)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}
 
 	response.Success(c, "Managers retrieved successfully", managers)
+}
+
+// GetDepartmentManager returns the suggested reporting manager (department head) for a department.
+// @Summary Get suggested manager for a department
+// @Description Returns the department head/manager who should be the default reporting manager
+//
+//	for new employees in this department. Returns null data if no manager is set.
+//
+// @Tags Employees
+// @Produce json
+// @Param department_id path int true "Department ID"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/employees/department-manager/{department_id} [get]
+func (h *EmployeeHandler) GetDepartmentManager(c *gin.Context) {
+	departmentID, err := strconv.ParseUint(c.Param("department_id"), 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid department ID", nil)
+		return
+	}
+
+	manager, err := h.employeeService.GetDepartmentManager(uint(departmentID))
+	if err != nil {
+		response.NotFound(c, err.Error())
+		return
+	}
+
+	if manager == nil {
+		response.Success(c, "No manager is assigned to this department", nil)
+		return
+	}
+
+	response.Success(c, "Department manager retrieved successfully", manager)
 }

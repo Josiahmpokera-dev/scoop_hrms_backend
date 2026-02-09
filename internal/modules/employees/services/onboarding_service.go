@@ -842,6 +842,14 @@ func (s *OnboardingService) saveStep2Employment(draft *models.EmployeeOnboarding
 		if !department.IsActive {
 			return fmt.Errorf("department with ID %d is not active", *req.DepartmentID)
 		}
+
+		// Auto-suggest reporting manager from department head if not explicitly provided.
+		// The department's ManagerID is the head of department — use it as the default
+		// reporting manager. This is optional: if the user explicitly provides a
+		// reporting_manager_id (even null), we respect that choice.
+		if req.ReportingManagerID == nil && department.ManagerID != nil {
+			req.ReportingManagerID = department.ManagerID
+		}
 	}
 	// Position ID is optional - only validate if provided
 	if req.PositionID != nil {
@@ -880,6 +888,18 @@ func (s *OnboardingService) saveStep2Employment(draft *models.EmployeeOnboarding
 		// Check if location is active
 		if !location.IsActive {
 			return fmt.Errorf("location with ID %d is not active", *req.LocationID)
+		}
+	}
+
+	// Validate reporting manager if provided (either explicitly or auto-suggested from department)
+	if req.ReportingManagerID != nil {
+		manager, err := s.employeeRepo.FindByID(*req.ReportingManagerID)
+		if err != nil || manager == nil {
+			// If the auto-suggested manager is not found, silently clear it instead of failing
+			req.ReportingManagerID = nil
+		} else if manager.Status != models.StatusActive || !manager.IsActive {
+			// If the manager is not active, silently clear
+			req.ReportingManagerID = nil
 		}
 	}
 

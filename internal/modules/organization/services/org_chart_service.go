@@ -166,12 +166,14 @@ func (s *OrgChartService) buildNode(positionID uint, managerEmpID *string, level
 		}{}
 	}
 
-	// Get department name
+	// Get department name and ID
 	var departmentName *string
+	var departmentID *uint
 	if position.DepartmentID != nil {
 		dept, err := s.departmentRepo.FindByID(*position.DepartmentID)
 		if err == nil && dept != nil {
 			departmentName = &dept.Name
+			departmentID = &dept.ID
 		}
 	}
 
@@ -179,6 +181,7 @@ func (s *OrgChartService) buildNode(positionID uint, managerEmpID *string, level
 	node := &models.OrgChartNode{
 		Designation:  position.Title,
 		Department:   departmentName,
+		DepartmentID: departmentID,
 		ManagerEmpID: managerEmpID,
 		Level:        level,
 		IsVacant:     len(employees) == 0,
@@ -201,6 +204,30 @@ func (s *OrgChartService) buildNode(positionID uint, managerEmpID *string, level
 		} else {
 			defaultPhoto := "/img/avatars/default.jpg"
 			node.Photo = &defaultPhoto
+		}
+
+		// Check if this employee is a department head
+		// Query departments where this employee is the manager (head)
+		var headDepartments []struct {
+			ID   uint
+			Name string
+			Code string
+		}
+		s.db.Table("departments").
+			Select("id, name, code").
+			Where("manager_id = ? AND is_active = ? AND deleted_at IS NULL", emp.ID, true).
+			Find(&headDepartments)
+
+		if len(headDepartments) > 0 {
+			node.IsDepartmentHead = true
+			node.HeadOfDepartments = make([]models.DepartmentRef, len(headDepartments))
+			for i, hd := range headDepartments {
+				node.HeadOfDepartments[i] = models.DepartmentRef{
+					ID:   hd.ID,
+					Name: hd.Name,
+					Code: hd.Code,
+				}
+			}
 		}
 	} else {
 		// Vacant position

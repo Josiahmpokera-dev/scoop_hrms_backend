@@ -3,6 +3,7 @@ package router
 import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
 	assetHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/handlers"
+	attendanceHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/handlers"
 	auditHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/handlers"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/auth/handlers"
 	biometricHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/handlers"
@@ -43,6 +44,8 @@ func SetupRoutes(r *gin.Engine) {
 	roleHandler := roleHandlers.NewRoleHandler()
 	auditHandler := auditHandlers.NewAuditHandler()
 	dashboardHandler := dashboardHandlers.NewDashboardHandler()
+	notificationHandler := dashboardHandlers.NewNotificationHandler()
+	peopleDirectoryHandler := employeeHandlers.NewPeopleDirectoryHandler()
 
 	// API v1 routes (audit middleware logs every request)
 	v1 := r.Group("/api/v1")
@@ -69,8 +72,10 @@ func SetupRoutes(r *gin.Engine) {
 		users := v1.Group("/users")
 		users.Use(middleware.AuthMiddleware())
 		{
-			users.GET("/special-roles", middleware.HRMiddleware(), userHandler.ListSpecialRoleUsers) // List IT, HR, Admin users (HR/Admin only)
-			users.GET("", middleware.HRMiddleware(), userHandler.ListUsers)                          // List users (HR/Admin only, for transfer-role pickers)
+			users.POST("", middleware.HRMiddleware(), userHandler.CreateUser)                                       // Create user from employee (Admin/HR only)
+			users.GET("/available-employees", middleware.HRMiddleware(), userHandler.ListEmployeesWithoutUser) // List employees without user accounts (for picker)
+			users.GET("/special-roles", middleware.HRMiddleware(), userHandler.ListSpecialRoleUsers)           // List IT, HR, Admin users (HR/Admin only)
+			users.GET("", middleware.HRMiddleware(), userHandler.ListUsers)                                    // List users (HR/Admin only, for transfer-role pickers)
 			users.POST("/transfer-role", userHandler.TransferRole)                                   // Transfer role from one user to another (unchanged)
 			users.POST("/assign-role", middleware.AdminMiddleware(), userHandler.AssignRole)         // Assign admin/hr/it to a normal user (Admin only)
 			users.POST("/add-role", middleware.AdminMiddleware(), userHandler.AddRole)               // Add role to user (supports multiple roles) (Admin only)
@@ -123,6 +128,24 @@ func SetupRoutes(r *gin.Engine) {
 			// Admin/HR only dashboard routes
 			dashboard.GET("/events", middleware.HRMiddleware(), dashboardHandler.GetEvents)                      // Birthdays, anniversaries (HR/Admin)
 			dashboard.GET("/pending-approvals", middleware.HRMiddleware(), dashboardHandler.GetPendingApprovals) // Pending approvals (HR/Admin)
+		}
+
+		// Notification routes (require authentication)
+		notifications := v1.Group("/notifications")
+		notifications.Use(middleware.AuthMiddleware())
+		{
+			notifications.GET("/count", notificationHandler.GetNotificationCount)  // Get notification counts (badges)
+			notifications.GET("", notificationHandler.GetNotifications)            // Get notifications list
+		}
+
+		// People Directory routes (require authentication)
+		peopleDirectory := v1.Group("/people-directory")
+		peopleDirectory.Use(middleware.AuthMiddleware())
+		{
+			peopleDirectory.GET("", peopleDirectoryHandler.SearchDirectory)            // Search/browse directory
+			peopleDirectory.GET("/filters", peopleDirectoryHandler.GetFilters)         // Get filter options
+			peopleDirectory.GET("/stats", peopleDirectoryHandler.GetStatistics)        // Get directory statistics
+			peopleDirectory.GET("/:id", peopleDirectoryHandler.GetEmployeeProfile)     // Get employee profile
 		}
 
 		// Admin routes (require admin role)
@@ -240,7 +263,8 @@ func SetupRoutes(r *gin.Engine) {
 			employees.GET("/employee-id/:employee_id", employeeHandler.GetEmployeeByEmployeeID) // Get by employee ID
 			employees.GET("/department/:department_id", employeeHandler.ListByDepartment)       // List by department
 			employees.GET("/status/:status", employeeHandler.ListByStatus)                      // List by status
-			employees.GET("/managers", employeeHandler.ListManagers)                            // List all potential reporting managers
+			employees.GET("/managers", employeeHandler.ListManagers)                                                // List potential reporting managers (optional: ?department_id=X to filter & flag department head)
+			employees.GET("/department-manager/:department_id", employeeHandler.GetDepartmentManager)          // Get suggested manager for a department (department head)
 
 			// Employee status management (POST with ID in body)
 			employees.POST("/terminate", employeeHandler.TerminateEmployee)   // Terminate employee
@@ -354,7 +378,9 @@ func SetupRoutes(r *gin.Engine) {
 			departments.GET("/root", departmentHandler.GetRootDepartments) // Get root departments
 			departments.GET("/:id", departmentHandler.GetDepartment)       // Get department by ID
 			departments.PUT("/:id", departmentHandler.UpdateDepartment)    // Update department
-			departments.DELETE("/:id", departmentHandler.DeleteDepartment) // Delete department
+			departments.DELETE("/:id", departmentHandler.DeleteDepartment)            // Delete department
+			departments.POST("/:id/assign-head", departmentHandler.AssignDepartmentHead)  // Assign employee as department head
+			departments.POST("/:id/remove-head", departmentHandler.RemoveDepartmentHead)  // Remove department head assignment
 			// POST-only action-based endpoint
 			departments.POST("/action", departmentHandler.HandleAction) // Action-based API
 		}
@@ -786,6 +812,75 @@ func SetupRoutes(r *gin.Engine) {
 			// Loans
 			selfServicePayroll.GET("/loans", loanHandler.GetMyLoans)
 			selfServicePayroll.POST("/loans/apply", loanHandler.ApplyForLoan)
+		}
+
+		// ============ Attendance Module: Timesheets & Overtime ============
+		timesheetHandler := attendanceHandlers.NewTimesheetHandler()
+		overtimeHandler := attendanceHandlers.NewOvertimeHandler()
+		attendanceReportsHandler := attendanceHandlers.NewAttendanceReportsHandler()
+
+		// Timesheet - Employee Self-Service (all authenticated users)
+		timesheets := v1.Group("/attendance/timesheets")
+		timesheets.Use(middleware.AuthMiddleware())
+		{
+			// My timesheets
+			timesheets.GET("", timesheetHandler.GetMyTimesheets)                              // List my weekly timesheets
+			timesheets.GET("/:timesheet_id", timesheetHandler.GetTimesheetByID)               // Get timesheet by ID
+			timesheets.POST("/entries", timesheetHandler.CreateEntry)                          // Create single entry
+			timesheets.POST("/entries/bulk", timesheetHandler.BulkCreateEntries)               // Bulk create entries for a week
+			timesheets.PUT("/entries/:entry_id", timesheetHandler.UpdateEntry)                 // Update entry
+			timesheets.DELETE("/entries/:entry_id", timesheetHandler.DeleteEntry)              // Delete entry
+			timesheets.POST("/:timesheet_id/submit", timesheetHandler.SubmitTimesheet)        // Submit for approval
+			timesheets.POST("/:timesheet_id/recall", timesheetHandler.RecallTimesheet)        // Recall submitted timesheet
+			timesheets.POST("/copy-last-week", timesheetHandler.CopyLastWeek)                 // Copy entries from last week
+			timesheets.GET("/stats", timesheetHandler.GetEmployeeStats)                       // Employee utilization stats
+			timesheets.GET("/team", timesheetHandler.GetTeamTimesheets)                       // Manager: team timesheets
+		}
+
+		// Timesheet - Approvals (Admin/HR)
+		timesheetApprovals := v1.Group("/attendance/timesheets/approvals")
+		timesheetApprovals.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			timesheetApprovals.GET("", timesheetHandler.GetPendingApprovals)                           // List pending approvals
+			timesheetApprovals.POST("/:timesheet_id", timesheetHandler.ApproveTimesheet)               // Approve/reject timesheet
+		}
+
+		// Overtime - Employee Self-Service (all authenticated users)
+		overtime := v1.Group("/attendance/overtime")
+		overtime.Use(middleware.AuthMiddleware())
+		{
+			overtime.POST("/requests", overtimeHandler.CreateOTRequest)                          // Submit OT request
+			overtime.GET("/requests", overtimeHandler.GetMyOTRequests)                           // List my OT requests
+			overtime.GET("/requests/:request_id", overtimeHandler.GetOTRequestByID)              // Get OT request by ID
+			overtime.POST("/requests/:request_id/cancel", overtimeHandler.CancelOTRequest)       // Cancel OT request
+			overtime.GET("/policies", overtimeHandler.ListPolicies)                              // View OT policies
+			overtime.GET("/policies/:policy_id", overtimeHandler.GetPolicy)                     // View specific policy
+			overtime.GET("/stats", overtimeHandler.GetOvertimeStats)                             // OT statistics
+		}
+
+		// Overtime - Admin/HR Management
+		overtimeAdmin := v1.Group("/attendance/overtime/admin")
+		overtimeAdmin.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			// Policy management
+			overtimeAdmin.POST("/policies", overtimeHandler.CreatePolicy)                           // Create OT policy
+			overtimeAdmin.PUT("/policies/:policy_id", overtimeHandler.UpdatePolicy)                 // Update OT policy
+			overtimeAdmin.DELETE("/policies/:policy_id", overtimeHandler.DeletePolicy)               // Delete OT policy
+
+			// Request management
+			overtimeAdmin.GET("/requests", overtimeHandler.ListAllRequests)                          // List all OT requests
+			overtimeAdmin.GET("/pending", overtimeHandler.GetPendingApprovals)                       // List pending approvals
+			overtimeAdmin.POST("/requests/:request_id/approve", overtimeHandler.ApproveOTRequest)    // Approve/reject OT request
+		}
+
+		// Attendance Reports (Admin/HR)
+		attendanceReports := v1.Group("/attendance/reports")
+		attendanceReports.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			attendanceReports.GET("/timesheets", attendanceReportsHandler.GetTimesheetSummaryReport)       // Timesheet summary
+			attendanceReports.GET("/overtime", attendanceReportsHandler.GetOvertimeSummaryReport)           // Overtime summary
+			attendanceReports.GET("/project-utilization", attendanceReportsHandler.GetProjectUtilizationReport) // Project utilization
+			attendanceReports.GET("/employee-utilization", attendanceReportsHandler.GetEmployeeUtilizationReport) // Employee utilization
 		}
 	}
 }

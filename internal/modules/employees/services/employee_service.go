@@ -342,14 +342,30 @@ func (s *EmployeeService) convertToEmployeeListResponse(emp *models.Employee) *m
 }
 
 // ListManagers lists all active employees who can be reporting managers
-func (s *EmployeeService) ListManagers(tenantID *uint) ([]map[string]interface{}, error) {
+func (s *EmployeeService) ListManagers(tenantID *uint, departmentID *uint) ([]map[string]interface{}, error) {
 	managers, err := s.employeeRepo.ListManagers(tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get managers: %w", err)
 	}
 
-	result := make([]map[string]interface{}, len(managers))
-	for i, emp := range managers {
+	// If a departmentID filter is given, find the department head so we can flag it
+	var departmentHeadID *uint
+	if departmentID != nil {
+		dept, err := s.departmentRepo.FindByID(*departmentID)
+		if err == nil && dept != nil && dept.ManagerID != nil {
+			departmentHeadID = dept.ManagerID
+		}
+	}
+
+	var result []map[string]interface{}
+	for _, emp := range managers {
+		// If filtering by department, only include managers in that department
+		if departmentID != nil {
+			if emp.DepartmentID == nil || *emp.DepartmentID != *departmentID {
+				continue
+			}
+		}
+
 		managerData := map[string]interface{}{
 			"id":          emp.ID,
 			"employee_id": emp.EmployeeID,
@@ -377,7 +393,97 @@ func (s *EmployeeService) ListManagers(tenantID *uint) ([]map[string]interface{}
 			}
 		}
 
-		result[i] = managerData
+		// Flag the department head (suggested reporting manager)
+		if departmentHeadID != nil && emp.ID == *departmentHeadID {
+			managerData["is_department_head"] = true
+			managerData["is_suggested"] = true
+		} else {
+			managerData["is_department_head"] = false
+			managerData["is_suggested"] = false
+		}
+
+		result = append(result, managerData)
+	}
+
+	// If no results but we do have a department head, include the head even if not in the filtered list
+	// (they might be from a different department managing this one)
+	if departmentID != nil && len(result) == 0 && departmentHeadID != nil {
+		headEmp, err := s.employeeRepo.FindByID(*departmentHeadID)
+		if err == nil && headEmp != nil && headEmp.IsActive {
+			managerData := map[string]interface{}{
+				"id":                  headEmp.ID,
+				"employee_id":         headEmp.EmployeeID,
+				"full_name":           headEmp.FullName(),
+				"first_name":          headEmp.FirstName,
+				"last_name":           headEmp.LastName,
+				"email":               headEmp.WorkEmail,
+				"is_department_head":  true,
+				"is_suggested":        true,
+			}
+			if headEmp.DepartmentID != nil {
+				managerData["department_id"] = headEmp.DepartmentID
+				department, err := s.departmentRepo.FindByID(*headEmp.DepartmentID)
+				if err == nil && department != nil {
+					managerData["department"] = department.Name
+				}
+			}
+			if headEmp.PositionID != nil {
+				managerData["position_id"] = headEmp.PositionID
+				position, err := s.positionRepo.FindByID(*headEmp.PositionID)
+				if err == nil && position != nil {
+					managerData["position"] = position.Title
+				}
+			}
+			result = append(result, managerData)
+		}
+	}
+
+	if result == nil {
+		result = []map[string]interface{}{}
+	}
+
+	return result, nil
+}
+
+// GetDepartmentManager returns the suggested reporting manager for a department
+// (the department head/manager). Returns nil if no manager is set.
+func (s *EmployeeService) GetDepartmentManager(departmentID uint) (map[string]interface{}, error) {
+	department, err := s.departmentRepo.FindByID(departmentID)
+	if err != nil {
+		return nil, fmt.Errorf("department not found")
+	}
+
+	if department.ManagerID == nil {
+		return nil, nil // No manager set for this department
+	}
+
+	manager, err := s.employeeRepo.FindByID(*department.ManagerID)
+	if err != nil || manager == nil {
+		return nil, nil // Manager reference invalid
+	}
+
+	if manager.Status != models.StatusActive || !manager.IsActive {
+		return nil, nil // Manager not active
+	}
+
+	result := map[string]interface{}{
+		"id":                 manager.ID,
+		"employee_id":        manager.EmployeeID,
+		"full_name":          manager.FullName(),
+		"first_name":         manager.FirstName,
+		"last_name":          manager.LastName,
+		"email":              manager.WorkEmail,
+		"is_department_head": true,
+		"department_id":      departmentID,
+		"department":         department.Name,
+	}
+
+	if manager.PositionID != nil {
+		position, err := s.positionRepo.FindByID(*manager.PositionID)
+		if err == nil && position != nil {
+			result["position_id"] = manager.PositionID
+			result["position"] = position.Title
+		}
 	}
 
 	return result, nil

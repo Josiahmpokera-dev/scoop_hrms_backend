@@ -11,6 +11,7 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // UserService handles user-related business logic.
@@ -27,6 +28,174 @@ func NewUserService() *UserService {
 		roleRepo:     repositories.NewRoleRepository(),
 		employeeRepo: employeeRepos.NewEmployeeRepository(),
 	}
+}
+
+// CreateUserResult holds the result of creating a new user linked to an employee.
+type CreateUserResult struct {
+	User       *models.User `json:"user"`
+	EmployeeID string       `json:"employee_id"` // Employee number (e.g. EMP001)
+	Roles      []string     `json:"roles"`
+	Email      string       `json:"email"`    // Login email (returned so admin can share credentials)
+	Password   string       `json:"password"` // Plain password (returned once at creation only)
+}
+
+// CreateUser creates a new system user account linked to an existing employee record.
+// The employee must exist and must not already have a user account.
+// User data (name, email, phone) is pulled from the employee record automatically.
+// Only Admin or HR can call this.
+func (s *UserService) CreateUser(callerUserID uint, req *models.CreateUserRequest) (*CreateUserResult, error) {
+	// Verify caller is admin or HR
+	caller, err := s.userRepo.FindByID(callerUserID)
+	if err != nil || caller == nil {
+		return nil, errors.New("caller user not found")
+	}
+	if !caller.IsActive {
+		return nil, errors.New("caller account is not active")
+	}
+	if !caller.IsAdmin() && !caller.IsHR() {
+		return nil, errors.New("only an admin or HR can create users")
+	}
+
+	// Find the employee
+	employee, err := s.employeeRepo.FindByID(req.EmployeeID)
+	if err != nil || employee == nil {
+		return nil, errors.New("employee not found")
+	}
+
+	// Check if employee is active
+	if !employee.IsActiveStatus() {
+		return nil, errors.New("employee is not active")
+	}
+
+	// Check if employee already has a user account
+	if employee.UserID != nil && *employee.UserID > 0 {
+		return nil, errors.New("this employee already has a user account")
+	}
+
+	// Determine email: use work_email first, then personal_email
+	email := ""
+	if employee.WorkEmail != nil && *employee.WorkEmail != "" {
+		email = *employee.WorkEmail
+	} else if employee.PersonalEmail != nil && *employee.PersonalEmail != "" {
+		email = *employee.PersonalEmail
+	}
+	if email == "" {
+		return nil, errors.New("employee does not have an email address (work_email or personal_email required)")
+	}
+
+	// Check if email is already used by another user
+	if s.userRepo.ExistsByEmail(email) {
+		return nil, fmt.Errorf("a user with email %s already exists", email)
+	}
+
+	// Hash password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, errors.New("failed to hash password")
+	}
+
+	// Generate username from email if not provided
+	username := req.Username
+	if username == "" {
+		emailParts := strings.Split(email, "@")
+		if len(emailParts) > 0 {
+			username = emailParts[0]
+		} else {
+			username = strings.ToLower(employee.FirstName + employee.LastName)
+		}
+		username = strings.ToLower(strings.ReplaceAll(username, ".", ""))
+		username = strings.ReplaceAll(username, "_", "")
+		username = strings.ReplaceAll(username, "-", "")
+	}
+
+	// Determine legacy role (user_type column)
+	role := req.Role
+	legacyRole := role
+	if role == "employee" || role == "manager" {
+		legacyRole = "user"
+	}
+
+	// Create user from employee data
+	user := &models.User{
+		Username:    username,
+		Email:       email,
+		Password:    string(hashedPassword),
+		FirstName:   employee.FirstName,
+		LastName:    employee.LastName,
+		PhoneNumber: employee.PhoneNumber,
+		Role:        models.UserRole(legacyRole),
+		Status:      models.UserStatusActive,
+		IsActive:    true,
+	}
+
+	if err := s.userRepo.Create(user); err != nil {
+		return nil, errors.New("failed to create user")
+	}
+
+	// Link employee to the new user
+	employee.UserID = &user.ID
+	if err := s.employeeRepo.Update(employee); err != nil {
+		// Rollback: delete the created user if linking fails
+		_ = s.userRepo.Delete(user.ID)
+		return nil, errors.New("failed to link employee to user")
+	}
+
+	// Assign the RBAC role so permissions work correctly
+	rbacRole, err := s.roleRepo.FindByCode(role)
+	if err == nil && rbacRole != nil {
+		_ = s.roleRepo.AssignUserRole(user.ID, rbacRole.ID, &callerUserID)
+	}
+
+	// Get the final roles list
+	roles, _ := s.GetUserRoles(user.ID)
+
+	return &CreateUserResult{
+		User:       user,
+		EmployeeID: employee.EmployeeID,
+		Roles:      roles,
+		Email:      email,
+		Password:   req.Password,
+	}, nil
+}
+
+// ListEmployeesWithoutUser returns employees that don't have a linked user account yet.
+// This is used by the frontend to populate the employee picker when creating a new user.
+func (s *UserService) ListEmployeesWithoutUser(page, pageSize int, search string) ([]map[string]interface{}, int64, error) {
+	employees, total, err := s.employeeRepo.ListEmployeesWithoutUser(page, pageSize, search)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Build a simplified list for the picker
+	var results []map[string]interface{}
+	for _, emp := range employees {
+		email := ""
+		if emp.WorkEmail != nil && *emp.WorkEmail != "" {
+			email = *emp.WorkEmail
+		} else if emp.PersonalEmail != nil && *emp.PersonalEmail != "" {
+			email = *emp.PersonalEmail
+		}
+
+		item := map[string]interface{}{
+			"id":          emp.ID,
+			"employee_id": emp.EmployeeID,
+			"first_name":  emp.FirstName,
+			"last_name":   emp.LastName,
+			"email":       email,
+			"department_id": emp.DepartmentID,
+			"position_id":   emp.PositionID,
+			"status":        emp.Status,
+		}
+		if emp.PhoneNumber != nil {
+			item["phone_number"] = *emp.PhoneNumber
+		}
+		if emp.PhotoURL != nil {
+			item["photo_url"] = *emp.PhotoURL
+		}
+		results = append(results, item)
+	}
+
+	return results, total, nil
 }
 
 // ListUsers returns a paginated list of users with optional filters (tenant, role, search).

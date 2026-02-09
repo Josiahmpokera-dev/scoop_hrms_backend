@@ -320,3 +320,196 @@ func (s *DepartmentService) ListDepartments(tenantID *uint, page, pageSize int, 
 func (s *DepartmentService) GetRootDepartments(tenantID *uint) ([]models.Department, error) {
 	return s.repo.FindRootDepartments(tenantID)
 }
+
+// AssignDepartmentHead assigns an employee as the head of a department.
+// This also updates the org chart by:
+//   - Setting the employee's department_id to this department
+//   - Setting the employee's reports_to_id to the parent department's head (if exists)
+//   - Updating employees in this department who had no reporting manager to report to the new head
+func (s *DepartmentService) AssignDepartmentHead(departmentID uint, employeeID uint, updatedBy *uint) (*models.Department, error) {
+	department, err := s.repo.FindByID(departmentID)
+	if err != nil {
+		return nil, errors.New("department not found")
+	}
+
+	// Validate the employee exists and is active
+	employee, err := s.employeeRepo.FindByID(employeeID)
+	if err != nil {
+		return nil, errors.New("employee not found")
+	}
+	if !employee.IsActive {
+		return nil, errors.New("employee is not active")
+	}
+
+	// Track the previous head (if any) for cascading updates
+	previousHeadID := department.ManagerID
+
+	// 1. Update the department's manager_id
+	department.ManagerID = &employeeID
+	department.UpdatedBy = updatedBy
+
+	if err := s.repo.Update(department); err != nil {
+		return nil, fmt.Errorf("failed to assign department head: %w", err)
+	}
+
+	// 2. Update the new head's department_id to this department (if not already)
+	if employee.DepartmentID == nil || *employee.DepartmentID != departmentID {
+		employee.DepartmentID = &departmentID
+	}
+
+	// 3. Set the new head's reporting manager to the parent department's head
+	//    This places the new head correctly in the org chart hierarchy
+	if department.ParentDepartmentID != nil {
+		parentDept, err := s.repo.FindByID(*department.ParentDepartmentID)
+		if err == nil && parentDept != nil && parentDept.ManagerID != nil {
+			// New head reports to the parent department's head
+			employee.ReportsToID = parentDept.ManagerID
+		}
+	} else {
+		// Top-level department: the head reports to no one (or could report to CEO)
+		// Clear reports_to if this is a root department
+		employee.ReportsToID = nil
+	}
+
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return nil, fmt.Errorf("failed to update department head employee record: %w", err)
+	}
+
+	// 4. Cascade: employees in this department who currently report to the old head
+	//    should now report to the new head
+	if previousHeadID != nil && *previousHeadID != employeeID {
+		s.reassignSubordinates(*previousHeadID, employeeID, departmentID)
+	}
+
+	// 5. Cascade: employees in this department who have no reporting manager
+	//    should be assigned to report to the new head
+	s.assignOrphanedEmployees(employeeID, departmentID)
+
+	// 6. Update child departments: if any child department's head reports to the old head,
+	//    update them to report to the new head
+	if previousHeadID != nil && *previousHeadID != employeeID {
+		s.updateChildDepartmentHeads(departmentID, employeeID)
+	} else {
+		// Even without a previous head, ensure child department heads report to this head
+		s.updateChildDepartmentHeads(departmentID, employeeID)
+	}
+
+	return department, nil
+}
+
+// RemoveDepartmentHead removes the head of department assignment.
+// This updates the org chart by:
+//   - Re-pointing employees who reported to the removed head to the parent department head (if exists)
+//   - Clearing the department's manager_id
+func (s *DepartmentService) RemoveDepartmentHead(departmentID uint, updatedBy *uint) (*models.Department, error) {
+	department, err := s.repo.FindByID(departmentID)
+	if err != nil {
+		return nil, errors.New("department not found")
+	}
+
+	previousHeadID := department.ManagerID
+
+	// Clear the department head
+	department.ManagerID = nil
+	department.UpdatedBy = updatedBy
+
+	if err := s.repo.Update(department); err != nil {
+		return nil, fmt.Errorf("failed to remove department head: %w", err)
+	}
+
+	// Cascade: reassign employees who reported to the removed head
+	if previousHeadID != nil {
+		// Find the fallback manager: parent department's head
+		var fallbackManagerID *uint
+		if department.ParentDepartmentID != nil {
+			parentDept, err := s.repo.FindByID(*department.ParentDepartmentID)
+			if err == nil && parentDept != nil && parentDept.ManagerID != nil {
+				fallbackManagerID = parentDept.ManagerID
+			}
+		}
+
+		// Reassign direct reports of the removed head within this department
+		employees, _ := s.employeeRepo.ListByDepartment(departmentID)
+		for _, emp := range employees {
+			if emp.ReportsToID != nil && *emp.ReportsToID == *previousHeadID {
+				emp.ReportsToID = fallbackManagerID
+				emp.UpdatedBy = updatedBy
+				_ = s.employeeRepo.Update(&emp)
+			}
+		}
+
+		// Update child department heads: they should now report to the fallback manager
+		if department.SubDepartments != nil {
+			for _, childDept := range department.SubDepartments {
+				if childDept.ManagerID != nil {
+					childHead, err := s.employeeRepo.FindByID(*childDept.ManagerID)
+					if err == nil && childHead != nil {
+						childHead.ReportsToID = fallbackManagerID
+						childHead.UpdatedBy = updatedBy
+						_ = s.employeeRepo.Update(childHead)
+					}
+				}
+			}
+		}
+	}
+
+	return department, nil
+}
+
+// reassignSubordinates moves employees who reported to oldHeadID to report to newHeadID
+// within the given department
+func (s *DepartmentService) reassignSubordinates(oldHeadID, newHeadID uint, departmentID uint) {
+	employees, err := s.employeeRepo.ListByDepartment(departmentID)
+	if err != nil {
+		return
+	}
+
+	for _, emp := range employees {
+		if emp.ID == newHeadID {
+			continue // Don't modify the new head itself
+		}
+		if emp.ReportsToID != nil && *emp.ReportsToID == oldHeadID {
+			emp.ReportsToID = &newHeadID
+			_ = s.employeeRepo.Update(&emp)
+		}
+	}
+}
+
+// assignOrphanedEmployees assigns employees in the department who have no reporting manager
+// to report to the department head
+func (s *DepartmentService) assignOrphanedEmployees(headEmployeeID uint, departmentID uint) {
+	employees, err := s.employeeRepo.ListByDepartment(departmentID)
+	if err != nil {
+		return
+	}
+
+	for _, emp := range employees {
+		if emp.ID == headEmployeeID {
+			continue // Don't assign head to report to themselves
+		}
+		if emp.ReportsToID == nil && emp.IsActive {
+			emp.ReportsToID = &headEmployeeID
+			_ = s.employeeRepo.Update(&emp)
+		}
+	}
+}
+
+// updateChildDepartmentHeads ensures heads of child departments report to this department's head
+func (s *DepartmentService) updateChildDepartmentHeads(departmentID uint, newHeadEmployeeID uint) {
+	department, err := s.repo.FindByID(departmentID)
+	if err != nil || department == nil {
+		return
+	}
+
+	// SubDepartments are preloaded by FindByID
+	for _, childDept := range department.SubDepartments {
+		if childDept.ManagerID != nil && *childDept.ManagerID != newHeadEmployeeID {
+			childHead, err := s.employeeRepo.FindByID(*childDept.ManagerID)
+			if err == nil && childHead != nil && childHead.IsActive {
+				childHead.ReportsToID = &newHeadEmployeeID
+				_ = s.employeeRepo.Update(childHead)
+			}
+		}
+	}
+}

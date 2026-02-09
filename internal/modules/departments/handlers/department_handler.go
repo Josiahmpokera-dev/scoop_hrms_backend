@@ -7,73 +7,106 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/services"
+	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
+	positionRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/types"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-gonic/gin"
 )
 
-// DepartmentResponse represents the department response with location name instead of location_id
+// HeadOfDepartmentInfo represents enriched head-of-department employee data
+type HeadOfDepartmentInfo struct {
+	ID         uint    `json:"id"`
+	EmployeeID string  `json:"employee_id"`
+	FullName   string  `json:"full_name"`
+	FirstName  string  `json:"first_name"`
+	LastName   string  `json:"last_name"`
+	Email      *string `json:"email,omitempty"`
+	Position   *string `json:"position,omitempty"`
+}
+
+// DepartmentResponse represents the department response with location name and enriched head-of-department info
 type DepartmentResponse struct {
-	ID                uint           `json:"id"`
-	TenantID          *uint          `json:"tenant_id,omitempty"`
-	OrganizationID    *uint          `json:"organization_id,omitempty"`
-	OrganizationUnitID *uint         `json:"organization_unit_id,omitempty"`
-	Code              string         `json:"code"`
-	Name              string         `json:"name"`
-	Description       *string        `json:"description,omitempty"`
-	Level             *string        `json:"level,omitempty"`
-	DepartmentType    *string        `json:"department_type,omitempty"`
-	ParentDepartmentID *uint         `json:"parent_department_id,omitempty"`
-	ManagerID         *uint          `json:"manager_id,omitempty"`
-	DeputyManager     *string        `json:"deputy_manager,omitempty"`
-	BudgetAllocated   *float64       `json:"budget_allocated,omitempty"`
-	BudgetCurrency    *string        `json:"budget_currency,omitempty"`
-	EmployeeCapacity  *int           `json:"employee_capacity,omitempty"`
-	Location          *string        `json:"location,omitempty"` // Location name instead of location_id
-	CostCenter        *string        `json:"cost_center,omitempty"`
-	IsActive          bool           `json:"is_active"`
-	CreatedAt         string         `json:"created_at"`
-	UpdatedAt         string         `json:"updated_at"`
-	UpdatedBy         *uint          `json:"updated_by,omitempty"`
+	ID                  uint                  `json:"id"`
+	TenantID            *uint                 `json:"tenant_id,omitempty"`
+	OrganizationID      *uint                 `json:"organization_id,omitempty"`
+	OrganizationUnitID  *uint                 `json:"organization_unit_id,omitempty"`
+	Code                string                `json:"code"`
+	Name                string                `json:"name"`
+	Description         *string               `json:"description,omitempty"`
+	Level               *string               `json:"level,omitempty"`
+	DepartmentType      *string               `json:"department_type,omitempty"`
+	ParentDepartmentID  *uint                 `json:"parent_department_id,omitempty"`
+	HeadOfDepartment    *HeadOfDepartmentInfo `json:"head_of_department"` // Enriched employee data (null if not assigned)
+	EmployeeCapacity    *int                  `json:"employee_capacity,omitempty"`
+	Location            *string               `json:"location,omitempty"` // Location name instead of location_id
+	LocationID          *uint                 `json:"location_id,omitempty"`
+	IsActive            bool                  `json:"is_active"`
+	CreatedAt           string                `json:"created_at"`
+	UpdatedAt           string                `json:"updated_at"`
+	UpdatedBy           *uint                 `json:"updated_by,omitempty"`
 }
 
 type DepartmentHandler struct {
-	service     *services.DepartmentService
+	service      *services.DepartmentService
 	locationRepo *locationRepos.LocationRepository
+	employeeRepo *employeeRepos.EmployeeRepository
+	positionRepo *positionRepos.JobPositionRepository
 }
 
 func NewDepartmentHandler() *DepartmentHandler {
 	return &DepartmentHandler{
-		service:     services.NewDepartmentService(),
+		service:      services.NewDepartmentService(),
 		locationRepo: locationRepos.NewLocationRepository(),
+		employeeRepo: employeeRepos.NewEmployeeRepository(),
+		positionRepo: positionRepos.NewJobPositionRepository(),
 	}
 }
 
-// toDepartmentResponse converts Department model to DepartmentResponse with location name
+// toDepartmentResponse converts Department model to DepartmentResponse with location name and enriched head-of-department
 func (h *DepartmentHandler) toDepartmentResponse(dept *models.Department) *DepartmentResponse {
 	resp := &DepartmentResponse{
-		ID:                dept.ID,
-		TenantID:          dept.TenantID,
-		OrganizationID:    dept.OrganizationID,
-		OrganizationUnitID: dept.OrganizationUnitID,
-		Code:              dept.Code,
-		Name:              dept.Name,
-		Description:       dept.Description,
-		Level:             dept.Level,
-		DepartmentType:    dept.DepartmentType,
-		ParentDepartmentID: dept.ParentDepartmentID,
-		ManagerID:         dept.ManagerID,
-		DeputyManager:     dept.DeputyManager,
-		BudgetAllocated:   dept.BudgetAllocated,
-		BudgetCurrency:    dept.BudgetCurrency,
-		EmployeeCapacity:  dept.EmployeeCapacity,
-		CostCenter:        dept.CostCenter,
-		IsActive:          dept.IsActive,
-		CreatedAt:         dept.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:         dept.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedBy:         dept.UpdatedBy,
+		ID:                  dept.ID,
+		TenantID:            dept.TenantID,
+		OrganizationID:      dept.OrganizationID,
+		OrganizationUnitID:  dept.OrganizationUnitID,
+		Code:                dept.Code,
+		Name:                dept.Name,
+		Description:         dept.Description,
+		Level:               dept.Level,
+		DepartmentType:      dept.DepartmentType,
+		ParentDepartmentID:  dept.ParentDepartmentID,
+		EmployeeCapacity:    dept.EmployeeCapacity,
+		LocationID:          dept.LocationID,
+		IsActive:            dept.IsActive,
+		CreatedAt:           dept.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:           dept.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedBy:           dept.UpdatedBy,
+	}
+
+	// Enrich head of department with employee data
+	if dept.ManagerID != nil {
+		emp, err := h.employeeRepo.FindByID(*dept.ManagerID)
+		if err == nil && emp != nil {
+			hodInfo := &HeadOfDepartmentInfo{
+				ID:         emp.ID,
+				EmployeeID: emp.EmployeeID,
+				FullName:   emp.FirstName + " " + emp.LastName,
+				FirstName:  emp.FirstName,
+				LastName:   emp.LastName,
+				Email:      emp.WorkEmail,
+			}
+			// Get position title
+			if emp.PositionID != nil {
+				position, err := h.positionRepo.FindByID(*emp.PositionID)
+				if err == nil && position != nil {
+					hodInfo.Position = &position.Title
+				}
+			}
+			resp.HeadOfDepartment = hodInfo
+		}
 	}
 
 	// Get location name if location_id exists
@@ -375,6 +408,80 @@ func (h *DepartmentHandler) HandleAction(c *gin.Context) {
 	default:
 		response.BadRequest(c, "Invalid action. Must be one of: create, read, update, delete, list", nil)
 	}
+}
+
+// AssignDepartmentHead assigns an employee as the head of a department
+// @Summary Assign department head
+// @Description Assign an employee as the head of department. Takes the employee's ID from the employees table.
+// @Tags Departments
+// @Accept json
+// @Produce json
+// @Param id path int true "Department ID"
+// @Param body body object true "Request body" example({"employee_id": 5})
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/departments/{id}/assign-head [post]
+func (h *DepartmentHandler) AssignDepartmentHead(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid department ID", nil)
+		return
+	}
+
+	var req struct {
+		EmployeeID uint `json:"employee_id" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	user, _ := c.Get("user")
+	var updatedBy *uint
+	if userObj, ok := user.(*userModels.User); ok {
+		updatedBy = &userObj.ID
+	}
+
+	department, err := h.service.AssignDepartmentHead(uint(id), req.EmployeeID, updatedBy)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	departmentResponse := h.toDepartmentResponse(department)
+	response.Success(c, "Department head assigned successfully", departmentResponse)
+}
+
+// RemoveDepartmentHead removes the head of department assignment
+// @Summary Remove department head
+// @Description Remove the current head of department assignment.
+// @Tags Departments
+// @Produce json
+// @Param id path int true "Department ID"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/departments/{id}/remove-head [post]
+func (h *DepartmentHandler) RemoveDepartmentHead(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid department ID", nil)
+		return
+	}
+
+	user, _ := c.Get("user")
+	var updatedBy *uint
+	if userObj, ok := user.(*userModels.User); ok {
+		updatedBy = &userObj.ID
+	}
+
+	department, err := h.service.RemoveDepartmentHead(uint(id), updatedBy)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	departmentResponse := h.toDepartmentResponse(department)
+	response.Success(c, "Department head removed successfully", departmentResponse)
 }
 
 // Helper function to map map[string]interface{} to struct

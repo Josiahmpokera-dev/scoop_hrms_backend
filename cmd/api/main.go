@@ -11,6 +11,7 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/config"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	assetModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/models"
+	attendanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/models"
 	auditModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/models"
 	biometricModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/models"
 	biometricWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/workers"
@@ -133,6 +134,13 @@ func main() {
 		&dashboardModels.Announcement{},
 		&dashboardModels.AnnouncementAttachment{},
 		&dashboardModels.AnnouncementRead{},
+		// Attendance: Timesheets & Overtime models
+		&attendanceModels.TimesheetWeek{},
+		&attendanceModels.TimesheetEntry{},
+		&attendanceModels.TimesheetApproval{},
+		&attendanceModels.OvertimePolicy{},
+		&attendanceModels.OvertimeRequest{},
+		&attendanceModels.OvertimeApproval{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}

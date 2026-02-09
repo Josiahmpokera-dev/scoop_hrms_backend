@@ -174,6 +174,50 @@ func (r *EmployeeRepository) ListManagers(tenantID *uint) ([]models.Employee, er
 	return employees, err
 }
 
+// ListEmployeesWithoutUser returns active employees that don't have a linked user account yet.
+// Used by the "Create User" flow to pick an employee.
+func (r *EmployeeRepository) ListEmployeesWithoutUser(page, pageSize int, search string) ([]models.Employee, int64, error) {
+	var employees []models.Employee
+	var total int64
+
+	query := r.db.Model(&models.Employee{}).
+		Where("(user_id IS NULL OR user_id = 0)").
+		Where("status = ? AND is_active = ?", models.StatusActive, true)
+
+	if search != "" {
+		term := "%" + search + "%"
+		query = query.Where(
+			"(LOWER(first_name) LIKE LOWER(?) OR LOWER(last_name) LIKE LOWER(?) OR LOWER(employee_id) LIKE LOWER(?) OR LOWER(work_email) LIKE LOWER(?))",
+			term, term, term, term,
+		)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := query.Order("first_name ASC, last_name ASC").Offset(offset).Limit(pageSize).Find(&employees).Error
+	return employees, total, err
+}
+
+// ListByManagerID returns employees who report to the given manager
+func (r *EmployeeRepository) ListByManagerID(managerID uint, page, pageSize int) ([]models.Employee, int64, error) {
+	var employees []models.Employee
+	var total int64
+
+	query := r.db.Model(&models.Employee{}).
+		Where("manager_id = ? AND status = ? AND is_active = ?", managerID, models.StatusActive, true)
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * pageSize
+	err := query.Order("first_name ASC, last_name ASC").Offset(offset).Limit(pageSize).Find(&employees).Error
+	return employees, total, err
+}
+
 // SearchEmployees searches employees with filters and pagination
 func (r *EmployeeRepository) SearchEmployees(tenantID *uint, search *string, departmentID, positionID, locationID *uint, status *string, page, pageSize int) ([]models.Employee, int64, error) {
 	var employees []models.Employee
@@ -225,4 +269,208 @@ func (r *EmployeeRepository) SearchEmployees(tenantID *uint, search *string, dep
 	err := query.Order("first_name ASC, last_name ASC").Offset(offset).Limit(pageSize).Find(&employees).Error
 
 	return employees, total, err
+}
+
+// PeopleDirectoryFilters holds all filter options for the People Directory search
+type PeopleDirectoryFilters struct {
+	TenantID       *uint
+	Search         *string
+	DepartmentID   *uint
+	PositionID     *uint
+	LocationID     *uint
+	TeamID         *uint
+	ManagerID      *uint
+	EmploymentType *string
+	Status         *string
+	Letter         *string // First letter of first name (A-Z)
+	SortBy         string  // first_name, last_name, employee_id, department, hire_date
+	SortOrder      string  // asc, desc
+	Page           int
+	PageSize       int
+}
+
+// SearchPeopleDirectory searches employees for the People Directory with comprehensive filters
+func (r *EmployeeRepository) SearchPeopleDirectory(filters PeopleDirectoryFilters) ([]models.Employee, int64, error) {
+	var employees []models.Employee
+	var total int64
+
+	offset := (filters.Page - 1) * filters.PageSize
+	query := r.db.Model(&models.Employee{})
+
+	// Tenant filter
+	if filters.TenantID != nil {
+		query = query.Where("tenant_id = ?", *filters.TenantID)
+	}
+
+	// Text search (name, employee_id, email, phone)
+	if filters.Search != nil && *filters.Search != "" {
+		searchTerm := "%" + *filters.Search + "%"
+		query = query.Where(
+			"(LOWER(first_name) LIKE LOWER(?) OR LOWER(last_name) LIKE LOWER(?) OR LOWER(CONCAT(first_name, ' ', last_name)) LIKE LOWER(?) OR LOWER(employee_id) LIKE LOWER(?) OR LOWER(work_email) LIKE LOWER(?) OR LOWER(phone_number) LIKE LOWER(?))",
+			searchTerm, searchTerm, searchTerm, searchTerm, searchTerm, searchTerm,
+		)
+	}
+
+	// Alphabet letter filter
+	if filters.Letter != nil && *filters.Letter != "" {
+		query = query.Where("UPPER(LEFT(first_name, 1)) = UPPER(?)", *filters.Letter)
+	}
+
+	// Department filter
+	if filters.DepartmentID != nil {
+		query = query.Where("department_id = ?", *filters.DepartmentID)
+	}
+
+	// Position filter
+	if filters.PositionID != nil {
+		query = query.Where("position_id = ?", *filters.PositionID)
+	}
+
+	// Location filter
+	if filters.LocationID != nil {
+		query = query.Where("location_id = ?", *filters.LocationID)
+	}
+
+	// Team filter
+	if filters.TeamID != nil {
+		query = query.Where("team_id = ?", *filters.TeamID)
+	}
+
+	// Manager (reports_to) filter
+	if filters.ManagerID != nil {
+		query = query.Where("reports_to_id = ?", *filters.ManagerID)
+	}
+
+	// Employment type filter
+	if filters.EmploymentType != nil && *filters.EmploymentType != "" {
+		query = query.Where("employment_type = ?", *filters.EmploymentType)
+	}
+
+	// Status filter (default to active)
+	if filters.Status != nil && *filters.Status != "" {
+		query = query.Where("status = ?", *filters.Status)
+	} else {
+		query = query.Where("status = ? AND is_active = ?", models.StatusActive, true)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Sorting
+	orderClause := "first_name ASC, last_name ASC" // default
+	validSortFields := map[string]string{
+		"first_name":  "first_name",
+		"last_name":   "last_name",
+		"employee_id": "employee_id",
+		"hire_date":   "hire_date",
+		"created_at":  "created_at",
+		"department":  "department_id",
+	}
+	if sortField, ok := validSortFields[filters.SortBy]; ok {
+		direction := "ASC"
+		if filters.SortOrder == "desc" {
+			direction = "DESC"
+		}
+		orderClause = sortField + " " + direction
+	}
+
+	// Get paginated results
+	err := query.Order(orderClause).Offset(offset).Limit(filters.PageSize).Find(&employees).Error
+
+	return employees, total, err
+}
+
+// GetDepartmentEmployeeCounts returns the count of active employees per department
+func (r *EmployeeRepository) GetDepartmentEmployeeCounts(tenantID *uint) ([]DepartmentEmployeeCount, error) {
+	var counts []DepartmentEmployeeCount
+
+	query := r.db.Model(&models.Employee{}).
+		Select("department_id, COUNT(*) as count").
+		Where("status = ? AND is_active = ? AND department_id IS NOT NULL", models.StatusActive, true).
+		Group("department_id")
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	err := query.Find(&counts).Error
+	return counts, err
+}
+
+// DepartmentEmployeeCount holds department_id and employee count
+type DepartmentEmployeeCount struct {
+	DepartmentID uint  `json:"department_id"`
+	Count        int64 `json:"count"`
+}
+
+// GetLocationEmployeeCounts returns the count of active employees per location
+func (r *EmployeeRepository) GetLocationEmployeeCounts(tenantID *uint) ([]LocationEmployeeCount, error) {
+	var counts []LocationEmployeeCount
+
+	query := r.db.Model(&models.Employee{}).
+		Select("location_id, COUNT(*) as count").
+		Where("status = ? AND is_active = ? AND location_id IS NOT NULL", models.StatusActive, true).
+		Group("location_id")
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	err := query.Find(&counts).Error
+	return counts, err
+}
+
+// LocationEmployeeCount holds location_id and employee count
+type LocationEmployeeCount struct {
+	LocationID uint  `json:"location_id"`
+	Count      int64 `json:"count"`
+}
+
+// GetEmploymentTypeCounts returns the count of active employees per employment type
+func (r *EmployeeRepository) GetEmploymentTypeCounts(tenantID *uint) ([]EmploymentTypeCount, error) {
+	var counts []EmploymentTypeCount
+
+	query := r.db.Model(&models.Employee{}).
+		Select("employment_type, COUNT(*) as count").
+		Where("status = ? AND is_active = ? AND employment_type IS NOT NULL", models.StatusActive, true).
+		Group("employment_type")
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	err := query.Find(&counts).Error
+	return counts, err
+}
+
+// EmploymentTypeCount holds employment_type and count
+type EmploymentTypeCount struct {
+	EmploymentType string `json:"employment_type"`
+	Count          int64  `json:"count"`
+}
+
+// GetAlphabetCounts returns the count of active employees grouped by first letter of first_name
+func (r *EmployeeRepository) GetAlphabetCounts(tenantID *uint) ([]AlphabetCount, error) {
+	var counts []AlphabetCount
+
+	query := r.db.Model(&models.Employee{}).
+		Select("UPPER(LEFT(first_name, 1)) as letter, COUNT(*) as count").
+		Where("status = ? AND is_active = ?", models.StatusActive, true).
+		Group("UPPER(LEFT(first_name, 1))").
+		Order("letter ASC")
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	err := query.Find(&counts).Error
+	return counts, err
+}
+
+// AlphabetCount holds letter and count
+type AlphabetCount struct {
+	Letter string `json:"letter"`
+	Count  int64  `json:"count"`
 }

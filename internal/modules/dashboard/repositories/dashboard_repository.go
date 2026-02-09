@@ -230,9 +230,9 @@ func (r *DashboardRepository) GetUpcomingBirthdays(tenantID *uint, daysAhead int
 		Where("e.status = ?", employeeModels.StatusActive).
 		Where("e.date_of_birth IS NOT NULL").
 		Where(`(
-			(EXTRACT(MONTH FROM e.date_of_birth) = EXTRACT(MONTH FROM ?) AND EXTRACT(DAY FROM e.date_of_birth) >= EXTRACT(DAY FROM ?))
-			OR (EXTRACT(MONTH FROM e.date_of_birth) = EXTRACT(MONTH FROM ?) AND EXTRACT(DAY FROM e.date_of_birth) <= EXTRACT(DAY FROM ?))
-			OR (EXTRACT(MONTH FROM e.date_of_birth) > EXTRACT(MONTH FROM ?) AND EXTRACT(MONTH FROM e.date_of_birth) < EXTRACT(MONTH FROM ?))
+			(EXTRACT(MONTH FROM e.date_of_birth) = EXTRACT(MONTH FROM ?::timestamp) AND EXTRACT(DAY FROM e.date_of_birth) >= EXTRACT(DAY FROM ?::timestamp))
+			OR (EXTRACT(MONTH FROM e.date_of_birth) = EXTRACT(MONTH FROM ?::timestamp) AND EXTRACT(DAY FROM e.date_of_birth) <= EXTRACT(DAY FROM ?::timestamp))
+			OR (EXTRACT(MONTH FROM e.date_of_birth) > EXTRACT(MONTH FROM ?::timestamp) AND EXTRACT(MONTH FROM e.date_of_birth) < EXTRACT(MONTH FROM ?::timestamp))
 		)`, now, now, endDate, endDate, now, endDate)
 
 	if tenantID != nil {
@@ -281,9 +281,9 @@ func (r *DashboardRepository) GetUpcomingAnniversaries(tenantID *uint, daysAhead
 		Where("e.status = ?", employeeModels.StatusActive).
 		Where("e.hire_date IS NOT NULL").
 		Where(`(
-			(EXTRACT(MONTH FROM e.hire_date) = EXTRACT(MONTH FROM ?) AND EXTRACT(DAY FROM e.hire_date) >= EXTRACT(DAY FROM ?))
-			OR (EXTRACT(MONTH FROM e.hire_date) = EXTRACT(MONTH FROM ?) AND EXTRACT(DAY FROM e.hire_date) <= EXTRACT(DAY FROM ?))
-			OR (EXTRACT(MONTH FROM e.hire_date) > EXTRACT(MONTH FROM ?) AND EXTRACT(MONTH FROM e.hire_date) < EXTRACT(MONTH FROM ?))
+			(EXTRACT(MONTH FROM e.hire_date) = EXTRACT(MONTH FROM ?::timestamp) AND EXTRACT(DAY FROM e.hire_date) >= EXTRACT(DAY FROM ?::timestamp))
+			OR (EXTRACT(MONTH FROM e.hire_date) = EXTRACT(MONTH FROM ?::timestamp) AND EXTRACT(DAY FROM e.hire_date) <= EXTRACT(DAY FROM ?::timestamp))
+			OR (EXTRACT(MONTH FROM e.hire_date) > EXTRACT(MONTH FROM ?::timestamp) AND EXTRACT(MONTH FROM e.hire_date) < EXTRACT(MONTH FROM ?::timestamp))
 		)`, now, now, endDate, endDate, now, endDate)
 
 	if tenantID != nil {

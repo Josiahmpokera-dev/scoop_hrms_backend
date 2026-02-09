@@ -23,6 +23,94 @@ func NewUserHandler() *UserHandler {
 	}
 }
 
+// CreateUser creates a new system user account linked to an existing employee.
+// The user's name and email are taken from the employee record automatically.
+// The employee must exist and must not already have a user account.
+//
+// @Summary Create user from employee
+// @Description Create a login account for an existing employee with a specified role. Admin or HR only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param request body models.CreateUserRequest true "Create user request"
+// @Success 201 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
+// @Router /api/v1/users [post]
+func (h *UserHandler) CreateUser(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	callerID := userID.(uint)
+
+	var req models.CreateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	result, err := h.userService.CreateUser(callerID, &req)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Created(c, "User created successfully", gin.H{
+		"user":        result.User,
+		"employee_id": result.EmployeeID,
+		"roles":       result.Roles,
+		"credentials": gin.H{
+			"email":    result.Email,
+			"password": result.Password,
+		},
+	})
+}
+
+// ListEmployeesWithoutUser returns employees that don't have a login account yet.
+// Use this to populate the employee picker when creating a new user.
+//
+// @Summary List employees without user accounts
+// @Description Get employees that can have a user account created. Admin or HR only.
+// @Tags Users
+// @Produce json
+// @Param page query int false "Page number" default(1)
+// @Param page_size query int false "Page size" default(20) maximum(100)
+// @Param search query string false "Search by name, employee ID, or email"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/users/available-employees [get]
+func (h *UserHandler) ListEmployeesWithoutUser(c *gin.Context) {
+	page := 1
+	if p := c.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+	pageSize := 20
+	if ps := c.Query("page_size"); ps != "" {
+		if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 && parsed <= 100 {
+			pageSize = parsed
+		}
+	}
+	search := strings.TrimSpace(c.Query("search"))
+
+	employees, total, err := h.userService.ListEmployeesWithoutUser(page, pageSize, search)
+	if err != nil {
+		response.InternalServerError(c, "Failed to list employees", err.Error())
+		return
+	}
+
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	meta := &response.Meta{
+		Page:       page,
+		PerPage:    pageSize,
+		Total:      total,
+		TotalPages: totalPages,
+	}
+	response.SuccessWithMeta(c, "Employees without user accounts retrieved successfully", employees, meta)
+}
+
 // ListUsers returns a paginated list of users for transfer-role and other admin/HR use.
 // Optional filters: role (admin, hr, it, user), search (email, first_name, last_name, username).
 //
