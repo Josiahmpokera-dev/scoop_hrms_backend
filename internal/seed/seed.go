@@ -17,10 +17,18 @@ func Run() {
 
 	log.Println("Running seeders...")
 
+	// Phase 1: Core system setup (permissions, roles, admin)
 	RunPermissions()
 	RunRoles()
 	RunAdminUser()
 	RunNonEmployeeUsers()
+
+	// Phase 2: Development test data (locations, departments, positions, teams, employees, leave)
+	RunDevelopmentData()
+
+	// Phase 3: Relationship assignments (department heads, team leads — must run after employees exist)
+	RunDepartmentHeads()
+	RunTeamLeads()
 
 	log.Println("All seeders completed.")
 }
