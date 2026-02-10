@@ -161,12 +161,18 @@ func main() {
 	// Initialize Gin router
 	router := gin.New()
 
-	// Configure CORS middleware — allow all origins, methods, and headers.
-	// AllowOriginFunc returns true for every origin so any frontend domain is accepted.
-	// AllowCredentials is true so the browser will send cookies/auth headers.
-	// Headers must be explicitly listed (wildcard "*" is forbidden when credentials are enabled).
+	// Configure CORS middleware
 	router.Use(cors.New(cors.Config{
-		AllowOriginFunc: func(origin string) bool { return true },
+		AllowOrigins: []string{
+			"https://gthr.scoopworks.com",  // Production domain
+			"http://localhost:3000",         // Local development
+			"http://localhost:5173",         // Vite local development
+			"http://127.0.0.1:3000",        // Local development (IP)
+			"http://127.0.0.1:5173",        // Vite local development (IP)
+			"http://scoop-hrms-dev:3000",   // Docker container (port 3000)
+			"http://scoop-hrms-dev",        // Docker container (no port)
+			"http://172.19.0.2:3000",       // Docker container IP
+		},
 		AllowMethods: []string{
 			"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD",
 		},
@@ -179,23 +185,9 @@ func main() {
 			"Accept-Language",
 			"Authorization",
 			"Cache-Control",
-			"Connection",
-			"Host",
-			"Pragma",
-			"Referer",
-			"User-Agent",
 			"X-Requested-With",
 			"X-Tenant-ID",
 			"X-Request-Id",
-			"X-Forwarded-For",
-			"X-Forwarded-Proto",
-			"X-Real-Ip",
-			"Access-Control-Request-Headers",
-			"Access-Control-Request-Method",
-			"DNT",
-			"If-Modified-Since",
-			"Keep-Alive",
-			"X-CustomHeader",
 		},
 		ExposeHeaders: []string{
 			"Content-Length",
