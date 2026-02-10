@@ -161,17 +161,12 @@ func main() {
 	// Initialize Gin router
 	router := gin.New()
 
-	// Configure CORS middleware
+	// Configure CORS middleware — accepts any origin.
+	// AllowOriginFunc mirrors the request Origin back in the response header,
+	// which is required when AllowCredentials is true (browser rejects "*").
 	router.Use(cors.New(cors.Config{
-		AllowOrigins: []string{
-			"https://gthr.scoopworks.com",  // Production domain
-			"http://localhost:3000",         // Local development
-			"http://localhost:5173",         // Vite local development
-			"http://127.0.0.1:3000",        // Local development (IP)
-			"http://127.0.0.1:5173",        // Vite local development (IP)
-			"http://scoop-hrms-dev:3000",   // Docker container (port 3000)
-			"http://scoop-hrms-dev",        // Docker container (no port)
-			"http://172.19.0.2:3000",       // Docker container IP
+		AllowOriginFunc: func(origin string) bool {
+			return true // Allow every origin (local dev, Docker, production)
 		},
 		AllowMethods: []string{
 			"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD",
