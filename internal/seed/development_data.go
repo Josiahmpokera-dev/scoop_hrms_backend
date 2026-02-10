@@ -381,10 +381,10 @@ func seedTeams(departments map[string]*deptModels.Department, locations map[stri
 
 type testEmployeeDef struct {
 	// User fields
-	Username  string
-	Email     string
-	Password  string
-	UserRole  userModels.UserRole
+	Username string
+	Email    string
+	Password string
+	UserRole userModels.UserRole
 	// Employee fields
 	EmployeeID     string
 	FirstName      string
@@ -776,25 +776,67 @@ func seedTestEmployees(
 	empIDMap := make(map[string]uint) // EmployeeID code -> DB ID
 
 	for _, def := range employees {
-		// Check if employee already exists
-		if empRepo.ExistsByEmployeeID(def.EmployeeID) {
-			existing, _ := empRepo.FindByEmployeeID(def.EmployeeID)
-			if existing != nil {
-				empIDMap[def.EmployeeID] = existing.ID
-			}
-			continue
-		}
-
-		// Create user first
+		// Always hash the password (needed for both new and existing users)
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(def.Password), bcrypt.DefaultCost)
 		if err != nil {
 			log.Printf("  Warning: Failed to hash password for %s: %v", def.Email, err)
 			continue
 		}
 
+		// Check if employee already exists
+		if empRepo.ExistsByEmployeeID(def.EmployeeID) {
+			existing, _ := empRepo.FindByEmployeeID(def.EmployeeID)
+			if existing != nil {
+				empIDMap[def.EmployeeID] = existing.ID
+			}
+
+			// Reset the user account: unblock, reset password, clear failed login count
+			// This ensures test accounts are always usable after app restart
+			existingUser, _ := userRepo.FindByEmail(def.Email)
+			if existingUser != nil {
+				needsUpdate := false
+				if existingUser.Status != "active" {
+					existingUser.Status = "active"
+					needsUpdate = true
+				}
+				if !existingUser.IsActive {
+					existingUser.IsActive = true
+					needsUpdate = true
+				}
+				if existingUser.FailedLoginCount > 0 {
+					existingUser.FailedLoginCount = 0
+					needsUpdate = true
+				}
+				if existingUser.LockedUntil != nil {
+					existingUser.LockedUntil = nil
+					needsUpdate = true
+				}
+				// Always reset password to the seeder default so test credentials always work
+				existingUser.Password = string(hashedPassword)
+				needsUpdate = true
+
+				if needsUpdate {
+					if err := userRepo.Update(existingUser); err != nil {
+						log.Printf("  Warning: Failed to reset user %s: %v", def.Email, err)
+					} else {
+						log.Printf("  ✅ User account reset: %s (password: %s)", def.Email, def.Password)
+					}
+				}
+			}
+			continue
+		}
+
+		// Create user first
 		existingUser, _ := userRepo.FindByEmail(def.Email)
 		var userID uint
 		if existingUser != nil {
+			// User exists but employee doesn't — reset the user and reuse
+			existingUser.Password = string(hashedPassword)
+			existingUser.Status = "active"
+			existingUser.IsActive = true
+			existingUser.FailedLoginCount = 0
+			existingUser.LockedUntil = nil
+			_ = userRepo.Update(existingUser)
 			userID = existingUser.ID
 		} else {
 			user := &userModels.User{
@@ -890,6 +932,14 @@ func seedTestEmployees(
 	}
 
 	log.Printf("  ✅ Test employees seeded: %d employees created/verified", len(employees))
+	log.Println("  ────────────────────────────────────────────────────────────")
+	log.Printf("  📋 TEST CREDENTIALS (all accounts use password: %s)", defaultPassword)
+	log.Println("  ────────────────────────────────────────────────────────────")
+	log.Println("  Admin:  john.mwanga@hrms.com    (CEO, Admin)")
+	log.Println("  HR:     fatma.salim@hrms.com    (HR Director)")
+	log.Println("  IT:     michael.temba@hrms.com  (IT Director)")
+	log.Println("  User:   joseph.mosha@hrms.com   (Sr. Developer)")
+	log.Println("  ────────────────────────────────────────────────────────────")
 }
 
 // ─── Leave Types ────────────────────────────────────────────────────────────
@@ -963,14 +1013,14 @@ func seedLeaveBalances() {
 
 	// Leave entitlements per type
 	entitlements := map[string]float64{
-		"AL":  28,  // 28 days annual leave
-		"SL":  21,  // 21 days sick leave
-		"CL":  5,   // 5 days compassionate
-		"EL":  3,   // 3 days emergency
-		"UL":  30,  // 30 days unpaid (unlimited but capped)
-		"STL": 10,  // 10 days study
-		"WFH": 52,  // ~1 per week
-		"HL":  12,  // 12 half days
+		"AL":  28, // 28 days annual leave
+		"SL":  21, // 21 days sick leave
+		"CL":  5,  // 5 days compassionate
+		"EL":  3,  // 3 days emergency
+		"UL":  30, // 30 days unpaid (unlimited but capped)
+		"STL": 10, // 10 days study
+		"WFH": 52, // ~1 per week
+		"HL":  12, // 12 half days
 	}
 
 	count := 0
@@ -1005,8 +1055,8 @@ func RunDepartmentHeads() {
 	empRepo := empRepos.NewEmployeeRepository()
 
 	assignments := []struct {
-		DeptCode   string
-		EmpID      string // EmployeeID of the head
+		DeptCode string
+		EmpID    string // EmployeeID of the head
 	}{
 		{"EXEC", "EMP-001"},   // John Mwanga heads Executive
 		{"HR", "EMP-010"},     // Fatma Salim heads HR
@@ -1090,4 +1140,3 @@ func RunTeamLeads() {
 		log.Printf("  ✅ Team lead assigned: %s -> %s %s", a.TeamCode, emp.FirstName, emp.LastName)
 	}
 }
-

@@ -23,8 +23,8 @@ import (
 	leaveModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
 	locationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/models"
 	organizationUnitModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/models"
-	payrollModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	organizationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/models"
+	payrollModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
 	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
@@ -161,17 +161,15 @@ func main() {
 	// Initialize Gin router
 	router := gin.New()
 
-	// Configure CORS middleware — allow all origins
-	corsConfig := cors.Config{
-		AllowOrigins:     config.AppConfig.CORS.AllowedOrigins,
-		AllowMethods:     config.AppConfig.CORS.AllowedMethods,
-		AllowHeaders:     config.AppConfig.CORS.AllowedHeaders,
-		ExposeHeaders:    []string{"Content-Length"},
+	// Configure CORS middleware — allow all origins, methods, and headers
+	router.Use(cors.New(cors.Config{
+		AllowOriginFunc:  func(origin string) bool { return true },
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"},
+		AllowHeaders:     []string{"*"},
+		ExposeHeaders:    []string{"Content-Length", "Content-Type", "Authorization", "X-Request-Id"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
-		AllowOriginFunc:  func(origin string) bool { return true },
-	}
-	router.Use(cors.New(corsConfig))
+	}))
 
 	// Add middleware
 	router.Use(gin.Logger())
