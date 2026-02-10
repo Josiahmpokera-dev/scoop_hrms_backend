@@ -161,12 +161,48 @@ func main() {
 	// Initialize Gin router
 	router := gin.New()
 
-	// Configure CORS middleware — allow all origins, methods, and headers
+	// Configure CORS middleware — allow all origins, methods, and headers.
+	// AllowOriginFunc returns true for every origin so any frontend domain is accepted.
+	// AllowCredentials is true so the browser will send cookies/auth headers.
+	// Headers must be explicitly listed (wildcard "*" is forbidden when credentials are enabled).
 	router.Use(cors.New(cors.Config{
-		AllowOriginFunc:  func(origin string) bool { return true },
-		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"},
-		AllowHeaders:     []string{"*"},
-		ExposeHeaders:    []string{"Content-Length", "Content-Type", "Authorization", "X-Request-Id"},
+		AllowOriginFunc: func(origin string) bool { return true },
+		AllowMethods: []string{
+			"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD",
+		},
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Type",
+			"Content-Length",
+			"Accept",
+			"Accept-Encoding",
+			"Accept-Language",
+			"Authorization",
+			"Cache-Control",
+			"Connection",
+			"Host",
+			"Pragma",
+			"Referer",
+			"User-Agent",
+			"X-Requested-With",
+			"X-Tenant-ID",
+			"X-Request-Id",
+			"X-Forwarded-For",
+			"X-Forwarded-Proto",
+			"X-Real-Ip",
+			"Access-Control-Request-Headers",
+			"Access-Control-Request-Method",
+			"DNT",
+			"If-Modified-Since",
+			"Keep-Alive",
+			"X-CustomHeader",
+		},
+		ExposeHeaders: []string{
+			"Content-Length",
+			"Content-Type",
+			"Authorization",
+			"X-Request-Id",
+		},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
