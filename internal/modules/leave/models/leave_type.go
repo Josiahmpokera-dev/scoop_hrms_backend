@@ -9,7 +9,6 @@ import (
 // LeaveType represents a type of leave (Annual, Sick, Emergency, etc.)
 type LeaveType struct {
 	ID                     uint           `json:"id" gorm:"primaryKey"`
-	TenantID               *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	Code                   string         `json:"code" gorm:"uniqueIndex;not null;size:10"` // AL, SL, EL, etc.
 	Name                   string         `json:"name" gorm:"not null;size:100"`
 	Icon                   *string        `json:"icon,omitempty" gorm:"size:10"` // Emoji icon

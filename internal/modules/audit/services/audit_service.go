@@ -24,7 +24,6 @@ func (s *AuditService) Log(entry *models.AuditLog) error {
 
 // ListFilter is the filter for listing audit logs (exposed to handlers).
 type ListFilter struct {
-	TenantID   *uint
 	UserID     *uint
 	Action     string
 	Resource   string
@@ -38,7 +37,6 @@ type ListFilter struct {
 // List returns audit logs with pagination and filters.
 func (s *AuditService) List(filter ListFilter, page, pageSize int) ([]models.AuditLog, int64, error) {
 	rf := repositories.ListFilter{
-		TenantID:   filter.TenantID,
 		UserID:     filter.UserID,
 		Action:     filter.Action,
 		Resource:   filter.Resource,

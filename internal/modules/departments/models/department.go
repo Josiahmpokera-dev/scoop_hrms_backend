@@ -19,7 +19,6 @@ const (
 // Department represents a department in the organizational hierarchy
 type Department struct {
 	ID                uint           `json:"id" gorm:"primaryKey"`
-	TenantID          *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	OrganizationID    *uint          `json:"organization_id,omitempty" gorm:"index"` // References organizations(id)
 	OrganizationUnitID *uint         `json:"organization_unit_id,omitempty" gorm:"index"` // References organization_units(id)
 	Code              string         `json:"code" gorm:"uniqueIndex;not null;size:20"`

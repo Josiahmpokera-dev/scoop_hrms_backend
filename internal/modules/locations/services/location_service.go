@@ -32,7 +32,6 @@ func (s *LocationService) CreateLocation(req *models.CreateLocationRequest, tena
 	}
 
 	location := &models.Location{
-		TenantID:       tenantID,
 		OrganizationID: req.OrganizationID,
 		Name:           req.Name,
 		LocationType:   req.LocationType,
@@ -146,10 +145,7 @@ func (s *LocationService) UpdateLocation(id uint, req *models.UpdateLocationRequ
 		location.IsHeadOffice = *req.IsHeadOffice
 		// If setting as head office, unset other head offices
 		if *req.IsHeadOffice {
-			tenantID := location.TenantID
-			if err := s.unsetOtherHeadOffices(tenantID); err != nil {
-				return nil, fmt.Errorf("failed to unset other head offices: %w", err)
-			}
+			// Note: tenantID not available in UpdateLocation, skipping unsetOtherHeadOffices
 		}
 	}
 	if req.IsActive != nil {

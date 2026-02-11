@@ -39,7 +39,6 @@ const (
 // AssetRequest represents a request from an employee to HR for an asset
 type AssetRequest struct {
 	ID            uint                 `json:"id" gorm:"primaryKey"`
-	TenantID      *uint                `json:"tenant_id,omitempty" gorm:"index"`
 	EmployeeID    string               `json:"employee_id" gorm:"index;not null;size:50"` // Employee ID (e.g., EMP001)
 	RequestNumber string               `json:"request_number" gorm:"uniqueIndex;not null;size:50"` // e.g., AR-2026-001
 	RequestType   AssetRequestType     `json:"request_type" gorm:"type:varchar(50);not null"` // new, replacement, additional

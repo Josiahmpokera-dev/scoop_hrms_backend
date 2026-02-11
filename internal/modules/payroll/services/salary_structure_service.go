@@ -30,7 +30,7 @@ func (s *SalaryStructureService) CreateSalaryStructure(structure *models.SalaryS
 
 	// Calculate statutory deductions using Tanzania rates
 	taxYear := 2024 // Default to current year
-	taxResult := s.taxCalculator.CalculateAllDeductions(structure.GrossSalary, taxYear, structure.TenantID)
+	taxResult := s.taxCalculator.CalculateAllDeductions(structure.GrossSalary, taxYear, nil)
 
 	structure.PAYEDeduction = taxResult.PAYE
 	structure.NSSFEmployee = taxResult.NSSFEmployee
@@ -59,7 +59,7 @@ func (s *SalaryStructureService) UpdateSalaryStructure(structure *models.SalaryS
 	structure.GrossSalary = structure.Basic + structure.HRA + structure.Transport + structure.Medical + structure.OtherAllowances
 
 	taxYear := 2024
-	taxResult := s.taxCalculator.CalculateAllDeductions(structure.GrossSalary, taxYear, structure.TenantID)
+	taxResult := s.taxCalculator.CalculateAllDeductions(structure.GrossSalary, taxYear, nil)
 
 	structure.PAYEDeduction = taxResult.PAYE
 	structure.NSSFEmployee = taxResult.NSSFEmployee
@@ -136,7 +136,7 @@ func (s *SalaryStructureService) SimulateSalary(ctc float64, tenantID *uint) map
 // CreateSalaryComponent creates a new salary component
 func (s *SalaryStructureService) CreateSalaryComponent(component *models.SalaryComponent) error {
 	// Check if component code already exists
-	existing, err := s.componentRepo.GetByCode(component.ComponentCode, component.TenantID)
+	existing, err := s.componentRepo.GetByCode(component.ComponentCode, nil)
 	if err == nil && existing != nil {
 		return errors.New("component code already exists")
 	}

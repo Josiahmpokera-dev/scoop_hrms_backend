@@ -23,20 +23,11 @@ type OnboardingRequest struct {
 // OnboardingResponse represents the complete onboarding response
 type OnboardingResponse struct {
 	User         *UserInfo `json:"user"`
-	Tenant       *TenantInfo `json:"tenant,omitempty"`
 	Organization *OrganizationInfo `json:"organization,omitempty"`
 	AccessToken  string    `json:"access_token"`
 	TokenType    string    `json:"token_type"`
 	ExpiresIn    int64     `json:"expires_in"`
 	SetupComplete bool     `json:"setup_complete"`
-}
-
-// TenantInfo represents tenant information in response
-type TenantInfo struct {
-	ID       uint   `json:"id"`
-	Name     string `json:"name"`
-	Domain   *string `json:"domain,omitempty"`
-	Status   string `json:"status"`
 }
 
 // OrganizationInfo represents organization information in response

@@ -9,7 +9,6 @@ import (
 // TaxSlab represents a PAYE tax slab for a country
 type TaxSlab struct {
 	ID           uint           `json:"id" gorm:"primaryKey"`
-	TenantID     *uint          `json:"tenantId,omitempty" gorm:"index"`
 	Country      string         `json:"country" gorm:"size:100;default:'Tanzania'"`
 	TaxYear      int            `json:"taxYear" gorm:"not null"`
 	Period       string         `json:"period" gorm:"size:30;default:'Monthly'"` // Monthly, Annual
@@ -33,7 +32,6 @@ func (TaxSlab) TableName() string {
 // StatutoryRule represents statutory contribution rules (NSSF, NHIF, SDL, WCF)
 type StatutoryRule struct {
 	ID              uint           `json:"id" gorm:"primaryKey"`
-	TenantID        *uint          `json:"tenantId,omitempty" gorm:"index"`
 	Country         string         `json:"country" gorm:"size:100;default:'Tanzania'"`
 	Code            string         `json:"code" gorm:"size:20;not null"` // NSSF, NHIF, SDL, WCF
 	Name            string         `json:"name" gorm:"size:255"`
@@ -60,7 +58,6 @@ func (StatutoryRule) TableName() string {
 // NHIFSchedule represents the NHIF contribution schedule based on salary bands
 type NHIFSchedule struct {
 	ID               uint           `json:"id" gorm:"primaryKey"`
-	TenantID         *uint          `json:"tenantId,omitempty" gorm:"index"`
 	Country          string         `json:"country" gorm:"size:100;default:'Tanzania'"`
 	SalaryFrom       float64        `json:"from" gorm:"type:decimal(15,2)"`
 	SalaryTo         float64        `json:"to" gorm:"type:decimal(15,2)"`
@@ -81,7 +78,6 @@ func (NHIFSchedule) TableName() string {
 // CompliancePayment represents a statutory payment record
 type CompliancePayment struct {
 	ID              uint           `json:"id" gorm:"primaryKey"`
-	TenantID        *uint          `json:"tenantId,omitempty" gorm:"index"`
 	PayrollRunID    *uint          `json:"payrollRunId,omitempty" gorm:"index"`
 	PayMonth        int            `json:"payMonth"`
 	PayYear         int            `json:"payYear"`

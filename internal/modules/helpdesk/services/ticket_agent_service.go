@@ -49,10 +49,6 @@ func (s *TicketAgentService) AssignTicket(ticketID uint, assigneeUserID uint, te
 		return nil, errors.New("ticket not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && ticket.TenantID != nil && *ticket.TenantID != *tenantID {
-		return nil, errors.New("ticket does not belong to your tenant")
-	}
 
 	// Get assignee user
 	assignee, err := s.userRepo.FindByID(assigneeUserID)
@@ -77,7 +73,6 @@ func (s *TicketAgentService) AssignTicket(ticketID uint, assigneeUserID uint, te
 	// Add assignment note if provided
 	if note != nil && *note != "" {
 		_ = s.commentRepo.Create(&models.Comment{
-			TenantID:   tenantID,
 			TicketID:   ticketID,
 			AuthorID:   assignedBy,
 			AuthorName: "System",
@@ -99,10 +94,6 @@ func (s *TicketAgentService) UpdateTicketStatus(ticketID uint, status string, te
 		return nil, errors.New("ticket not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && ticket.TenantID != nil && *ticket.TenantID != *tenantID {
-		return nil, errors.New("ticket does not belong to your tenant")
-	}
 
 	// Validate status transition
 	validStatus := models.TicketStatus(status)
@@ -138,7 +129,6 @@ func (s *TicketAgentService) UpdateTicketStatus(ticketID uint, status string, te
 	// Add status change note if provided
 	if note != nil && *note != "" {
 		_ = s.commentRepo.Create(&models.Comment{
-			TenantID:   tenantID,
 			TicketID:   ticketID,
 			AuthorID:   updatedBy,
 			AuthorName: "System",
@@ -160,10 +150,6 @@ func (s *TicketAgentService) ResolveTicket(ticketID uint, tenantID *uint, resolv
 		return nil, errors.New("ticket not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && ticket.TenantID != nil && *ticket.TenantID != *tenantID {
-		return nil, errors.New("ticket does not belong to your tenant")
-	}
 
 	// Resolve ticket
 	now := time.Now()

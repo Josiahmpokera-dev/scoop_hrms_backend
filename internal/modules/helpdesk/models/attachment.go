@@ -9,7 +9,6 @@ import (
 // Attachment represents an attachment on a helpdesk ticket
 type Attachment struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	TenantID    *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	TicketID    uint           `json:"ticket_id" gorm:"index;not null"`
 	Name        string         `json:"name" gorm:"not null;size:255"`
 	URL         string         `json:"url" gorm:"not null;size:500"`

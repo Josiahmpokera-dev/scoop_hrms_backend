@@ -201,7 +201,6 @@ func (s *PostOnboardingTaskService) CreateTask(req *models.CreatePostOnboardingT
 
 	// Create task
 	task := &models.PostOnboardingTask{
-		TenantID:         tenantID,
 		EmployeeID:       req.EmployeeID,
 		TaskType:         req.TaskType,
 		Title:            title,
@@ -259,10 +258,7 @@ func (s *PostOnboardingTaskService) UpdateTask(req *models.UpdatePostOnboardingT
 		return nil, errors.New("task not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && task.TenantID != nil && *task.TenantID != *tenantID {
-		return nil, errors.New("task does not belong to your tenant")
-	}
+	// Tenant ownership check removed (single-tenant)
 
 	// Update fields
 	if req.Title != nil {
@@ -353,10 +349,7 @@ func (s *PostOnboardingTaskService) CompleteTask(req *models.CompletePostOnboard
 		return nil, errors.New("task not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && task.TenantID != nil && *task.TenantID != *tenantID {
-		return nil, errors.New("task does not belong to your tenant")
-	}
+	// Tenant ownership check removed (single-tenant)
 
 	// Check if task can be completed
 	if !task.CanBeCompleted() {
@@ -388,10 +381,7 @@ func (s *PostOnboardingTaskService) GetTask(id uint, tenantID *uint) (*models.Po
 		return nil, errors.New("task not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && task.TenantID != nil && *task.TenantID != *tenantID {
-		return nil, errors.New("task does not belong to your tenant")
-	}
+	// Tenant ownership check removed (single-tenant)
 
 	return task, nil
 }
@@ -404,10 +394,7 @@ func (s *PostOnboardingTaskService) GetTasksByEmployeeID(employeeID string, tena
 		return nil, errors.New("employee not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && employee.TenantID != nil && *employee.TenantID != *tenantID {
-		return nil, errors.New("employee does not belong to your tenant")
-	}
+	// Tenant ownership check removed (single-tenant)
 
 	tasks, err := s.taskRepo.FindByEmployeeID(employeeID)
 	if err != nil {
@@ -479,10 +466,7 @@ func (s *PostOnboardingTaskService) GetTaskSummary(employeeID string, tenantID *
 		return nil, errors.New("employee not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && employee.TenantID != nil && *employee.TenantID != *tenantID {
-		return nil, errors.New("employee does not belong to your tenant")
-	}
+	// Tenant ownership check removed (single-tenant)
 
 	// Get task counts
 	counts, err := s.taskRepo.CountByEmployeeID(employeeID)
@@ -525,10 +509,7 @@ func (s *PostOnboardingTaskService) DeleteTask(id uint, tenantID *uint) error {
 		return errors.New("task not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && task.TenantID != nil && *task.TenantID != *tenantID {
-		return errors.New("task does not belong to your tenant")
-	}
+	// Tenant ownership check removed (single-tenant)
 
 	if err := s.taskRepo.Delete(id); err != nil {
 		return fmt.Errorf("failed to delete task: %w", err)
@@ -546,13 +527,8 @@ func (s *PostOnboardingTaskService) ListEmployeesWithTaskCompletion(tenantID *ui
 		return nil, 0, fmt.Errorf("failed to get employees: %w", err)
 	}
 
-	// Filter by tenant if needed
-	filteredEmployees := make([]models.Employee, 0)
-	for _, emp := range employees {
-		if tenantID == nil || (emp.TenantID != nil && *emp.TenantID == *tenantID) {
-			filteredEmployees = append(filteredEmployees, emp)
-		}
-	}
+	// All employees pass the filter (single-tenant)
+	filteredEmployees := employees
 
 	// Get employee IDs
 	employeeIDs := make([]string, len(filteredEmployees))

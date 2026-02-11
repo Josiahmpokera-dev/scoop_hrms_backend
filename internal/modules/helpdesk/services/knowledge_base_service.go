@@ -35,9 +35,6 @@ func (s *KnowledgeBaseService) GetArticleByID(articleID uint, tenantID *uint, in
 	if err != nil {
 		return nil, errors.New("article not found")
 	}
-	if tenantID != nil && article.TenantID != nil && *article.TenantID != *tenantID {
-		return nil, errors.New("article does not belong to your tenant")
-	}
 	if article.Status != models.KBArticleStatusPublished {
 		return nil, errors.New("article not found")
 	}
@@ -54,16 +51,12 @@ func (s *KnowledgeBaseService) SubmitFeedback(articleID uint, userID uint, tenan
 	if err != nil {
 		return 0, 0, errors.New("article not found")
 	}
-	if tenantID != nil && article.TenantID != nil && *article.TenantID != *tenantID {
-		return 0, 0, errors.New("article does not belong to your tenant")
-	}
 
 	existing, _ := s.kbRepo.GetFeedbackByUserAndArticle(articleID, userID)
 	if existing != nil {
 		_ = s.kbRepo.UpdateFeedback(articleID, userID, isHelpful)
 	} else {
 		_ = s.kbRepo.CreateFeedback(&models.KBArticleFeedback{
-			TenantID:  tenantID,
 			ArticleID: articleID,
 			UserID:    userID,
 			IsHelpful: isHelpful,

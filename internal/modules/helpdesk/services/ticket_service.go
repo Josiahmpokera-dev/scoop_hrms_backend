@@ -74,7 +74,6 @@ func (s *TicketService) CreateTicket(userID uint, tenantID *uint, title, descrip
 	dueDate := time.Now().Add(48 * time.Hour)
 
 	ticket := &models.Ticket{
-		TenantID:     tenantID,
 		TicketNumber: ticketNumber,
 		Title:        title,
 		Description:  description,
@@ -149,10 +148,6 @@ func (s *TicketService) GetTicketDetails(ticketID uint, userID uint, tenantID *u
 		return nil, nil, nil, errors.New("ticket not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && ticket.TenantID != nil && *ticket.TenantID != *tenantID {
-		return nil, nil, nil, errors.New("ticket does not belong to your tenant")
-	}
 
 	// Verify ownership (if not agent/admin): requester is this user (employee or user-only)
 	if !isAgentOrAdmin && !s.isRequester(ticket, userID) {
@@ -180,11 +175,6 @@ func (s *TicketService) AddComment(ticketID uint, userID uint, tenantID *uint, t
 	ticket, err := s.ticketRepo.FindByID(ticketID)
 	if err != nil {
 		return nil, errors.New("ticket not found")
-	}
-
-	// Verify tenant ownership
-	if tenantID != nil && ticket.TenantID != nil && *ticket.TenantID != *tenantID {
-		return nil, errors.New("ticket does not belong to your tenant")
 	}
 
 	// Verify ownership (if not agent/admin)
@@ -219,7 +209,6 @@ func (s *TicketService) AddComment(ticketID uint, userID uint, tenantID *uint, t
 
 	// Create comment
 	comment := &models.Comment{
-		TenantID:   tenantID,
 		TicketID:   ticketID,
 		AuthorID:   userID,
 		AuthorName: authorName,
@@ -249,11 +238,6 @@ func (s *TicketService) CloseTicket(ticketID uint, userID uint, tenantID *uint, 
 	ticket, err := s.ticketRepo.FindByID(ticketID)
 	if err != nil {
 		return errors.New("ticket not found")
-	}
-
-	// Verify tenant ownership
-	if tenantID != nil && ticket.TenantID != nil && *ticket.TenantID != *tenantID {
-		return errors.New("ticket does not belong to your tenant")
 	}
 
 	// Verify ownership (requester only can close their own ticket)
@@ -306,9 +290,6 @@ func (s *TicketService) AddAttachments(ticketID uint, userID uint, tenantID *uin
 	if err != nil {
 		return nil, errors.New("ticket not found")
 	}
-	if tenantID != nil && ticket.TenantID != nil && *ticket.TenantID != *tenantID {
-		return nil, errors.New("ticket does not belong to your tenant")
-	}
 	if !s.isRequester(ticket, userID) {
 		return nil, errors.New("unauthorized: this ticket does not belong to you")
 	}
@@ -317,7 +298,6 @@ func (s *TicketService) AddAttachments(ticketID uint, userID uint, tenantID *uin
 	now := time.Now()
 	for _, in := range inputs {
 		att := &models.Attachment{
-			TenantID:   tenantID,
 			TicketID:   ticketID,
 			Name:       in.Name,
 			URL:        in.URL,
@@ -380,11 +360,6 @@ func (s *TicketService) SubmitCSAT(ticketID uint, userID uint, tenantID *uint, r
 	ticket, err := s.ticketRepo.FindByID(ticketID)
 	if err != nil {
 		return errors.New("ticket not found")
-	}
-
-	// Verify tenant ownership
-	if tenantID != nil && ticket.TenantID != nil && *ticket.TenantID != *tenantID {
-		return errors.New("ticket does not belong to your tenant")
 	}
 
 	// Verify ownership (requester only)

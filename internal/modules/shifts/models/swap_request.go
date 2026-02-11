@@ -18,7 +18,6 @@ const (
 // SwapRequest represents a shift swap request between two employees
 type SwapRequest struct {
 	ID                  uint           `json:"id" gorm:"primaryKey"`
-	TenantID            *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	RequestedBy         string         `json:"requested_by" gorm:"not null;size:50;index"` // References employees(employee_id)
 	RequestedWith       string         `json:"requested_with" gorm:"not null;size:50;index"` // References employees(employee_id)
 	AssignmentID        uint           `json:"assignment_id" gorm:"not null;index"` // References roster_assignments(id)

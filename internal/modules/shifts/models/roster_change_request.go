@@ -18,7 +18,6 @@ const (
 // RosterChangeRequest represents a request by an employee to change their roster assignment
 type RosterChangeRequest struct {
 	ID              uint           `json:"id" gorm:"primaryKey"`
-	TenantID        *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	RequestedBy     string         `json:"requested_by" gorm:"not null;size:50;index"` // References employees(employee_id)
 	AssignmentID    uint           `json:"assignment_id" gorm:"not null;index"` // References roster_assignments(id)
 	RequestedShiftID *uint         `json:"requested_shift_id,omitempty" gorm:"index"` // New shift (optional - if not provided, keeps current)

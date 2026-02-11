@@ -41,7 +41,6 @@ const (
 // AssetIssue represents an issue reported by an employee regarding an assigned asset
 type AssetIssue struct {
 	ID            uint               `json:"id" gorm:"primaryKey"`
-	TenantID      *uint              `json:"tenant_id,omitempty" gorm:"index"`
 	EmployeeID    string             `json:"employee_id" gorm:"index;not null;size:50"` // Employee ID (e.g., EMP001)
 	IssueNumber   string             `json:"issue_number" gorm:"uniqueIndex;not null;size:50"` // e.g., AI-2026-001
 	AssetID       uint               `json:"asset_id" gorm:"index;not null"` // References assets(id)

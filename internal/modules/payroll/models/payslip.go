@@ -18,7 +18,6 @@ const (
 // Payslip represents an employee's payslip for a pay period
 type Payslip struct {
 	ID              uint          `json:"id" gorm:"primaryKey"`
-	TenantID        *uint         `json:"tenantId,omitempty" gorm:"index"`
 	PayrollRunID    uint          `json:"payrollRunId" gorm:"index;not null"`
 	EmployeeID      uint          `json:"employeeId" gorm:"index;not null"`
 	EmployeeCode    string        `json:"empId" gorm:"size:50"`

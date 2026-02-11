@@ -102,7 +102,7 @@ func LoadConfig() (*Config, error) {
 		CORS: CORSConfig{
 			AllowedOrigins: getEnvSlice("CORS_ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000", "http://127.0.0.1:5173"}),
 			AllowedMethods: getEnvSlice("CORS_ALLOWED_METHODS", []string{"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"}),
-			AllowedHeaders: getEnvSlice("CORS_ALLOWED_HEADERS", []string{"Content-Type", "Authorization", "X-Tenant-ID", "Accept", "Accept-Language"}),
+			AllowedHeaders: getEnvSlice("CORS_ALLOWED_HEADERS", []string{"Content-Type", "Authorization", "Accept", "Accept-Language"}),
 		},
 		BioTime: BioTimeConfig{
 			BaseURL:  getEnv("BIOTIME_BASE_URL", "http://10.4.9.24:8087"),

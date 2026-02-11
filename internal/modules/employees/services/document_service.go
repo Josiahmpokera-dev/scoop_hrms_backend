@@ -34,13 +34,8 @@ func (s *DocumentService) ListEmployeesWithDocuments(tenantID *uint, page, pageS
 		return nil, 0, fmt.Errorf("failed to get employees: %w", err)
 	}
 
-	// Filter by tenant if needed
-	filteredEmployees := make([]models.Employee, 0)
-	for _, emp := range employees {
-		if tenantID == nil || (emp.TenantID != nil && *emp.TenantID == *tenantID) {
-			filteredEmployees = append(filteredEmployees, emp)
-		}
-	}
+	// All employees pass the filter (single-tenant)
+	filteredEmployees := employees
 
 	// Get documents for all employees
 	result := make([]map[string]interface{}, len(filteredEmployees))
@@ -90,10 +85,7 @@ func (s *DocumentService) GetEmployeeDocuments(employeeID string, tenantID *uint
 		return nil, fmt.Errorf("employee not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && employee.TenantID != nil && *employee.TenantID != *tenantID {
-		return nil, fmt.Errorf("employee does not belong to your tenant")
-	}
+	// Tenant ownership check removed (single-tenant)
 
 	// Get documents
 	docs, err := s.documentRepo.FindByEmployeeIDString(employeeID)
@@ -114,18 +106,14 @@ func (s *DocumentService) GetDocumentByID(documentID uint, tenantID *uint) (*mod
 	// Verify tenant ownership through employee
 	if doc.EmployeeID != nil {
 		employee, err := s.employeeRepo.FindByID(*doc.EmployeeID)
-		if err == nil && employee != nil {
-			if tenantID != nil && employee.TenantID != nil && *employee.TenantID != *tenantID {
-				return nil, fmt.Errorf("document does not belong to your tenant")
-			}
+		if err != nil {
+			// Employee not found, but continue
 		}
 	} else if doc.EmployeeIDString != nil {
 		// Check by employee ID string
 		employee, err := s.employeeRepo.FindByEmployeeID(*doc.EmployeeIDString)
-		if err == nil && employee != nil {
-			if tenantID != nil && employee.TenantID != nil && *employee.TenantID != *tenantID {
-				return nil, fmt.Errorf("document does not belong to your tenant")
-			}
+		if err != nil {
+			// Employee not found, but continue
 		}
 	}
 

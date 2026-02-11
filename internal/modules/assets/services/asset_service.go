@@ -128,7 +128,6 @@ func (s *AssetService) CreateAsset(req *models.CreateAssetRequest, tenantID *uin
 
 	// Create asset
 	asset := &models.Asset{
-		TenantID:      tenantID,
 		AssetCode:     assetCode,
 		AssetType:     strings.ToLower(req.AssetType),
 		Brand:          req.Brand,
@@ -200,10 +199,6 @@ func (s *AssetService) UpdateAsset(req *models.UpdateAssetRequest, tenantID *uin
 		return nil, errors.New("asset not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return nil, errors.New("asset does not belong to your tenant")
-	}
 
 	// Check if asset is retired (cannot be updated)
 	if asset.Status == string(models.AssetStatusRetired) {
@@ -299,10 +294,6 @@ func (s *AssetService) AssignAsset(req *models.AssignAssetRequest, tenantID *uin
 		return nil, errors.New("asset not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return nil, errors.New("asset does not belong to your tenant")
-	}
 
 	// Check if asset is available
 	if !asset.CanBeAssigned() {
@@ -360,10 +351,6 @@ func (s *AssetService) ReturnAsset(req *models.ReturnAssetRequest, tenantID *uin
 		return nil, errors.New("asset not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return nil, errors.New("asset does not belong to your tenant")
-	}
 
 	// Check if asset can be returned
 	if !asset.CanBeReturned() {
@@ -423,10 +410,6 @@ func (s *AssetService) MarkForRepair(req *models.MarkForRepairRequest, tenantID 
 		return nil, errors.New("asset not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return nil, errors.New("asset does not belong to your tenant")
-	}
 
 	// Check if asset can be repaired
 	if !asset.CanBeRepaired() {
@@ -460,10 +443,6 @@ func (s *AssetService) CompleteRepair(req *models.CompleteRepairRequest, tenantI
 		return nil, errors.New("asset not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return nil, errors.New("asset does not belong to your tenant")
-	}
 
 	// Check if asset is under repair
 	if asset.Status != string(models.AssetStatusUnderRepair) {
@@ -514,10 +493,6 @@ func (s *AssetService) RetireAsset(req *models.RetireAssetRequest, tenantID *uin
 		return nil, errors.New("asset not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return nil, errors.New("asset does not belong to your tenant")
-	}
 
 	// Check if asset can be retired
 	if !asset.CanBeRetired() {
@@ -565,11 +540,6 @@ func (s *AssetService) DeleteAsset(id uint, tenantID *uint) error {
 		return errors.New("asset not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return errors.New("asset does not belong to your tenant")
-	}
-
 	// Check if asset can be deleted (only retired assets)
 	if !asset.CanBeDeleted() {
 		return errors.New("only retired assets can be deleted")
@@ -592,10 +562,6 @@ func (s *AssetService) GetAsset(id uint, tenantID *uint) (*models.Asset, error) 
 		return nil, err
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return nil, errors.New("asset does not belong to your tenant")
-	}
 
 	return asset, nil
 }

@@ -61,19 +61,15 @@ func (s *DepartmentService) CreateDepartment(req *models.CreateDepartmentRequest
 		if err != nil {
 			return nil, fmt.Errorf("location with ID '%d' not found", *req.LocationID)
 		}
-		// Verify location belongs to the tenant
-		if tenantID != nil && location.TenantID != nil && *location.TenantID != *tenantID {
-			return nil, fmt.Errorf("location with ID '%d' does not belong to your tenant", *req.LocationID)
-		}
 		locationID = &location.ID
 	} else if req.Location != nil && *req.Location != "" {
 		// Look up location by name if provided
 		// Allow locations from any organization within the tenant (not restricted to department's organization)
-		location, err := s.locationRepo.FindByName(*req.Location, tenantID, req.OrganizationID)
+		location, err := s.locationRepo.FindByName(*req.Location, nil, req.OrganizationID)
 		if err != nil {
 			// If not found in organization scope, try tenant-wide search
 			if req.OrganizationID != nil {
-				location, err = s.locationRepo.FindByName(*req.Location, tenantID, nil)
+				location, err = s.locationRepo.FindByName(*req.Location, nil, nil)
 			}
 			if err != nil {
 				return nil, fmt.Errorf("location '%s' not found", *req.Location)
@@ -129,7 +125,6 @@ func (s *DepartmentService) CreateDepartment(req *models.CreateDepartmentRequest
 	}
 
 	department := &models.Department{
-		TenantID:          tenantID,
 		OrganizationID:    req.OrganizationID,
 		OrganizationUnitID: req.OrganizationUnitID,
 		Code:              req.Code,
@@ -228,19 +223,15 @@ func (s *DepartmentService) UpdateDepartment(id uint, req *models.UpdateDepartme
 		if err != nil {
 			return nil, fmt.Errorf("location with ID '%d' not found", *req.LocationID)
 		}
-		// Verify location belongs to the tenant
-		if department.TenantID != nil && location.TenantID != nil && *location.TenantID != *department.TenantID {
-			return nil, fmt.Errorf("location with ID '%d' does not belong to your tenant", *req.LocationID)
-		}
 		department.LocationID = &location.ID
 	} else if req.Location != nil && *req.Location != "" {
 		// Look up location by name
 		// Allow locations from any organization within the tenant
-		location, err := s.locationRepo.FindByName(*req.Location, department.TenantID, department.OrganizationID)
+		location, err := s.locationRepo.FindByName(*req.Location, nil, department.OrganizationID)
 		if err != nil {
 			// If not found in organization scope, try tenant-wide search
 			if department.OrganizationID != nil {
-				location, err = s.locationRepo.FindByName(*req.Location, department.TenantID, nil)
+				location, err = s.locationRepo.FindByName(*req.Location, nil, nil)
 			}
 			if err != nil {
 				return nil, fmt.Errorf("location '%s' not found", *req.Location)

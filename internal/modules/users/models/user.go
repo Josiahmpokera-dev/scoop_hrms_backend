@@ -26,7 +26,6 @@ const (
 // User represents a user in the system
 type User struct {
 	ID               uint           `json:"id" gorm:"primaryKey"`
-	TenantID         *uint          `json:"tenant_id,omitempty" gorm:"index"`  // Multi-tenant support
 	Username         string         `json:"username" gorm:"not null;size:100"` // Username field
 	Email            string         `json:"email" gorm:"uniqueIndex:idx_users_email;not null;size:255"`
 	Password         string         `json:"-" gorm:"column:password_hash;type:varchar(255);not null"` // Hidden from JSON, maps to password_hash column
@@ -67,11 +66,6 @@ func (u *User) IsHR() bool {
 // FullName returns the full name of the user
 func (u *User) FullName() string {
 	return u.FirstName + " " + u.LastName
-}
-
-// GetTenantID returns the tenant ID for middleware compatibility
-func (u *User) GetTenantID() *uint {
-	return u.TenantID
 }
 
 // CanLogin returns true if the user is allowed to login (active and not suspended/blocked).

@@ -512,7 +512,7 @@ func (s *EmployeeService) getOnboardingStatus(employeeID uint) (string, *float64
 	// Also check for drafts with employee_id string matching this employee's employee_id
 	// This handles cases where draft was created with employee_id but not yet completed
 	if employee.EmployeeID != "" {
-		draft, err := draftRepo.FindByEmployeeIDString(employee.EmployeeID, employee.TenantID)
+		draft, err := draftRepo.FindByEmployeeIDString(employee.EmployeeID, nil)
 		if err == nil && draft != nil {
 			if !draft.IsCompleted {
 				progress := draft.Progress

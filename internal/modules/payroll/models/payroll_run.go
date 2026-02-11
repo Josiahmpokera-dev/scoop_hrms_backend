@@ -30,7 +30,6 @@ const (
 // PayrollRun represents a payroll processing run
 type PayrollRun struct {
 	ID                        uint             `json:"id" gorm:"primaryKey"`
-	TenantID                  *uint            `json:"tenantId,omitempty" gorm:"index"`
 	RunName                   string           `json:"runName" gorm:"not null;size:255"`
 	PayPeriod                 string           `json:"payPeriod" gorm:"size:100"` // e.g., "01 Nov - 30 Nov 2024"
 	PayMonth                  int              `json:"payMonth" gorm:"not null"`  // 1-12

@@ -66,15 +66,10 @@ func AuditMiddleware() gin.HandlerFunc {
 		path := c.Request.URL.Path
 		ip := getClientIPForAudit(c)
 		userAgent := c.Request.UserAgent()
-		var userID, tenantID *uint
+		var userID *uint
 		if uid, exists := c.Get(userIDKey); exists {
 			if u, ok := uid.(uint); ok {
 				userID = &u
-			}
-		}
-		if tid, exists := c.Get(TenantIDKey); exists {
-			if t, ok := tid.(uint); ok {
-				tenantID = &t
 			}
 		}
 
@@ -84,7 +79,6 @@ func AuditMiddleware() gin.HandlerFunc {
 		resource, action := deriveResourceAndAction(path, method)
 
 		entry := &models.AuditLog{
-			TenantID:   tenantID,
 			UserID:     userID,
 			Action:     action,
 			Resource:   resource,

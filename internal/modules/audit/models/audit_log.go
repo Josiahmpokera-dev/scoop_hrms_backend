@@ -10,7 +10,6 @@ import (
 // Captures who did what, when, where, and outcome for every action.
 type AuditLog struct {
 	ID         uint           `json:"id" gorm:"primaryKey"`
-	TenantID   *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	UserID     *uint          `json:"user_id,omitempty" gorm:"index"`           // Who performed the action (nil if unauthenticated)
 	Action     string         `json:"action" gorm:"size:100;index"`             // e.g. assign_role, create_employee, login
 	Resource   string         `json:"resource" gorm:"size:80;index"`           // e.g. users, employees, leave

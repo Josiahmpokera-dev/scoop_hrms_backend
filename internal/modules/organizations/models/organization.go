@@ -18,7 +18,6 @@ const (
 // Organization represents an organization/company in the system
 type Organization struct {
 	ID                uint               `json:"id" gorm:"primaryKey"`
-	TenantID          *uint              `json:"tenant_id,omitempty" gorm:"index"`
 	Code              string             `json:"code" gorm:"uniqueIndex;not null;size:50"`
 	Name              string             `json:"name" gorm:"not null;size:255"`
 	LegalName         *string            `json:"legal_name,omitempty" gorm:"size:255"`

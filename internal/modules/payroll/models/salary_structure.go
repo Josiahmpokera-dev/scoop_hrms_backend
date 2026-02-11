@@ -9,7 +9,6 @@ import (
 // SalaryStructure represents a salary template
 type SalaryStructure struct {
 	ID                    uint           `json:"id" gorm:"primaryKey"`
-	TenantID              *uint          `json:"tenantId,omitempty" gorm:"index"`
 	TemplateName          string         `json:"templateName" gorm:"not null;size:255"`
 	Grade                 string         `json:"grade" gorm:"size:50"` // e.g., G1, G2, G3
 	Location              string         `json:"location" gorm:"size:100"`
@@ -69,7 +68,6 @@ const (
 // SalaryComponent represents a reusable salary component
 type SalaryComponent struct {
 	ID                uint            `json:"id" gorm:"primaryKey"`
-	TenantID          *uint           `json:"tenantId,omitempty" gorm:"index"`
 	ComponentName     string          `json:"componentName" gorm:"not null;size:255"`
 	ComponentCode     string          `json:"componentCode" gorm:"not null;size:50;uniqueIndex"` // e.g., BASIC, HRA, PAYE
 	ComponentType     ComponentType   `json:"componentType" gorm:"type:varchar(30);not null"`

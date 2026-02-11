@@ -19,7 +19,6 @@ const (
 // Team represents a team within a department
 type Team struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	TenantID    *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	DepartmentID *uint         `json:"department_id,omitempty" gorm:"index"` // References departments(id)
 	Code        string         `json:"code" gorm:"uniqueIndex;not null;size:20"`
 	Name        string         `json:"name" gorm:"not null;size:100"`

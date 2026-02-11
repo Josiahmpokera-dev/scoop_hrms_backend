@@ -137,7 +137,6 @@ func (s *LeaveRequestService) CreateLeaveRequest(req *models.CreateLeaveRequestR
 
 	// Create leave request
 	leaveRequest := &models.LeaveRequest{
-		TenantID:                  tenantID,
 		ApplicationNumber:         appNumber,
 		DocumentNumber:            "HR.FO.04.00",
 		EmployeeID:                employeeID,
@@ -174,7 +173,6 @@ func (s *LeaveRequestService) CreateLeaveRequest(req *models.CreateLeaveRequestR
 		documents := make([]models.LeaveDocument, len(req.Documents))
 		for i, doc := range req.Documents {
 			documents[i] = models.LeaveDocument{
-				TenantID:      tenantID,
 				LeaveRequestID: leaveRequest.ID,
 				FileName:      doc.FileName,
 				FileURL:       doc.FileURL,
@@ -268,7 +266,7 @@ func (s *LeaveRequestService) UpdateLeaveRequest(id uint, req *models.UpdateLeav
 
 	// Recalculate days if dates changed
 	if req.FromDate != nil || req.ToDate != nil {
-		totalDays, _, _, err := s.CalculateLeaveDays(leaveRequest.FromDate, leaveRequest.ToDate, leaveRequest.HalfDay, leaveRequest.EmployeeID, leaveRequest.TenantID)
+		totalDays, _, _, err := s.CalculateLeaveDays(leaveRequest.FromDate, leaveRequest.ToDate, leaveRequest.HalfDay, leaveRequest.EmployeeID, nil)
 		if err != nil {
 			return nil, fmt.Errorf("failed to recalculate days: %w", err)
 		}

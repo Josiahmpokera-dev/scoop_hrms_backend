@@ -17,7 +17,6 @@ const (
 // RoutingRule represents a routing rule for automatic ticket assignment
 type RoutingRule struct {
 	ID                uint           `json:"id" gorm:"primaryKey"`
-	TenantID          *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	Name              string         `json:"name" gorm:"not null;size:255"`
 	IsActive          bool           `json:"is_active" gorm:"default:true"`
 	

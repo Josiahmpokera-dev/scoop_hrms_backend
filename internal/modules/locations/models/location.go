@@ -9,7 +9,6 @@ import (
 // Location represents a work location in the system
 type Location struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	TenantID    *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	OrganizationID *uint       `json:"organization_id,omitempty" gorm:"index"` // References organizations(id)
 	Name        string         `json:"name" gorm:"not null;size:100"`
 	LocationType *string       `json:"location_type,omitempty" gorm:"size:50"` // head_office, branch, remote, satellite

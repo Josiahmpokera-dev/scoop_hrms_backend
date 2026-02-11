@@ -35,7 +35,7 @@ func NewPayrollRunService() *PayrollRunService {
 // CreatePayrollRun creates a new payroll run
 func (s *PayrollRunService) CreatePayrollRun(run *models.PayrollRun) error {
 	// Check if a run already exists for this period
-	existing, err := s.repo.GetByPeriod(run.TenantID, run.PayMonth, run.PayYear)
+	existing, err := s.repo.GetByPeriod(nil, run.PayMonth, run.PayYear)
 	if err == nil && existing != nil {
 		return errors.New("payroll run already exists for this period")
 	}
@@ -551,7 +551,6 @@ func (s *PayrollRunService) GeneratePayslips(runID uint, tenantID *uint, taxYear
 		ytdGross, ytdTax, ytdNSSF, ytdNHIF, ytdNet, _ := s.payslipRepo.GetYTDTotals(emp.EmployeeID, run.PayYear, run.PayMonth-1)
 
 		payslip := models.Payslip{
-			TenantID:                   tenantID,
 			PayrollRunID:               runID,
 			EmployeeID:                 emp.EmployeeID,
 			EmployeeCode:               emp.EmployeeCode,

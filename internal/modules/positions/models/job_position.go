@@ -9,7 +9,6 @@ import (
 // JobPosition represents a job position/title in the system
 type JobPosition struct {
 	ID                  uint           `json:"id" gorm:"primaryKey"`
-	TenantID            *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	OrganizationID      *uint          `json:"organization_id,omitempty" gorm:"index"`        // References organizations(id)
 	Code                string         `json:"code" gorm:"uniqueIndex;not null;size:20"`      // Position Code *
 	Title               string         `json:"title" gorm:"not null;size:100"`                // Position Title *

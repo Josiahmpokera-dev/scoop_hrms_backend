@@ -42,7 +42,6 @@ const (
 // Ticket represents a helpdesk ticket
 type Ticket struct {
 	ID           uint           `json:"id" gorm:"primaryKey"`
-	TenantID     *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	TicketNumber string         `json:"ticket_number" gorm:"uniqueIndex;not null;size:50"` // e.g., HD-2026-001
 	Title        string         `json:"title" gorm:"not null;size:255"`
 	Description  string         `json:"description" gorm:"type:text;not null"`

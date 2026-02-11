@@ -46,10 +46,6 @@ func (s *AssetHRService) GetAssetRequestDetails(requestID uint, tenantID *uint) 
 		return nil, errors.New("asset request not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && request.TenantID != nil && *request.TenantID != *tenantID {
-		return nil, errors.New("asset request does not belong to your tenant")
-	}
 
 	return request, nil
 }
@@ -61,10 +57,6 @@ func (s *AssetHRService) ApproveAssetRequest(requestID uint, tenantID *uint, app
 		return nil, errors.New("asset request not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && request.TenantID != nil && *request.TenantID != *tenantID {
-		return nil, errors.New("asset request does not belong to your tenant")
-	}
 
 	// Check if can be approved
 	if request.Status != models.AssetRequestStatusPending {
@@ -91,10 +83,6 @@ func (s *AssetHRService) RejectAssetRequest(requestID uint, tenantID *uint, reje
 		return nil, errors.New("asset request not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && request.TenantID != nil && *request.TenantID != *tenantID {
-		return nil, errors.New("asset request does not belong to your tenant")
-	}
 
 	// Check if can be rejected
 	if request.Status != models.AssetRequestStatusPending {
@@ -122,11 +110,6 @@ func (s *AssetHRService) FulfillAssetRequest(requestID uint, assetID uint, tenan
 		return nil, nil, errors.New("asset request not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && request.TenantID != nil && *request.TenantID != *tenantID {
-		return nil, nil, errors.New("asset request does not belong to your tenant")
-	}
-
 	// Check if can be fulfilled
 	if request.Status != models.AssetRequestStatusApproved {
 		return nil, nil, fmt.Errorf("can only fulfill approved requests. Current status: %s", request.Status)
@@ -138,10 +121,6 @@ func (s *AssetHRService) FulfillAssetRequest(requestID uint, assetID uint, tenan
 		return nil, nil, errors.New("asset not found")
 	}
 
-	// Verify asset belongs to tenant
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return nil, nil, errors.New("asset does not belong to your tenant")
-	}
 
 	// Check if asset is available
 	if !asset.CanBeAssigned() {
@@ -198,11 +177,6 @@ func (s *AssetHRService) ReassignAsset(assetID uint, newEmployeeID string, tenan
 	asset, err := s.assetRepo.FindByID(assetID)
 	if err != nil {
 		return nil, errors.New("asset not found")
-	}
-
-	// Verify tenant ownership
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return nil, errors.New("asset does not belong to your tenant")
 	}
 
 	// Check if asset is currently assigned

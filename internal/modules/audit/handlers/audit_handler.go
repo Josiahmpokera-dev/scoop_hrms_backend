@@ -54,18 +54,10 @@ func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 	}
 
 	filter := services.ListFilter{
-		TenantID: nil, // Default: show all logs; optional ?tenant_id= for scoping
 		Action:   strings.TrimSpace(c.Query("action")),
 		Resource: strings.TrimSpace(c.Query("resource")),
 		Method:   strings.TrimSpace(c.Query("method")),
 		Search:   strings.TrimSpace(c.Query("search")),
-	}
-
-	if tid := c.Query("tenant_id"); tid != "" {
-		if parsed, err := strconv.ParseUint(tid, 10, 32); err == nil {
-			tidUint := uint(parsed)
-			filter.TenantID = &tidUint
-		}
 	}
 	if u := c.Query("user_id"); u != "" {
 		if parsed, err := strconv.ParseUint(u, 10, 32); err == nil {

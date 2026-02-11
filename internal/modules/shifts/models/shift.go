@@ -21,7 +21,6 @@ const (
 // Shift represents a work shift configuration
 type Shift struct {
 	ID                 uint           `json:"id" gorm:"primaryKey"`
-	TenantID           *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	ShiftName          string         `json:"shift_name" gorm:"not null;size:100"`
 	ShiftCode          string         `json:"shift_code" gorm:"uniqueIndex;not null;size:20"`
 	ShiftType          string         `json:"shift_type" gorm:"not null;size:50"` // fixed, split, rotating, night, flexible

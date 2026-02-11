@@ -43,7 +43,6 @@ const (
 // Asset represents an asset/equipment in the system
 type Asset struct {
 	ID                uint           `json:"id" gorm:"primaryKey"`
-	TenantID          *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	AssetCode         string         `json:"asset_code" gorm:"uniqueIndex;not null;size:50"`
 	AssetType         string         `json:"asset_type" gorm:"not null;size:50"`
 	Brand             string         `json:"brand" gorm:"not null;size:100"`

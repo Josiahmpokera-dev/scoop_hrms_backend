@@ -29,7 +29,6 @@ const (
 // Announcement represents a company announcement
 type Announcement struct {
 	ID          uint                 `json:"id" gorm:"primaryKey"`
-	TenantID    *uint                `json:"tenant_id,omitempty" gorm:"index"`
 	Title       string               `json:"title" gorm:"not null;size:255"`
 	Description string               `json:"description" gorm:"type:text;not null"`
 	Type        AnnouncementType     `json:"type" gorm:"type:varchar(20);default:'info'"`

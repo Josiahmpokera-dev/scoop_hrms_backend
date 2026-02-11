@@ -18,7 +18,6 @@ const (
 // KnowledgeBaseArticle represents a knowledge base article
 type KnowledgeBaseArticle struct {
 	ID              uint             `json:"id" gorm:"primaryKey"`
-	TenantID        *uint            `json:"tenant_id,omitempty" gorm:"index"`
 	ArticleNumber   string           `json:"article_number" gorm:"uniqueIndex;not null;size:50"` // e.g., KB-001
 	Title           string           `json:"title" gorm:"not null;size:255"`
 	Content         string           `json:"content" gorm:"type:text;not null"`
@@ -54,7 +53,6 @@ func (KnowledgeBaseArticle) TableName() string {
 // KBArticleFeedback represents feedback on a knowledge base article
 type KBArticleFeedback struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	TenantID    *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	ArticleID   uint           `json:"article_id" gorm:"index;not null"`
 	UserID      uint           `json:"user_id" gorm:"index;not null"`
 	IsHelpful   bool           `json:"is_helpful" gorm:"not null"`

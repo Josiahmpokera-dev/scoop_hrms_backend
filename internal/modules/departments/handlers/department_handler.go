@@ -69,7 +69,6 @@ func NewDepartmentHandler() *DepartmentHandler {
 func (h *DepartmentHandler) toDepartmentResponse(dept *models.Department) *DepartmentResponse {
 	resp := &DepartmentResponse{
 		ID:                  dept.ID,
-		TenantID:            dept.TenantID,
 		OrganizationID:      dept.OrganizationID,
 		OrganizationUnitID:  dept.OrganizationUnitID,
 		Code:                dept.Code,

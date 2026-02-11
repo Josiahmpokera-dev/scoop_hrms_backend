@@ -18,7 +18,6 @@ const (
 // Comment represents a comment on a helpdesk ticket
 type Comment struct {
 	ID          uint             `json:"id" gorm:"primaryKey"`
-	TenantID    *uint            `json:"tenant_id,omitempty" gorm:"index"`
 	TicketID    uint             `json:"ticket_id" gorm:"index;not null"`
 	AuthorID    uint             `json:"author_id" gorm:"index;not null"` // User ID
 	AuthorName  string           `json:"author_name" gorm:"not null;size:255"`

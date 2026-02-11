@@ -72,7 +72,6 @@ type CreateDraftOpts struct {
 // CreateDraft creates a new onboarding draft. Pass opts with LinkedUserID or ExistingUserEmail to onboard an existing user (no credentials at end).
 func (s *OnboardingService) CreateDraft(tenantID *uint, createdBy *uint, opts *CreateDraftOpts) (*models.EmployeeOnboardingDraft, error) {
 	draft := &models.EmployeeOnboardingDraft{
-		TenantID:       tenantID,
 		CompletedSteps: "[]",
 		Progress:       0,
 		IsCompleted:    false,
@@ -181,7 +180,7 @@ func (s *OnboardingService) SaveStep(draftID uint, step int, data map[string]int
 	// Reload draft from database to ensure we have the latest saved data including progress
 	var updatedDraft *models.EmployeeOnboardingDraft
 	if draft.EmployeeID != nil {
-		updatedDraft, err = s.draftRepo.FindByEmployeeIDString(*draft.EmployeeID, draft.TenantID)
+		updatedDraft, err = s.draftRepo.FindByEmployeeIDString(*draft.EmployeeID, nil)
 	} else {
 		updatedDraft, err = s.draftRepo.FindByID(draft.ID)
 	}
@@ -209,7 +208,6 @@ func (s *OnboardingService) SaveStepByEmployeeID(employeeID string, tenantID *ui
 		if step == 1 && errors.Is(err, gorm.ErrRecordNotFound) {
 			// Create new draft with the provided employee ID
 			draft = &models.EmployeeOnboardingDraft{
-				TenantID:       tenantID,
 				EmployeeID:     &employeeID,
 				CompletedSteps: "[]",
 				Progress:       0,
@@ -372,10 +370,7 @@ func (s *OnboardingService) GetCompletedEmployeeOnboarding(employeeID string, te
 		return nil, errors.New("employee not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && employee.TenantID != nil && *employee.TenantID != *tenantID {
-		return nil, errors.New("employee does not belong to your tenant")
-	}
+	// Tenant ownership check removed (single-tenant)
 
 	response := &models.CompletedEmployeeOnboardingResponse{
 		EmployeeID:      employee.EmployeeID,
@@ -832,12 +827,7 @@ func (s *OnboardingService) saveStep2Employment(draft *models.EmployeeOnboarding
 			}
 			return fmt.Errorf("failed to validate department: %w", err)
 		}
-		// Check if department belongs to the same tenant (if tenant_id is set)
-		if draft.TenantID != nil && department.TenantID != nil {
-			if *draft.TenantID != *department.TenantID {
-				return fmt.Errorf("department with ID %d does not belong to your tenant", *req.DepartmentID)
-			}
-		}
+		// Tenant check removed (single-tenant)
 		// Check if department is active
 		if !department.IsActive {
 			return fmt.Errorf("department with ID %d is not active", *req.DepartmentID)
@@ -860,12 +850,7 @@ func (s *OnboardingService) saveStep2Employment(draft *models.EmployeeOnboarding
 			}
 			return fmt.Errorf("failed to validate position: %w", err)
 		}
-		// Check if position belongs to the same tenant (if tenant_id is set)
-		if draft.TenantID != nil && position.TenantID != nil {
-			if *draft.TenantID != *position.TenantID {
-				return fmt.Errorf("position with ID %d does not belong to your tenant", *req.PositionID)
-			}
-		}
+		// Tenant check removed (single-tenant)
 		// Check if position is active
 		if !position.IsActive {
 			return fmt.Errorf("position with ID %d is not active", *req.PositionID)
@@ -879,12 +864,7 @@ func (s *OnboardingService) saveStep2Employment(draft *models.EmployeeOnboarding
 			}
 			return fmt.Errorf("failed to validate location: %w", err)
 		}
-		// Check if location belongs to the same tenant (if tenant_id is set)
-		if draft.TenantID != nil && location.TenantID != nil {
-			if *draft.TenantID != *location.TenantID {
-				return fmt.Errorf("location with ID %d does not belong to your tenant", *req.LocationID)
-			}
-		}
+		// Tenant check removed (single-tenant)
 		// Check if location is active
 		if !location.IsActive {
 			return fmt.Errorf("location with ID %d is not active", *req.LocationID)
@@ -1483,7 +1463,6 @@ func (s *OnboardingService) createEmployeeFromDraft(draft *models.EmployeeOnboar
 
 	// Build employee from table data
 	employee := &models.Employee{
-		TenantID:          draft.TenantID,
 		EmployeeID:         employeeID,
 		FirstName:          basicInfo.FirstName,
 		MiddleName:         basicInfo.MiddleName,
@@ -1706,7 +1685,6 @@ func (s *OnboardingService) createUserForEmployee(employee *models.Employee, dra
 
 	// Create user with determined role
 	user := &userModels.User{
-		TenantID:      employee.TenantID,
 		Username:      username,
 		Email:         email,
 		Password:      string(hashedPassword),

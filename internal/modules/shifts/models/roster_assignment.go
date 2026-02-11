@@ -18,7 +18,6 @@ const (
 // RosterAssignment represents a roster assignment for an employee
 type RosterAssignment struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	TenantID    *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	EmployeeID string         `json:"employee_id" gorm:"not null;size:50;index"` // References employees(employee_id)
 	Date        time.Time      `json:"date" gorm:"type:date;not null;index"`
 	ShiftID     uint           `json:"shift_id" gorm:"not null;index"` // References shifts(id)

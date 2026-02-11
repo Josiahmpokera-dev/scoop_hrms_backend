@@ -165,10 +165,7 @@ func (r *EmployeeRepository) ListManagers(tenantID *uint) ([]models.Employee, er
 	var employees []models.Employee
 	query := r.db.Where("status = ? AND is_active = ?", models.StatusActive, true)
 	
-	// Filter by tenant if provided
-	if tenantID != nil {
-		query = query.Where("tenant_id = ?", *tenantID)
-	}
+	// Tenant filter removed (single-tenant)
 	
 	err := query.Order("first_name ASC, last_name ASC").Find(&employees).Error
 	return employees, err
@@ -226,9 +223,7 @@ func (r *EmployeeRepository) SearchEmployees(tenantID *uint, search *string, dep
 	offset := (page - 1) * pageSize
 	query := r.db.Model(&models.Employee{})
 
-	if tenantID != nil {
-		query = query.Where("tenant_id = ?", *tenantID)
-	}
+	// Tenant filter removed (single-tenant)
 
 	// Search filter
 	if search != nil && *search != "" {
@@ -297,10 +292,7 @@ func (r *EmployeeRepository) SearchPeopleDirectory(filters PeopleDirectoryFilter
 	offset := (filters.Page - 1) * filters.PageSize
 	query := r.db.Model(&models.Employee{})
 
-	// Tenant filter
-	if filters.TenantID != nil {
-		query = query.Where("tenant_id = ?", *filters.TenantID)
-	}
+	// Tenant filter removed (single-tenant)
 
 	// Text search (name, employee_id, email, phone)
 	if filters.Search != nil && *filters.Search != "" {
@@ -391,9 +383,7 @@ func (r *EmployeeRepository) GetDepartmentEmployeeCounts(tenantID *uint) ([]Depa
 		Where("status = ? AND is_active = ? AND department_id IS NOT NULL", models.StatusActive, true).
 		Group("department_id")
 
-	if tenantID != nil {
-		query = query.Where("tenant_id = ?", *tenantID)
-	}
+	// Tenant filter removed (single-tenant)
 
 	err := query.Find(&counts).Error
 	return counts, err
@@ -414,9 +404,7 @@ func (r *EmployeeRepository) GetLocationEmployeeCounts(tenantID *uint) ([]Locati
 		Where("status = ? AND is_active = ? AND location_id IS NOT NULL", models.StatusActive, true).
 		Group("location_id")
 
-	if tenantID != nil {
-		query = query.Where("tenant_id = ?", *tenantID)
-	}
+	// Tenant filter removed (single-tenant)
 
 	err := query.Find(&counts).Error
 	return counts, err
@@ -437,9 +425,7 @@ func (r *EmployeeRepository) GetEmploymentTypeCounts(tenantID *uint) ([]Employme
 		Where("status = ? AND is_active = ? AND employment_type IS NOT NULL", models.StatusActive, true).
 		Group("employment_type")
 
-	if tenantID != nil {
-		query = query.Where("tenant_id = ?", *tenantID)
-	}
+	// Tenant filter removed (single-tenant)
 
 	err := query.Find(&counts).Error
 	return counts, err
@@ -461,9 +447,7 @@ func (r *EmployeeRepository) GetAlphabetCounts(tenantID *uint) ([]AlphabetCount,
 		Group("UPPER(LEFT(first_name, 1))").
 		Order("letter ASC")
 
-	if tenantID != nil {
-		query = query.Where("tenant_id = ?", *tenantID)
-	}
+	// Tenant filter removed (single-tenant)
 
 	err := query.Find(&counts).Error
 	return counts, err

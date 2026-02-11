@@ -109,7 +109,6 @@ func (h *FileUploadHandler) UploadDocument(c *gin.Context) {
 	if err != nil {
 		// Draft doesn't exist, create one
 		draft = &models.EmployeeOnboardingDraft{
-			TenantID:    tenantID,
 			EmployeeID:  &employeeID,
 			Progress:    0,
 			IsCompleted: false,
@@ -344,15 +343,13 @@ func (h *FileUploadHandler) DeleteDocument(c *gin.Context) {
 		return
 	}
 
-	// Verify tenant ownership through draft
+	// Tenant ownership check removed (single-tenant)
 	if doc.DraftID != nil {
 		draft, err := h.draftRepo.FindByID(*doc.DraftID)
-		if err == nil && draft != nil {
-			if tenantID != nil && draft.TenantID != nil && *draft.TenantID != *tenantID {
-				response.BadRequest(c, "Document does not belong to your tenant", nil)
-				return
-			}
+		if err != nil {
+			// Draft not found, but continue
 		}
+		_ = draft // Draft check removed
 	}
 
 	// Delete file from storage

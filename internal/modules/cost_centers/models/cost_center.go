@@ -18,7 +18,6 @@ const (
 // CostCenter represents a cost center in the system
 type CostCenter struct {
 	ID                uint           `json:"id" gorm:"primaryKey"`
-	TenantID          *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	OrganizationID    *uint          `json:"organization_id,omitempty" gorm:"index"` // References organizations(id)
 	Code              string         `json:"code" gorm:"uniqueIndex;not null;size:20"`
 	Name              string         `json:"name" gorm:"not null;size:100"`

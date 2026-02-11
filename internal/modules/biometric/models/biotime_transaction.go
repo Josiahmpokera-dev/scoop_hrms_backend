@@ -9,7 +9,6 @@ import (
 // BioTimeTransaction represents a BioTime transaction stored in our database
 type BioTimeTransaction struct {
 	ID                 uint           `json:"id" gorm:"primaryKey"`
-	TenantID           *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	
 	// BioTime Transaction Data
 	BioTimeTransactionID int          `json:"biotime_transaction_id" gorm:"column:biotime_transaction_id;type:integer;not null;index"` // ID from BioTime API

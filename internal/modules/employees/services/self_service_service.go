@@ -617,10 +617,7 @@ func (s *SelfServiceService) GetEmployeeDirectoryDetails(employeeID string, tena
 		return nil, errors.New("employee not found")
 	}
 
-	// Verify tenant
-	if tenantID != nil && employee.TenantID != nil && *tenantID != *employee.TenantID {
-		return nil, errors.New("employee not found")
-	}
+	// Tenant check removed (single-tenant)
 
 	// Get employment details
 	employmentDetails, _ := s.employmentDetailsRepo.FindByEmployeeID(employee.ID)

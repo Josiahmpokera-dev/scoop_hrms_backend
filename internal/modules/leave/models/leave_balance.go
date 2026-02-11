@@ -9,7 +9,6 @@ import (
 // LeaveBalance represents leave balance for an employee
 type LeaveBalance struct {
 	ID                        uint           `json:"id" gorm:"primaryKey"`
-	TenantID                  *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	EmployeeID                string         `json:"employee_id" gorm:"not null;size:50;index"` // References employees(employee_id)
 	LeaveTypeCode             string         `json:"leave_type_code" gorm:"not null;size:10;index"` // References leave_types(code)
 	Year                      int            `json:"year" gorm:"not null;index"` // Leave period year

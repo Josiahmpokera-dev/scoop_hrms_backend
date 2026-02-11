@@ -29,7 +29,6 @@ import (
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
 	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
 	teamModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/models"
-	tenantModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/tenants/models"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	appRouter "github.com/Josiahmpokera-dev/hrms-backend/internal/router"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/seed"
@@ -48,7 +47,6 @@ func main() {
 	// Run database migrations for all models
 	if err := database.Migrate(
 		// Core models
-		&tenantModels.Tenant{},
 		&roleModels.Role{},
 		&roleModels.Permission{},
 		&roleModels.UserRole{},

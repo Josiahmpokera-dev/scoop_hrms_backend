@@ -122,27 +122,8 @@ func (h *OrganizationHandler) DeleteOrganization(c *gin.Context) {
 // GetMyOrganization handles getting the current user's organization
 // This is useful after onboarding to get the organization that was created
 func (h *OrganizationHandler) GetMyOrganization(c *gin.Context) {
-	// Get user from context to access tenant_id
-	user, exists := c.Get("user")
-	if !exists {
-		response.Unauthorized(c, "User not authenticated")
-		return
-	}
-
-	userObj, ok := user.(*userModels.User)
-	if !ok {
-		response.Unauthorized(c, "Invalid user context")
-		return
-	}
-
-	// Get tenant_id from user
-	var tenantID *uint
-	if userObj.TenantID != nil {
-		tenantID = userObj.TenantID
-	} else {
-		// Try to get from context as fallback
-		tenantID = middleware.GetTenantID(c)
-	}
+	// Get tenant_id from context
+	tenantID := middleware.GetTenantID(c)
 
 	if tenantID == nil {
 		response.BadRequest(c, "User is not associated with a tenant. Please complete onboarding first.", nil)

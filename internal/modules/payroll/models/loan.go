@@ -30,7 +30,6 @@ const (
 // Loan represents a loan or salary advance for an employee
 type Loan struct {
 	ID                 uint           `json:"id" gorm:"primaryKey"`
-	TenantID           *uint          `json:"tenantId,omitempty" gorm:"index"`
 	EmployeeID         uint           `json:"employeeId" gorm:"index;not null"`
 	EmployeeCode       string         `json:"empId" gorm:"size:50"`
 	EmployeeName       string         `json:"employeeName" gorm:"size:255"`

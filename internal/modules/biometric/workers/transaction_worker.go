@@ -149,7 +149,6 @@ func (w *TransactionWorker) processBatch(messages []amqp.Delivery) {
 // processMessage processes a single message from the queue
 func (w *TransactionWorker) processMessage(d amqp.Delivery) error {
 	var message struct {
-		TenantID    *uint        `json:"tenant_id"`
 		Transactions []interface{} `json:"transactions"`
 	}
 
@@ -182,11 +181,11 @@ func (w *TransactionWorker) processMessage(d amqp.Delivery) error {
 	}
 
 	// Sync transactions to database
-	if err := w.syncService.SyncTransactions(message.TenantID, transactions); err != nil {
+	if err := w.syncService.SyncTransactions(nil, transactions); err != nil {
 		return fmt.Errorf("failed to sync transactions: %w", err)
 	}
 
-	log.Printf("Successfully processed %d transactions for tenant %v", len(transactions), message.TenantID)
+	log.Printf("Successfully processed %d transactions", len(transactions))
 	return nil
 }
 

@@ -9,7 +9,6 @@ import (
 // TicketCategory represents a ticket category configuration
 type TicketCategory struct {
 	ID                uint           `json:"id" gorm:"primaryKey"`
-	TenantID          *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	Name              string         `json:"name" gorm:"uniqueIndex;not null;size:100"` // IT, HR, Payroll, etc.
 	Description       *string        `json:"description,omitempty" gorm:"type:text"`
 	

@@ -26,7 +26,6 @@ func (r *AuditRepository) Create(log *models.AuditLog) error {
 
 // ListFilter holds filters for listing audit logs.
 type ListFilter struct {
-	TenantID   *uint
 	UserID     *uint
 	Action     string   // exact or partial
 	Resource   string   // exact or partial
@@ -44,9 +43,6 @@ func (r *AuditRepository) List(filter ListFilter, page, pageSize int) ([]models.
 
 	query := r.db.Model(&models.AuditLog{})
 
-	if filter.TenantID != nil {
-		query = query.Where("tenant_id = ?", *filter.TenantID)
-	}
 	if filter.UserID != nil {
 		query = query.Where("user_id = ?", *filter.UserID)
 	}

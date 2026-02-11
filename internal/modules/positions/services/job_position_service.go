@@ -34,12 +34,6 @@ func (s *JobPositionService) CreateJobPosition(req *models.CreateJobPositionRequ
 		if err != nil {
 			return nil, fmt.Errorf("department with ID %d not found", *req.DepartmentID)
 		}
-		// Check if department belongs to the same tenant (if tenant_id is set)
-		if tenantID != nil && department.TenantID != nil {
-			if *tenantID != *department.TenantID {
-				return nil, fmt.Errorf("department with ID %d does not belong to your tenant", *req.DepartmentID)
-			}
-		}
 		// Check if department is active
 		if !department.IsActive {
 			return nil, fmt.Errorf("department with ID %d is not active", *req.DepartmentID)
@@ -47,7 +41,6 @@ func (s *JobPositionService) CreateJobPosition(req *models.CreateJobPositionRequ
 	}
 
 	position := &models.JobPosition{
-		TenantID:            tenantID,
 		Code:                req.Code,
 		Title:               req.Title,
 		Grade:               req.Grade,
@@ -104,12 +97,6 @@ func (s *JobPositionService) UpdateJobPosition(id uint, req *models.UpdateJobPos
 		if err != nil {
 			return nil, fmt.Errorf("department with ID %d not found", *req.DepartmentID)
 		}
-		// Check if department belongs to the same tenant (if tenant_id is set)
-		if position.TenantID != nil && department.TenantID != nil {
-			if *position.TenantID != *department.TenantID {
-				return nil, fmt.Errorf("department with ID %d does not belong to your tenant", *req.DepartmentID)
-			}
-		}
 		// Check if department is active
 		if !department.IsActive {
 			return nil, fmt.Errorf("department with ID %d is not active", *req.DepartmentID)
@@ -161,17 +148,10 @@ func (s *JobPositionService) ListJobPositions(tenantID *uint, page, pageSize int
 
 // GetPositionsByDepartment retrieves all active positions for a specific department
 func (s *JobPositionService) GetPositionsByDepartment(departmentID uint, tenantID *uint) ([]models.JobPosition, error) {
-	// Validate department exists and belongs to tenant
-	department, err := s.departmentRepo.FindByID(departmentID)
+	// Validate department exists
+	_, err := s.departmentRepo.FindByID(departmentID)
 	if err != nil {
 		return nil, fmt.Errorf("department with ID %d not found", departmentID)
-	}
-
-	// Check if department belongs to the same tenant (if tenant_id is set)
-	if tenantID != nil && department.TenantID != nil {
-		if *tenantID != *department.TenantID {
-			return nil, fmt.Errorf("department with ID %d does not belong to your tenant", departmentID)
-		}
 	}
 
 	// Get positions for this department

@@ -9,7 +9,6 @@ import (
 // BioTimeConfig represents BioTime API configuration stored in database
 type BioTimeConfig struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	TenantID    *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	
 	// API Configuration
 	BaseURL     string         `json:"base_url" gorm:"not null;size:255"`

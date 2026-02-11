@@ -9,7 +9,6 @@ import (
 // LeavePolicy represents a leave policy configuration
 type LeavePolicy struct {
 	ID                    uint           `json:"id" gorm:"primaryKey"`
-	TenantID              *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	PolicyName            string         `json:"policy_name" gorm:"not null;size:200"`
 	Country               string         `json:"country" gorm:"not null;size:100"`
 	LeaveTypeCode         string         `json:"leave_type_code" gorm:"not null;size:10;index"` // References leave_types(code)

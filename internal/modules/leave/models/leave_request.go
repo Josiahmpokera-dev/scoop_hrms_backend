@@ -22,7 +22,6 @@ const (
 // LeaveRequest represents a leave application/request
 type LeaveRequest struct {
 	ID                        uint           `json:"id" gorm:"primaryKey"`
-	TenantID                  *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	ApplicationNumber         string         `json:"application_number" gorm:"uniqueIndex;not null;size:50"` // LV-2026-00123
 	DocumentNumber            string         `json:"document_number" gorm:"default:'HR.FO.04.00';size:50"`
 	EmployeeID                string         `json:"employee_id" gorm:"not null;size:50;index"` // References employees(employee_id)
@@ -75,7 +74,6 @@ func (LeaveRequest) TableName() string {
 // LeaveApproval represents approval workflow for leave requests
 type LeaveApproval struct {
 	ID              uint           `json:"id" gorm:"primaryKey"`
-	TenantID        *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	LeaveRequestID  uint           `json:"leave_request_id" gorm:"not null;index"`
 	Level           int            `json:"level" gorm:"not null"` // 1, 2, 3 (Head of Dept, HR, Director/CEO)
 	ApproverType    string         `json:"approver_type" gorm:"not null;size:50"` // head_of_department, hr_department, director_ceo
@@ -102,7 +100,6 @@ func (LeaveApproval) TableName() string {
 // LeaveDocument represents documents attached to leave requests
 type LeaveDocument struct {
 	ID            uint           `json:"id" gorm:"primaryKey"`
-	TenantID      *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	LeaveRequestID uint          `json:"leave_request_id" gorm:"not null;index"`
 	FileName      string         `json:"file_name" gorm:"not null;size:255"`
 	FileURL       string         `json:"file_url" gorm:"not null;size:500"`

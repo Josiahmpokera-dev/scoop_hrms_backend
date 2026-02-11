@@ -17,10 +17,6 @@ func (s *AssetService) ReassignAsset(req *models.ReassignAssetRequest, tenantID 
 		return nil, errors.New("asset not found")
 	}
 
-	// Verify tenant ownership
-	if tenantID != nil && asset.TenantID != nil && *asset.TenantID != *tenantID {
-		return nil, errors.New("asset does not belong to your tenant")
-	}
 
 	// Check if asset is currently assigned
 	if !asset.IsAssigned() {

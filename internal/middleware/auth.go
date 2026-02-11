@@ -75,10 +75,6 @@ func AuthMiddleware() gin.HandlerFunc {
 		if err == nil && user != nil {
 			// Set full user object in context
 			c.Set("user", user)
-			// Set tenant_id in context for easy access
-			if user.TenantID != nil {
-				c.Set(TenantIDKey, *user.TenantID)
-			}
 			// Build roles array: legacy user_type + assigned role codes
 			codes, _ := roleRepo.GetUserRoleCodes(user.ID)
 			userRoles := buildUserRolesSlice(string(user.Role), codes)

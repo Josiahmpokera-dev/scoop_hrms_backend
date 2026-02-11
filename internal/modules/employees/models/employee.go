@@ -25,7 +25,6 @@ const (
 // Employee represents an employee in the system
 type Employee struct {
 	ID             uint       `json:"id" gorm:"primaryKey"`
-	TenantID       *uint      `json:"tenant_id,omitempty" gorm:"index"`                // Multi-tenant support
 	UserID         *uint      `json:"user_id,omitempty" gorm:"index"`                  // References users(id)
 	OrganizationID *uint      `json:"organization_id,omitempty" gorm:"index"`          // References organizations(id)
 	EmployeeID     string     `json:"employee_id" gorm:"uniqueIndex;not null;size:50"` // Employee number/ID

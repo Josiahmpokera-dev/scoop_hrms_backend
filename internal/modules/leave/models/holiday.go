@@ -19,7 +19,6 @@ const (
 // Holiday represents a holiday
 type Holiday struct {
 	ID              uint           `json:"id" gorm:"primaryKey"`
-	TenantID        *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	Name            string         `json:"name" gorm:"not null;size:200"`
 	Date            time.Time      `json:"date" gorm:"not null;index"` // Date of holiday
 	Type            string         `json:"type" gorm:"not null;size:50"` // Public, Company, Optional, Restricted
