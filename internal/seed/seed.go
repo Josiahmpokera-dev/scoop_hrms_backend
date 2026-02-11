@@ -7,7 +7,7 @@ import (
 )
 
 // Run runs all seeders when the app is in development.
-// Call this from main.go after migrations: if config.AppConfig.Server.Env == "development" { seed.Run() }
+// Only creates permissions, roles, and two starter accounts (Admin + HR).
 func Run() {
 	env := config.AppConfig.Server.Env
 	if env != "development" {
@@ -17,18 +17,20 @@ func Run() {
 
 	log.Println("Running seeders...")
 
-	// Phase 1: Core system setup (permissions, roles, admin)
+	// System setup
 	RunPermissions()
 	RunRoles()
+
+	// Starter accounts (Admin + HR) — same password, reset on every restart
 	RunAdminUser()
-	RunNonEmployeeUsers()
+	RunHRUser()
 
-	// Phase 2: Development test data (locations, departments, positions, teams, employees, leave)
-	RunDevelopmentData()
-
-	// Phase 3: Relationship assignments (department heads, team leads — must run after employees exist)
-	RunDepartmentHeads()
-	RunTeamLeads()
+	log.Println("────────────────────────────────────────────────────────")
+	log.Printf("📋 SEED CREDENTIALS  (password: %s)", defaultPassword)
+	log.Println("────────────────────────────────────────────────────────")
+	log.Println("  Admin:  admin@hrms.com")
+	log.Println("  HR:     hr@hrms.com")
+	log.Println("────────────────────────────────────────────────────────")
 
 	log.Println("All seeders completed.")
 }
