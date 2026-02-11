@@ -21,5 +21,5 @@ RUN chmod +x /wait-for-postgres.sh
 COPY --from=builder /app/bin/hrms-backend .
 RUN mkdir -p /app/storage && chown -R appuser:appgroup /app
 USER appuser
-EXPOSE 8081
+EXPOSE 8080
 CMD ["/wait-for-postgres.sh", "postgres", "5432", "./hrms-backend"]
