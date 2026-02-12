@@ -125,7 +125,7 @@ func AdminMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if !containsRole(c, "admin") {
+		if !containsRole(c, "admin") && !containsRole(c, "super_admin") {
 			response.Forbidden(c, "Admin access required")
 			c.Abort()
 			return
@@ -135,7 +135,7 @@ func AdminMiddleware() gin.HandlerFunc {
 	}
 }
 
-// HRMiddleware ensures the user is HR or Admin (user has "admin" or "hr" in roles array or as primary role)
+// HRMiddleware ensures the user is HR or Admin (user has "admin", "super_admin", or "hr" in roles array or as primary role)
 func HRMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if _, exists := c.Get("user_id"); !exists {
@@ -143,8 +143,49 @@ func HRMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if !containsRole(c, "admin") && !containsRole(c, "hr") {
+		if !containsRole(c, "admin") && !containsRole(c, "super_admin") && !containsRole(c, "hr") {
 			response.Forbidden(c, "HR or Admin access required")
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// ManagerMiddleware ensures the user is a Manager, HR, or Admin.
+// Managers can approve leave, attendance, and oversee their team.
+func ManagerMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if _, exists := c.Get("user_id"); !exists {
+			response.Unauthorized(c, "User not authenticated")
+			c.Abort()
+			return
+		}
+		if !containsRole(c, "admin") && !containsRole(c, "super_admin") && !containsRole(c, "hr") && !containsRole(c, "manager") {
+			response.Forbidden(c, "Manager, HR, or Admin access required")
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// EmployeeMiddleware ensures the user has at least the employee role (all enrolled employees).
+// This passes for any authenticated user who has "employee", "manager", "hr", "admin", "super_admin", or "user" role.
+func EmployeeMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if _, exists := c.Get("user_id"); !exists {
+			response.Unauthorized(c, "User not authenticated")
+			c.Abort()
+			return
+		}
+		// All enrolled users (employee, manager, hr, admin, etc.) pass this check
+		if !containsRole(c, "employee") && !containsRole(c, "manager") &&
+			!containsRole(c, "admin") && !containsRole(c, "super_admin") &&
+			!containsRole(c, "hr") && !containsRole(c, "it") && !containsRole(c, "user") {
+			response.Forbidden(c, "Employee access required")
 			c.Abort()
 			return
 		}

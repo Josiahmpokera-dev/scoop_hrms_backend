@@ -96,7 +96,6 @@ const (
 type OffboardingWorkflow struct {
 	ID                    uint           `json:"id" gorm:"primaryKey"`
 	OffboardingID         string         `json:"offboarding_id" gorm:"uniqueIndex;not null;size:50"` // e.g., "off-001"
-	TenantID              *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	EmployeeID            string         `json:"employee_id" gorm:"not null;size:50;index"` // Employee ID string (e.g., "EMP013")
 	EmployeeDBID          *uint          `json:"employee_db_id,omitempty" gorm:"index"`      // References employees(id)
 	
@@ -159,7 +158,6 @@ type OffboardingClearance struct {
 	ID            uint           `json:"id" gorm:"primaryKey"`
 	ClearanceID   string         `json:"clearance_id" gorm:"uniqueIndex;not null;size:50"` // e.g., "clear-001"
 	OffboardingID string         `json:"offboarding_id" gorm:"not null;size:50;index"`      // References offboarding_workflows(offboarding_id)
-	TenantID      *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	
 	// Clearance Details
 	Department    string         `json:"department" gorm:"not null;size:50"` // Manager, IT, HR, Finance, Assets
@@ -185,7 +183,6 @@ type OffboardingAssetReturn struct {
 	ID            uint           `json:"id" gorm:"primaryKey"`
 	OffboardingID string         `json:"offboarding_id" gorm:"not null;size:50;index"` // References offboarding_workflows(offboarding_id)
 	AssetID       uint           `json:"asset_id" gorm:"not null;index"`               // References assets(id)
-	TenantID      *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	
 	// Return Details
 	ReturnStatus  string         `json:"return_status" gorm:"size:50;default:'Pending'"` // Pending, Returned, Issue
@@ -221,7 +218,6 @@ type FinalSettlement struct {
 	SettlementID  string         `json:"settlement_id" gorm:"uniqueIndex;not null;size:50"` // e.g., "sett-001"
 	OffboardingID string         `json:"offboarding_id" gorm:"not null;size:50;index"`      // References offboarding_workflows(offboarding_id)
 	EmployeeID    string         `json:"employee_id" gorm:"not null;size:50;index"`         // Employee ID string
-	TenantID      *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	
 	// Settlement Status
 	Status        string         `json:"status" gorm:"size:50;default:'Pending'"` // Pending, Calculated, Approved, Paid

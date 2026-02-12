@@ -268,7 +268,6 @@ func (r *EmployeeRepository) SearchEmployees(tenantID *uint, search *string, dep
 
 // PeopleDirectoryFilters holds all filter options for the People Directory search
 type PeopleDirectoryFilters struct {
-	TenantID       *uint
 	Search         *string
 	DepartmentID   *uint
 	PositionID     *uint

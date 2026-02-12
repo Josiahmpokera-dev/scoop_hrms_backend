@@ -41,7 +41,6 @@ const (
 // ServiceRequest represents a service request (HR Letter, IT Request, Facilities)
 type ServiceRequest struct {
 	ID            uint                  `json:"id" gorm:"primaryKey"`
-	TenantID      *uint                 `json:"tenant_id,omitempty" gorm:"index"`
 	EmployeeID    uint                  `json:"employee_id" gorm:"index;not null"`
 	RequestNumber string                `json:"request_number" gorm:"uniqueIndex;not null;size:50"` // e.g., SR-2026-001
 	Type          ServiceRequestType    `json:"type" gorm:"type:varchar(50);not null"`              // hr_letter, it_request, facilities

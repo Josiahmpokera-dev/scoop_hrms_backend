@@ -96,10 +96,7 @@ func (h *LoanHandler) CreateLoan(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
-
 	loan := &models.Loan{
-		TenantID:     tenantID,
 		EmployeeID:   req.EmployeeID,
 		EmployeeCode: req.EmployeeCode,
 		EmployeeName: req.EmployeeName,
@@ -340,10 +337,7 @@ func (h *LoanHandler) ApplyForLoan(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
-
 	loan := &models.Loan{
-		TenantID:   tenantID,
 		EmployeeID: employeeID,
 		LoanType:   req.LoanType,
 		Amount:     req.Amount,

@@ -21,6 +21,7 @@ import (
 	positionHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/handlers"
 	roleHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/handlers"
 	shiftHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/handlers"
+	projectHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/handlers"
 	teamHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/handlers"
 	userHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/handlers"
 	"github.com/gin-gonic/gin"
@@ -81,11 +82,14 @@ func SetupRoutes(r *gin.Engine) {
 			users.POST("/add-role", middleware.AdminMiddleware(), userHandler.AddRole)               // Add role to user (supports multiple roles) (Admin only)
 			users.POST("/remove-role", middleware.AdminMiddleware(), userHandler.RemoveRole)         // Remove role from user (Admin only)
 			users.POST("/set-roles", middleware.AdminMiddleware(), userHandler.SetRoles)             // Replace all roles for user (Admin only)
+			users.PUT("/change-roles", middleware.AdminMiddleware(), userHandler.ChangeRoles)        // Checkbox-style change roles (Admin only)
+			users.GET("/:id", middleware.HRMiddleware(), userHandler.GetUser)                        // Get user detail with roles (HR/Admin only)
 			users.GET("/:id/roles", middleware.HRMiddleware(), userHandler.GetUserRoles)             // Get all roles for a user (HR/Admin only)
 			users.POST("/:id/suspend", middleware.HRMiddleware(), userHandler.SuspendUser)           // Suspend user (HR/Admin only; user cannot login)
 			users.POST("/:id/unsuspend", middleware.HRMiddleware(), userHandler.UnsuspendUser)       // Unsuspend user (HR/Admin only; restores login)
 			users.POST("/:id/block", middleware.HRMiddleware(), userHandler.BlockUser)               // Block user (HR/Admin only; user cannot login)
 			users.POST("/:id/unblock", middleware.HRMiddleware(), userHandler.UnblockUser)           // Unblock user (HR/Admin only; restores login)
+			users.POST("/reset-password", middleware.HRMiddleware(), userHandler.ResetPassword)      // Reset user password (HR/Admin; default: GreenTelecom@2026)
 		}
 
 		// Roles routes (RBAC roles list; HR/Admin only)
@@ -128,6 +132,13 @@ func SetupRoutes(r *gin.Engine) {
 			// Admin/HR only dashboard routes
 			dashboard.GET("/events", middleware.HRMiddleware(), dashboardHandler.GetEvents)                      // Birthdays, anniversaries (HR/Admin)
 			dashboard.GET("/pending-approvals", middleware.HRMiddleware(), dashboardHandler.GetPendingApprovals) // Pending approvals (HR/Admin)
+
+			// Employee-specific dashboard routes
+			employee := dashboard.Group("/employee")
+			{
+				employee.GET("/statistics", dashboardHandler.GetEmployeeStatistics) // Personal KPI stats (leave, hours, requests, payday)
+				employee.GET("/my-activity", dashboardHandler.GetEmployeeActivity)  // Employee's recent activity feed
+			}
 		}
 
 		// Notification routes (require authentication)
@@ -615,15 +626,21 @@ func SetupRoutes(r *gin.Engine) {
 		holidayHandler := leaveHandlers.NewHolidayHandler()
 		leaveCalendarHandler := leaveHandlers.NewLeaveCalendarHandler()
 
-		// Leave Types (Admin/HR)
-		leaveTypes := v1.Group("/leave/types")
-		leaveTypes.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		// Leave Types — Read (any authenticated user)
+		leaveTypesRead := v1.Group("/leave/types")
+		leaveTypesRead.Use(middleware.AuthMiddleware())
 		{
-			leaveTypes.GET("", leaveTypeHandler.ListLeaveTypes)
-			leaveTypes.GET("/:type_id", leaveTypeHandler.GetLeaveType)
-			leaveTypes.POST("", leaveTypeHandler.CreateLeaveType)
-			leaveTypes.PUT("/:type_id", leaveTypeHandler.UpdateLeaveType)
-			leaveTypes.DELETE("/:type_id", leaveTypeHandler.DeleteLeaveType)
+			leaveTypesRead.GET("", leaveTypeHandler.ListLeaveTypes)
+			leaveTypesRead.GET("/:type_id", leaveTypeHandler.GetLeaveType)
+		}
+
+		// Leave Types — Write (Admin/HR only)
+		leaveTypesWrite := v1.Group("/leave/types")
+		leaveTypesWrite.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			leaveTypesWrite.POST("", leaveTypeHandler.CreateLeaveType)
+			leaveTypesWrite.PUT("/:type_id", leaveTypeHandler.UpdateLeaveType)
+			leaveTypesWrite.DELETE("/:type_id", leaveTypeHandler.DeleteLeaveType)
 		}
 
 		// Leave Policies (Admin/HR)
@@ -637,7 +654,7 @@ func SetupRoutes(r *gin.Engine) {
 			leavePolicies.DELETE("/:policy_id", leavePolicyHandler.DeleteLeavePolicy)
 		}
 
-		// Leave Requests - Employee endpoints
+		// Leave Requests - Employee endpoints (any authenticated user)
 		leaveRequests := v1.Group("/leave")
 		leaveRequests.Use(middleware.AuthMiddleware())
 		{
@@ -646,10 +663,16 @@ func SetupRoutes(r *gin.Engine) {
 			leaveRequests.GET("/balances", leaveRequestHandler.GetEmployeeLeaveBalances)
 			leaveRequests.GET("/policies/guidelines", leavePolicyHandler.GetPolicyGuidelines)
 
+			// Active leave types (read-only for form dropdown)
+			leaveRequests.GET("/active-types", leaveRequestHandler.GetActiveLeaveTypes)
+
+			// Holidays for employee calendar / day calculation
+			leaveRequests.GET("/holidays", leaveRequestHandler.GetLeaveHolidays)
+
 			// Calculate days
 			leaveRequests.POST("/calculate-days", leaveRequestHandler.CalculateLeaveDays)
 
-			// Leave requests
+			// Leave requests (employee's own)
 			leaveRequests.POST("/applications", leaveRequestHandler.CreateLeaveRequest)
 			leaveRequests.GET("/requests", leaveRequestHandler.ListLeaveRequests)
 			leaveRequests.GET("/requests/:request_id", leaveRequestHandler.GetLeaveRequest)
@@ -658,12 +681,17 @@ func SetupRoutes(r *gin.Engine) {
 			leaveRequests.DELETE("/requests/:request_id", leaveRequestHandler.DeleteLeaveRequest)
 		}
 
-		// Leave Requests - HR/Admin approval endpoints
-		leaveApprovals := v1.Group("/leave/requests")
+		// Leave Requests - HR/Admin management & approval endpoints
+		leaveApprovals := v1.Group("/leave")
 		leaveApprovals.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
-			leaveApprovals.POST("/:request_id/approve", leaveRequestHandler.ApproveLeaveRequest)
-			leaveApprovals.POST("/:request_id/reject", leaveRequestHandler.RejectLeaveRequest)
+			// List all leave requests across all employees (HR/Admin view)
+			leaveApprovals.GET("/admin/requests", leaveRequestHandler.ListAllLeaveRequests)
+
+			// Approval actions
+			leaveApprovals.POST("/requests/:request_id/approve", leaveRequestHandler.ApproveLeaveRequest)
+			leaveApprovals.POST("/requests/:request_id/reject", leaveRequestHandler.RejectLeaveRequest)
+			leaveApprovals.POST("/requests/:request_id/return-for-info", leaveRequestHandler.ReturnForInfo)
 		}
 
 		// Holidays (Admin/HR)
@@ -881,6 +909,59 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceReports.GET("/overtime", attendanceReportsHandler.GetOvertimeSummaryReport)           // Overtime summary
 			attendanceReports.GET("/project-utilization", attendanceReportsHandler.GetProjectUtilizationReport) // Project utilization
 			attendanceReports.GET("/employee-utilization", attendanceReportsHandler.GetEmployeeUtilizationReport) // Employee utilization
+		}
+
+		// ============ Projects & Daily Tasks ============
+		projectHandler := projectHandlers.NewProjectHandler()
+		dailyTaskHandler := projectHandlers.NewDailyTaskHandler()
+
+		// Projects - Management (HR/Admin/Manager)
+		projects := v1.Group("/projects")
+		projects.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			projects.GET("/statistics", projectHandler.GetStatistics)               // Project statistics
+			projects.GET("", projectHandler.ListProjects)                           // List all projects
+			projects.POST("", projectHandler.CreateProject)                         // Create project
+			projects.GET("/:id", projectHandler.GetProject)                         // Get project details
+			projects.PUT("/:id", projectHandler.UpdateProject)                      // Update project
+			projects.DELETE("/:id", projectHandler.DeleteProject)                   // Delete project
+			projects.POST("/:id/members", projectHandler.AddMembers)               // Add members to project
+			projects.POST("/:id/members/remove", projectHandler.RemoveMember)      // Remove member from project
+			projects.GET("/:id/members", projectHandler.ListMembers)               // List project members
+			projects.GET("/:id/progress", projectHandler.GetProjectProgress)       // Get project progress
+			projects.POST("/assign", projectHandler.AssignProject)                 // Assign project to employee(s)
+			projects.POST("/unassign", projectHandler.UnassignProject)             // Unassign employee from project
+		}
+
+		// Daily Tasks - Management (HR/Admin view all tasks)
+		dailyTasks := v1.Group("/daily-tasks")
+		dailyTasks.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			dailyTasks.GET("", dailyTaskHandler.ListDailyTasks)                              // List all daily tasks
+			dailyTasks.GET("/categories", dailyTaskHandler.GetTaskCategories)                 // Get task categories
+			dailyTasks.GET("/project/:project_id/summary", dailyTaskHandler.GetProjectTaskSummary) // Project task summary
+			dailyTasks.GET("/:id", dailyTaskHandler.GetDailyTask)                            // Get task details
+		}
+
+		// Self-Service: Projects & Daily Tasks (all authenticated employees)
+		selfServiceProjects := v1.Group("/self-service/projects")
+		selfServiceProjects.Use(middleware.AuthMiddleware())
+		{
+			selfServiceProjects.GET("", projectHandler.ListMyProjects)          // List my assigned projects
+			selfServiceProjects.GET("/:id", projectHandler.GetMyProjectDetails) // Get assigned project details + progress
+		}
+
+		selfServiceDailyTasks := v1.Group("/self-service/daily-tasks")
+		selfServiceDailyTasks.Use(middleware.AuthMiddleware())
+		{
+			selfServiceDailyTasks.POST("", dailyTaskHandler.CreateDailyTask)                 // Log a daily task
+			selfServiceDailyTasks.GET("", dailyTaskHandler.GetMyTasks)                       // List my daily tasks
+			selfServiceDailyTasks.GET("/today", dailyTaskHandler.GetMyTodayTasks)             // Get today's tasks
+			selfServiceDailyTasks.GET("/summary", dailyTaskHandler.GetMyTaskSummary)          // Get my task summary
+			selfServiceDailyTasks.GET("/categories", dailyTaskHandler.GetTaskCategories)      // Get task categories
+			selfServiceDailyTasks.GET("/:id", dailyTaskHandler.GetDailyTask)                 // Get task details
+			selfServiceDailyTasks.PUT("/:id", dailyTaskHandler.UpdateDailyTask)              // Update my task
+			selfServiceDailyTasks.DELETE("/:id", dailyTaskHandler.DeleteDailyTask)           // Delete my task
 		}
 	}
 }

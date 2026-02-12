@@ -22,6 +22,7 @@ func NewHolidayService() *HolidayService {
 
 // CreateHoliday creates a new holiday
 func (s *HolidayService) CreateHoliday(req *models.CreateHolidayRequest, tenantID *uint, createdBy *uint) (*models.Holiday, error) {
+	_ = tenantID
 	date, err := time.Parse("2006-01-02", req.Date)
 	if err != nil {
 		return nil, errors.New("invalid date format. Use YYYY-MM-DD")
@@ -39,7 +40,6 @@ func (s *HolidayService) CreateHoliday(req *models.CreateHolidayRequest, tenantI
 	}
 
 	holiday := &models.Holiday{
-		TenantID:      tenantID,
 		Name:          req.Name,
 		Date:          date,
 		Type:          req.Type,

@@ -58,11 +58,8 @@ func NewPeopleDirectoryHandler() *PeopleDirectoryHandler {
 // @Success 200 {object} response.APIResponse
 // @Router /api/v1/people-directory [get]
 func (h *PeopleDirectoryHandler) SearchDirectory(c *gin.Context) {
-	tenantID := middleware.GetTenantID(c)
-
 	// Build filters from query parameters
 	filters := employeeRepos.PeopleDirectoryFilters{
-		TenantID:  tenantID,
 		Page:      1,
 		PageSize:  20,
 		SortBy:    "first_name",
@@ -432,7 +429,6 @@ func (h *PeopleDirectoryHandler) GetStatistics(c *gin.Context) {
 
 	// Total active employees
 	totalFilters := employeeRepos.PeopleDirectoryFilters{
-		TenantID: tenantID,
 		Page:     1,
 		PageSize: 1,
 	}

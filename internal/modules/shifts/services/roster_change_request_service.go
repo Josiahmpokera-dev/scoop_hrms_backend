@@ -72,7 +72,6 @@ func (s *RosterChangeRequestService) CreateRosterChangeRequest(req *models.Creat
 	}
 
 	changeRequest := &models.RosterChangeRequest{
-		TenantID:          tenantID,
 		RequestedBy:       requestedBy,
 		AssignmentID:     req.AssignmentID,
 		RequestedShiftID: req.RequestedShiftID,

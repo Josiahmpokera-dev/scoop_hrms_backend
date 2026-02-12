@@ -80,7 +80,7 @@ func (s *DocumentService) ListEmployeesWithDocuments(tenantID *uint, page, pageS
 // GetEmployeeDocuments gets all documents for a specific employee
 func (s *DocumentService) GetEmployeeDocuments(employeeID string, tenantID *uint) ([]models.EmployeeDocument, error) {
 	// Verify employee exists and belongs to tenant
-	employee, err := s.employeeRepo.FindByEmployeeID(employeeID)
+	_, err := s.employeeRepo.FindByEmployeeID(employeeID)
 	if err != nil {
 		return nil, fmt.Errorf("employee not found")
 	}
@@ -105,13 +105,13 @@ func (s *DocumentService) GetDocumentByID(documentID uint, tenantID *uint) (*mod
 
 	// Verify tenant ownership through employee
 	if doc.EmployeeID != nil {
-		employee, err := s.employeeRepo.FindByID(*doc.EmployeeID)
+		_, err = s.employeeRepo.FindByID(*doc.EmployeeID)
 		if err != nil {
 			// Employee not found, but continue
 		}
 	} else if doc.EmployeeIDString != nil {
 		// Check by employee ID string
-		employee, err := s.employeeRepo.FindByEmployeeID(*doc.EmployeeIDString)
+		_, err = s.employeeRepo.FindByEmployeeID(*doc.EmployeeIDString)
 		if err != nil {
 			// Employee not found, but continue
 		}

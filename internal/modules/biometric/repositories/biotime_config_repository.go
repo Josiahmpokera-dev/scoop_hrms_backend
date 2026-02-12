@@ -58,7 +58,6 @@ func (r *BioTimeConfigRepository) FindOrCreate(tenantID *uint, baseURL, username
 	// Create new config if not found
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		config = &models.BioTimeConfig{
-			TenantID: tenantID,
 			BaseURL:  baseURL,
 			Username: username,
 			Password: password,

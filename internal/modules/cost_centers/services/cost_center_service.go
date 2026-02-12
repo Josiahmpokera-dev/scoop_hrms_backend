@@ -26,6 +26,7 @@ func NewCostCenterService() *CostCenterService {
 
 // CreateCostCenter creates a new cost center
 func (s *CostCenterService) CreateCostCenter(req *models.CreateCostCenterRequest, tenantID *uint, updatedBy *uint) (*models.CostCenter, error) {
+	_ = tenantID // reserved for future use
 	// Check if code already exists
 	if s.repo.ExistsByCode(req.Code) {
 		return nil, errors.New("cost center with this code already exists")
@@ -56,7 +57,6 @@ func (s *CostCenterService) CreateCostCenter(req *models.CreateCostCenterRequest
 	}
 
 	costCenter := &models.CostCenter{
-		TenantID:          tenantID,
 		OrganizationID:    req.OrganizationID,
 		Code:              req.Code,
 		Name:              req.Name,

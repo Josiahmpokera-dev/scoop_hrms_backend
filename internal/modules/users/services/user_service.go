@@ -203,9 +203,9 @@ func (s *UserService) ListUsers(tenantID *uint, page, pageSize int, role, search
 	return s.userRepo.List(tenantID, page, pageSize, role, search)
 }
 
-// ListSpecialRoleUsers returns users who have role admin, hr, or it (for transfer-role "from" picker, etc.).
+// ListSpecialRoleUsers returns users who have non-basic roles (admin, hr, it, manager) for transfer-role "from" picker, etc.
 func (s *UserService) ListSpecialRoleUsers(tenantID *uint, page, pageSize int, search string) ([]models.User, int64, error) {
-	roles := []string{string(models.RoleAdmin), string(models.RoleHR), string(models.RoleIT)}
+	roles := []string{string(models.RoleSuperAdmin), string(models.RoleAdmin), string(models.RoleHR), string(models.RoleIT), string(models.RoleManager)}
 	return s.userRepo.ListByRoles(tenantID, page, pageSize, roles, search)
 }
 
@@ -346,14 +346,14 @@ type AssignRoleResult struct {
 	PositionUpdated bool         `json:"position_updated"` // True if employee's position was updated (optional position_id was provided and user has employee record)
 }
 
-// AssignRole assigns or reassigns a role (admin, hr, it, or employee) to any user.
+// AssignRole assigns or reassigns a role to any user.
 // Only an Admin can call this. The target user must exist and be active. Any current role can be reassigned.
-// For role "employee", legacy user_type is set to "user" and RBAC gets the "employee" role.
+// For roles "employee" and "manager", legacy user_type is set to "user" and RBAC gets the respective role.
 // If positionID is not nil, the linked employee record (if any) has its position_id updated.
 func (s *UserService) AssignRole(callerUserID uint, targetUserID uint, role string, positionID *uint) (*AssignRoleResult, error) {
-	allowedRoles := map[string]bool{"admin": true, "hr": true, "it": true, "employee": true}
+	allowedRoles := map[string]bool{"super_admin": true, "admin": true, "hr": true, "it": true, "manager": true, "employee": true}
 	if !allowedRoles[role] {
-		return nil, errors.New("role must be admin, hr, it, or employee")
+		return nil, errors.New("role must be super_admin, admin, hr, it, manager, or employee")
 	}
 
 	caller, err := s.userRepo.FindByID(callerUserID)
@@ -375,9 +375,9 @@ func (s *UserService) AssignRole(callerUserID uint, targetUserID uint, role stri
 		return nil, errors.New("target user is not active")
 	}
 
-	// Legacy user_type: "employee" maps to "user"; admin/hr/it stay as-is
+	// Legacy user_type: "employee" and "manager" map to "user"; admin/hr/it stay as-is
 	legacyRole := role
-	if role == "employee" {
+	if role == "employee" || role == "manager" {
 		legacyRole = string(models.RoleUser)
 	}
 	target.Role = models.UserRole(legacyRole)
@@ -463,13 +463,13 @@ func (s *UserService) setUserStatus(callerUserID, targetUserID uint, status, act
 }
 
 // AddRoleToUser adds an additional role to a user without changing existing roles.
-// This allows a user to have multiple roles like ["admin", "employee"] or ["hr", "it"].
+// This allows a user to have multiple roles like ["admin", "employee"] or ["hr", "manager"].
 // Only Admin can call this.
 func (s *UserService) AddRoleToUser(callerUserID uint, targetUserID uint, role string) ([]string, error) {
-	allowedRoles := map[string]bool{"admin": true, "hr": true, "it": true, "employee": true, "user": true}
+	allowedRoles := map[string]bool{"super_admin": true, "admin": true, "hr": true, "it": true, "manager": true, "employee": true, "user": true}
 	role = strings.ToLower(strings.TrimSpace(role))
 	if !allowedRoles[role] {
-		return nil, errors.New("role must be admin, hr, it, employee, or user")
+		return nil, errors.New("role must be super_admin, admin, hr, it, manager, employee, or user")
 	}
 
 	caller, err := s.userRepo.FindByID(callerUserID)
@@ -570,6 +570,51 @@ func (s *UserService) RemoveRoleFromUser(callerUserID uint, targetUserID uint, r
 	return s.GetUserRoles(targetUserID)
 }
 
+// UserDetail holds user data plus roles for the "view user" API.
+type UserDetail struct {
+	ID            uint       `json:"id"`
+	Username      string     `json:"username"`
+	Email         string     `json:"email"`
+	FirstName     string     `json:"first_name"`
+	LastName      string     `json:"last_name"`
+	PhoneNumber   *string    `json:"phone_number,omitempty"`
+	Role          string     `json:"role"`    // Legacy primary role
+	Roles         []string   `json:"roles"`   // All RBAC roles
+	Status        string     `json:"status"`  // active, suspended, blocked
+	IsActive      bool       `json:"is_active"`
+	EmailVerified bool       `json:"email_verified"`
+	LastLogin     *time.Time `json:"last_login,omitempty"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+}
+
+// GetUserDetail returns a user's full profile with their roles. HR or Admin can call this.
+func (s *UserService) GetUserDetail(targetUserID uint) (*UserDetail, error) {
+	user, err := s.userRepo.FindByID(targetUserID)
+	if err != nil || user == nil {
+		return nil, errors.New("user not found")
+	}
+
+	roles, _ := s.GetUserRoles(user.ID)
+
+	return &UserDetail{
+		ID:            user.ID,
+		Username:      user.Username,
+		Email:         user.Email,
+		FirstName:     user.FirstName,
+		LastName:      user.LastName,
+		PhoneNumber:   user.PhoneNumber,
+		Role:          string(user.Role),
+		Roles:         roles,
+		Status:        user.Status,
+		IsActive:      user.IsActive,
+		EmailVerified: user.EmailVerified,
+		LastLogin:     user.LastLogin,
+		CreatedAt:     user.CreatedAt,
+		UpdatedAt:     user.UpdatedAt,
+	}, nil
+}
+
 // GetUserRoles returns all roles for a user (legacy + RBAC combined, deduplicated).
 func (s *UserService) GetUserRoles(userID uint) ([]string, error) {
 	user, err := s.userRepo.FindByID(userID)
@@ -612,7 +657,7 @@ func (s *UserService) SetUserRoles(callerUserID uint, targetUserID uint, newRole
 		return nil, errors.New("at least one role must be specified")
 	}
 
-	allowedRoles := map[string]bool{"admin": true, "hr": true, "it": true, "employee": true, "user": true}
+	allowedRoles := map[string]bool{"super_admin": true, "admin": true, "hr": true, "it": true, "manager": true, "employee": true, "user": true}
 	for i, r := range newRoles {
 		newRoles[i] = strings.ToLower(strings.TrimSpace(r))
 		if !allowedRoles[newRoles[i]] {
@@ -652,11 +697,207 @@ func (s *UserService) SetUserRoles(callerUserID uint, targetUserID uint, newRole
 
 	// Set legacy role to the first role (for backward compatibility)
 	primaryRole := newRoles[0]
-	if primaryRole == "employee" {
+	if primaryRole == "employee" || primaryRole == "manager" {
 		primaryRole = "user"
 	}
 	target.Role = models.UserRole(primaryRole)
 	_ = s.userRepo.Update(target)
 
 	return s.GetUserRoles(targetUserID)
+}
+
+// ChangeRolesResult holds the detailed result of a change-roles operation.
+type ChangeRolesResult struct {
+	UserID        uint     `json:"user_id"`
+	Email         string   `json:"email"`
+	Username      string   `json:"username"`
+	PreviousRoles []string `json:"previous_roles"` // Roles before the change
+	CurrentRoles  []string `json:"current_roles"`  // Roles after the change
+	Added         []string `json:"added"`           // Roles that were added (newly checked)
+	Removed       []string `json:"removed"`         // Roles that were removed (unchecked)
+	Unchanged     []string `json:"unchanged"`       // Roles that stayed the same
+}
+
+// ChangeUserRoles applies a checkbox-style role change: the caller sends the full desired set of roles,
+// and the service computes what needs to be added/removed. Returns the diff for the frontend.
+// Only Admin or Super Admin can call this.
+func (s *UserService) ChangeUserRoles(callerUserID uint, targetUserID uint, desiredRoles []string) (*ChangeRolesResult, error) {
+	if len(desiredRoles) == 0 {
+		return nil, errors.New("at least one role must be selected")
+	}
+
+	// Validate all desired roles
+	allowedRoles := map[string]bool{"super_admin": true, "admin": true, "hr": true, "it": true, "manager": true, "employee": true, "user": true}
+	for i, r := range desiredRoles {
+		desiredRoles[i] = strings.ToLower(strings.TrimSpace(r))
+		if !allowedRoles[desiredRoles[i]] {
+			return nil, fmt.Errorf("invalid role: %s (allowed: super_admin, admin, hr, it, manager, employee, user)", r)
+		}
+	}
+
+	// Verify caller is admin
+	caller, err := s.userRepo.FindByID(callerUserID)
+	if err != nil || caller == nil {
+		return nil, errors.New("caller user not found")
+	}
+	if !caller.IsAdmin() {
+		return nil, errors.New("only an admin can change user roles")
+	}
+
+	// Get target user
+	target, err := s.userRepo.FindByID(targetUserID)
+	if err != nil || target == nil {
+		return nil, errors.New("target user not found")
+	}
+
+	// Get current RBAC roles
+	previousRoles, err := s.GetUserRoles(targetUserID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get current roles: %w", err)
+	}
+
+	// Build sets for comparison
+	previousSet := make(map[string]bool)
+	for _, r := range previousRoles {
+		previousSet[r] = true
+	}
+	desiredSet := make(map[string]bool)
+	for _, r := range desiredRoles {
+		desiredSet[r] = true
+	}
+	// Always ensure "user" is in desired set
+	desiredSet["user"] = true
+
+	// Compute diff
+	var added, removed, unchanged []string
+	for r := range desiredSet {
+		if previousSet[r] {
+			unchanged = append(unchanged, r)
+		} else {
+			added = append(added, r)
+		}
+	}
+	for r := range previousSet {
+		if !desiredSet[r] {
+			removed = append(removed, r)
+		}
+	}
+
+	// Apply additions
+	for _, role := range added {
+		rbacRole, err := s.roleRepo.FindByCode(role)
+		if err == nil && rbacRole != nil {
+			_ = s.roleRepo.AssignUserRole(target.ID, rbacRole.ID, &callerUserID)
+		}
+	}
+
+	// Apply removals
+	for _, role := range removed {
+		rbacRole, err := s.roleRepo.FindByCode(role)
+		if err == nil && rbacRole != nil {
+			_ = s.roleRepo.RemoveUserRole(target.ID, rbacRole.ID)
+		}
+	}
+
+	// Update legacy user_type column to the highest-priority role
+	legacyRole := determineLegacyRole(desiredSet)
+	target.Role = models.UserRole(legacyRole)
+	_ = s.userRepo.Update(target)
+
+	// Get final roles
+	currentRoles, _ := s.GetUserRoles(targetUserID)
+
+	return &ChangeRolesResult{
+		UserID:        target.ID,
+		Email:         target.Email,
+		Username:      target.Username,
+		PreviousRoles: previousRoles,
+		CurrentRoles:  currentRoles,
+		Added:         added,
+		Removed:       removed,
+		Unchanged:     unchanged,
+	}, nil
+}
+
+// determineLegacyRole picks the highest-priority role for the legacy user_type column.
+// Priority: super_admin > admin > hr > it > user (employee and manager map to "user").
+func determineLegacyRole(roles map[string]bool) string {
+	if roles["super_admin"] {
+		return "super_admin"
+	}
+	if roles["admin"] {
+		return "admin"
+	}
+	if roles["hr"] {
+		return "hr"
+	}
+	if roles["it"] {
+		return "it"
+	}
+	return "user"
+}
+
+// DefaultResetPassword is used when no custom password is provided.
+const DefaultResetPassword = "GreenTelecom@2026"
+
+// ResetPasswordResult holds the result of a password reset.
+type ResetPasswordResult struct {
+	UserID   uint   `json:"user_id"`
+	Email    string `json:"email"`
+	Username string `json:"username"`
+	Message  string `json:"message"`
+}
+
+// ResetUserPassword resets a user's password to the provided value (or default).
+// Also clears failed login count, unblocks, and reactivates the account.
+// Only Admin, Super Admin, or HR can call this.
+func (s *UserService) ResetUserPassword(callerUserID, targetUserID uint, newPassword string) (*ResetPasswordResult, error) {
+	// Verify caller
+	caller, err := s.userRepo.FindByID(callerUserID)
+	if err != nil || caller == nil {
+		return nil, errors.New("caller user not found")
+	}
+	if !caller.IsAdmin() && !caller.IsHR() {
+		return nil, errors.New("only Admin, Super Admin, or HR can reset passwords")
+	}
+
+	// Prevent self-reset via this endpoint
+	if callerUserID == targetUserID {
+		return nil, errors.New("cannot reset your own password via this endpoint")
+	}
+
+	// Find target user
+	target, err := s.userRepo.FindByID(targetUserID)
+	if err != nil || target == nil {
+		return nil, errors.New("target user not found")
+	}
+
+	// Use default password if none provided
+	if newPassword == "" {
+		newPassword = DefaultResetPassword
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	// Reset password and clear any locks
+	target.Password = string(hashedPassword)
+	target.FailedLoginCount = 0
+	target.LockedUntil = nil
+	target.Status = "active"
+	target.IsActive = true
+
+	if err := s.userRepo.Update(target); err != nil {
+		return nil, fmt.Errorf("failed to reset password: %w", err)
+	}
+
+	return &ResetPasswordResult{
+		UserID:   target.ID,
+		Email:    target.Email,
+		Username: target.Username,
+		Message:  "Password reset successfully. Account unblocked and reactivated.",
+	}, nil
 }

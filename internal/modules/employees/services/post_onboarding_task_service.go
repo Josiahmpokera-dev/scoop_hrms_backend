@@ -389,7 +389,7 @@ func (s *PostOnboardingTaskService) GetTask(id uint, tenantID *uint) (*models.Po
 // GetTasksByEmployeeID retrieves all tasks for an employee
 func (s *PostOnboardingTaskService) GetTasksByEmployeeID(employeeID string, tenantID *uint) ([]models.PostOnboardingTask, error) {
 	// Validate employee exists
-	employee, err := s.employeeRepo.FindByEmployeeID(employeeID)
+	_, err := s.employeeRepo.FindByEmployeeID(employeeID)
 	if err != nil {
 		return nil, errors.New("employee not found")
 	}
@@ -461,7 +461,7 @@ func (s *PostOnboardingTaskService) GetTaskTypes() []models.GetTaskTypesResponse
 // GetTaskSummary returns a summary of tasks for an employee
 func (s *PostOnboardingTaskService) GetTaskSummary(employeeID string, tenantID *uint) (map[string]interface{}, error) {
 	// Validate employee exists
-	employee, err := s.employeeRepo.FindByEmployeeID(employeeID)
+	_, err := s.employeeRepo.FindByEmployeeID(employeeID)
 	if err != nil {
 		return nil, errors.New("employee not found")
 	}
@@ -504,7 +504,7 @@ func (s *PostOnboardingTaskService) GetTaskSummary(employeeID string, tenantID *
 
 // DeleteTask deletes a task
 func (s *PostOnboardingTaskService) DeleteTask(id uint, tenantID *uint) error {
-	task, err := s.taskRepo.FindByID(id)
+	_, err := s.taskRepo.FindByID(id)
 	if err != nil {
 		return errors.New("task not found")
 	}

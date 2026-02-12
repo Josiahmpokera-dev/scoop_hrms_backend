@@ -460,6 +460,18 @@ func (s *LeaveRequestService) ListLeaveRequests(tenantID *uint, page, pageSize i
 	return s.repo.List(tenantID, page, pageSize, filters)
 }
 
+// ListActiveLeaveTypes returns active leave types for employees (read-only)
+func (s *LeaveRequestService) ListActiveLeaveTypes(tenantID *uint, page, pageSize int, filters map[string]interface{}) ([]models.LeaveType, int64, error) {
+	return s.leaveTypeRepo.List(tenantID, page, pageSize, filters)
+}
+
+// GetHolidaysByYear returns holidays for a given year
+func (s *LeaveRequestService) GetHolidaysByYear(year int, tenantID *uint) ([]models.Holiday, error) {
+	startDate := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC)
+	endDate := time.Date(year, 12, 31, 23, 59, 59, 0, time.UTC)
+	return s.holidayService.GetHolidaysByDateRange(startDate, endDate, tenantID)
+}
+
 // ReturnForInfo returns a leave request for additional information
 func (s *LeaveRequestService) ReturnForInfo(id uint, req *models.ReturnForInfoRequest) (*models.LeaveRequest, error) {
 	leaveRequest, err := s.repo.FindByID(id)

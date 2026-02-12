@@ -9,7 +9,6 @@ import (
 // Role represents a role in the RBAC system
 type Role struct {
 	ID          uint           `json:"id" gorm:"primaryKey"`
-	TenantID    *uint          `json:"tenant_id,omitempty" gorm:"index"`
 	Code        string         `json:"code" gorm:"uniqueIndex;not null;size:100"`
 	Name        string         `json:"name" gorm:"not null;size:150"`
 	Description *string        `json:"description,omitempty" gorm:"type:text"`

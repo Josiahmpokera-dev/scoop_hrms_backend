@@ -54,7 +54,6 @@ func (s *ShiftService) CreateShift(req *models.CreateShiftRequest, tenantID *uin
 	}
 
 	shift := &models.Shift{
-		TenantID:          tenantID,
 		ShiftName:         req.ShiftName,
 		ShiftCode:         req.ShiftCode,
 		ShiftType:         req.ShiftType,

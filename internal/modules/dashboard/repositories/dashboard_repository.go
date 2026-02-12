@@ -420,7 +420,6 @@ func (r *DashboardRepository) GetEmployeeByEmployeeID(employeeID string) (*emplo
 func (r *DashboardRepository) GetEmployeeByUserID(userID uint) (*employeeModels.Employee, error) {
 	var employee employeeModels.Employee
 	if err := r.db.Where("user_id = ?", userID).
-		Preload("Department").
 		First(&employee).Error; err != nil {
 		return nil, err
 	}

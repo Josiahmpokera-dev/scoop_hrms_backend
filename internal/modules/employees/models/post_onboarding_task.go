@@ -49,7 +49,6 @@ const (
 // PostOnboardingTask represents a post-onboarding task/checklist item
 type PostOnboardingTask struct {
 	ID                uint                        `json:"id" gorm:"primaryKey"`
-	TenantID          *uint                       `json:"tenant_id,omitempty" gorm:"index"`
 	EmployeeID        string                      `json:"employee_id" gorm:"not null;size:50;index"` // Employee ID (e.g., EMP001)
 	TaskType          string                      `json:"task_type" gorm:"not null;size:100;index"` // Task type/category
 	Title             string                      `json:"title" gorm:"not null;size:255"`           // Task title

@@ -56,11 +56,11 @@ func (r *LeaveApprovalRepository) Update(approval *models.LeaveApproval) error {
 
 // CreateApprovalWorkflow creates the approval workflow for a leave request
 func (r *LeaveApprovalRepository) CreateApprovalWorkflow(requestID uint, tenantID *uint) error {
+	_ = tenantID // reserved for future use
 	// Create default approval levels
 	approvals := []models.LeaveApproval{
 		{
 			LeaveRequestID: requestID,
-			TenantID:       tenantID,
 			Level:          1,
 			ApproverType:   "head_of_department",
 			Status:         "pending",
@@ -68,7 +68,6 @@ func (r *LeaveApprovalRepository) CreateApprovalWorkflow(requestID uint, tenantI
 		},
 		{
 			LeaveRequestID: requestID,
-			TenantID:       tenantID,
 			Level:          2,
 			ApproverType:   "hr_department",
 			Status:         "pending",
@@ -76,7 +75,6 @@ func (r *LeaveApprovalRepository) CreateApprovalWorkflow(requestID uint, tenantI
 		},
 		{
 			LeaveRequestID: requestID,
-			TenantID:       tenantID,
 			Level:          3,
 			ApproverType:   "director_ceo",
 			Status:         "pending",

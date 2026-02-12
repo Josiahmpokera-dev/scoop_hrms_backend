@@ -22,6 +22,7 @@ func NewLeavePolicyService() *LeavePolicyService {
 
 // CreateLeavePolicy creates a new leave policy
 func (s *LeavePolicyService) CreateLeavePolicy(req *models.CreateLeavePolicyRequest, tenantID *uint, createdBy *uint) (*models.LeavePolicy, error) {
+	_ = tenantID
 	// Validate leave type exists
 	_, err := s.leaveTypeRepo.FindByCode(req.LeaveTypeCode)
 	if err != nil {
@@ -29,7 +30,6 @@ func (s *LeavePolicyService) CreateLeavePolicy(req *models.CreateLeavePolicyRequ
 	}
 
 	policy := &models.LeavePolicy{
-		TenantID:              tenantID,
 		PolicyName:            req.PolicyName,
 		Country:               req.Country,
 		LeaveTypeCode:         req.LeaveTypeCode,

@@ -37,7 +37,6 @@ func (s *TeamService) CreateTeam(req *models.CreateTeamRequest, tenantID *uint, 
 	}
 
 	team := &models.Team{
-		TenantID:     tenantID,
 		DepartmentID: req.DepartmentID,
 		Code:         req.Code,
 		Name:         req.Name,

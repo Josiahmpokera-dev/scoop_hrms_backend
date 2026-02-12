@@ -394,6 +394,70 @@ func (h *UserHandler) SetRoles(c *gin.Context) {
 	response.Success(c, "Roles updated successfully", gin.H{"user_id": req.UserID, "roles": roles})
 }
 
+// ChangeRoles applies a checkbox-style role change.
+// Send the full set of desired (checked) roles. The backend computes the diff: what was added, removed, unchanged.
+// Only Admin can call this.
+//
+// @Summary Change user roles (checkbox style)
+// @Description Apply a checkbox-style role change. Send all checked roles; backend computes the diff. Admin only.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param request body models.ChangeRolesRequest true "Change roles request"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
+// @Router /api/v1/users/change-roles [put]
+func (h *UserHandler) ChangeRoles(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	callerID := userID.(uint)
+
+	var req models.ChangeRolesRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	result, err := h.userService.ChangeUserRoles(callerID, req.UserID, req.Roles)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Roles changed successfully", result)
+}
+
+// GetUser returns a single user's profile with their roles and account information.
+// Does NOT include employee-related data — only user/account data.
+//
+// @Summary Get user detail
+// @Description Get a user's profile, roles, and account info. HR or Admin only.
+// @Tags Users
+// @Produce json
+// @Param id path int true "User ID"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Router /api/v1/users/{id} [get]
+func (h *UserHandler) GetUser(c *gin.Context) {
+	targetID, ok := parseUserIDParam(c)
+	if !ok {
+		response.BadRequest(c, "Invalid user ID", nil)
+		return
+	}
+
+	detail, err := h.userService.GetUserDetail(targetID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "User retrieved successfully", detail)
+}
+
 // GetUserRoles returns all roles for a user (combined legacy + RBAC, deduplicated).
 //
 // @Summary Get user roles
@@ -623,4 +687,45 @@ func (h *UserHandler) GetRateLimitStatus(c *gin.Context) {
 		return
 	}
 	response.Success(c, "Rate limit status retrieved", status)
+}
+
+// ResetPassword resets a user's password to a specified value or the default.
+// Also unblocks the account and clears failed login attempts.
+//
+// @Summary Reset user password
+// @Description Reset a user's password. If no password is provided, defaults to "GreenTelecom@2026". Also unblocks account and clears failed login count.
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param request body models.ResetPasswordRequest true "Reset password request"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 403 {object} response.APIResponse
+// @Router /api/v1/users/reset-password [post]
+func (h *UserHandler) ResetPassword(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	callerID := userID.(uint)
+
+	var req models.ResetPasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	newPassword := ""
+	if req.Password != nil {
+		newPassword = *req.Password
+	}
+
+	result, err := h.userService.ResetUserPassword(callerID, req.UserID, newPassword)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Password reset successfully", result)
 }

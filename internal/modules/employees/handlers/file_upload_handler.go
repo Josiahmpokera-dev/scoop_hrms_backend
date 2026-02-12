@@ -333,9 +333,6 @@ func (h *FileUploadHandler) DeleteDocument(c *gin.Context) {
 		return
 	}
 
-	// Get tenant ID
-	tenantID := middleware.GetTenantID(c)
-
 	// Find document
 	doc, err := h.documentRepo.FindByID(req.DocumentID)
 	if err != nil {

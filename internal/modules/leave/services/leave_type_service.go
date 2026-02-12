@@ -20,13 +20,13 @@ func NewLeaveTypeService() *LeaveTypeService {
 
 // CreateLeaveType creates a new leave type
 func (s *LeaveTypeService) CreateLeaveType(req *models.CreateLeaveTypeRequest, tenantID *uint, createdBy *uint) (*models.LeaveType, error) {
+	_ = tenantID
 	// Check if code already exists
 	if s.repo.ExistsByCode(req.Code) {
 		return nil, errors.New("leave type with this code already exists")
 	}
 
 	leaveType := &models.LeaveType{
-		TenantID:             tenantID,
 		Code:                 req.Code,
 		Name:                 req.Name,
 		Icon:                 req.Icon,

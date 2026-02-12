@@ -96,11 +96,9 @@ func (h *SalaryStructureHandler) CreateSalaryStructure(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
 	userID := getUserID(c)
 
 	structure := &models.SalaryStructure{
-		TenantID:        tenantID,
 		TemplateName:    req.TemplateName,
 		Grade:           req.Grade,
 		Location:        req.Location,
@@ -328,10 +326,7 @@ func (h *SalaryStructureHandler) CreateSalaryComponent(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
-
 	component := &models.SalaryComponent{
-		TenantID:          tenantID,
 		ComponentName:     req.ComponentName,
 		ComponentCode:     req.ComponentCode,
 		ComponentType:     req.ComponentType,

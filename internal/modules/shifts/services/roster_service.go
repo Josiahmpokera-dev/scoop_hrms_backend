@@ -58,7 +58,6 @@ func (s *RosterService) CreateRosterAssignment(req *models.CreateRosterAssignmen
 	}
 
 	assignment := &models.RosterAssignment{
-		TenantID:   tenantID,
 		EmployeeID: req.EmployeeID,
 		Date:       date,
 		ShiftID:    req.ShiftID,
@@ -115,7 +114,6 @@ func (s *RosterService) BulkCreateRosterAssignments(req *models.BulkCreateRoster
 		}
 
 		assignment := models.RosterAssignment{
-			TenantID:   tenantID,
 			EmployeeID: reqItem.EmployeeID,
 			Date:       date,
 			ShiftID:    reqItem.ShiftID,
@@ -356,7 +354,6 @@ func (s *RosterService) AutoSchedule(req *models.AutoScheduleRequest, tenantID *
 			}
 
 			assignment := models.RosterAssignment{
-				TenantID:   tenantID,
 				EmployeeID: employeeID,
 				Date:       currentDate,
 				ShiftID:    shiftID,

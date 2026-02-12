@@ -416,3 +416,164 @@ func (h *LeaveRequestHandler) DeleteLeaveRequest(c *gin.Context) {
 
 	response.Success(c, "Draft leave request deleted successfully", nil)
 }
+
+// ReturnForInfo handles returning a leave request to the employee for more information
+// @Summary Return leave request for information
+// @Description HR/Admin can return a pending leave request to the employee requesting additional information
+// @Tags Leave Management (HR/Admin)
+// @Accept json
+// @Produce json
+// @Param request_id path int true "Leave Request ID"
+// @Param request body models.ReturnForInfoRequest true "Information required"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/leave/requests/{request_id}/return-for-info [post]
+func (h *LeaveRequestHandler) ReturnForInfo(c *gin.Context) {
+	idStr := c.Param("request_id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid request ID", nil)
+		return
+	}
+
+	var req models.ReturnForInfoRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	request, err := h.service.ReturnForInfo(uint(id), &req)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Leave request returned for information successfully", request)
+}
+
+// ListAllLeaveRequests handles listing all leave requests for HR/Admin
+// @Summary List all leave requests (HR/Admin)
+// @Description Retrieve a paginated list of all leave requests across all employees for HR/Admin review
+// @Tags Leave Management (HR/Admin)
+// @Produce json
+// @Param page query int false "Page number (default: 1)"
+// @Param page_size query int false "Items per page (default: 20, max: 100)"
+// @Param status query string false "Filter: pending, approved, rejected, cancelled, draft, returned_for_info"
+// @Param employee_id query string false "Filter by employee ID"
+// @Param leave_type_code query string false "Filter by leave type code"
+// @Param from_date query string false "Filter from date (YYYY-MM-DD)"
+// @Param to_date query string false "Filter to date (YYYY-MM-DD)"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/leave/admin/requests [get]
+func (h *LeaveRequestHandler) ListAllLeaveRequests(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	tenantID := middleware.GetTenantID(c)
+
+	// Build filters — do NOT restrict by employee_id (HR sees all)
+	filters := make(map[string]interface{})
+	if status := c.Query("status"); status != "" {
+		filters["status"] = status
+	}
+	if employeeID := c.Query("employee_id"); employeeID != "" {
+		filters["employee_id"] = employeeID
+	}
+	if leaveTypeCode := c.Query("leave_type_code"); leaveTypeCode != "" {
+		filters["leave_type_code"] = leaveTypeCode
+	}
+	if fromDate := c.Query("from_date"); fromDate != "" {
+		filters["from_date"] = fromDate
+	}
+	if toDate := c.Query("to_date"); toDate != "" {
+		filters["to_date"] = toDate
+	}
+
+	requests, total, err := h.service.ListLeaveRequests(tenantID, page, pageSize, filters)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve leave requests", err.Error())
+		return
+	}
+
+	totalPages := (total + int64(pageSize) - 1) / int64(pageSize)
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	response.Success(c, "Leave requests retrieved successfully", map[string]interface{}{
+		"data": requests,
+		"meta": map[string]interface{}{
+			"page":        page,
+			"per_page":    pageSize,
+			"total":       total,
+			"total_pages": totalPages,
+		},
+	})
+}
+
+// GetActiveLeaveTypes returns active leave types for the employee leave form dropdown
+// @Summary Get active leave types (Employee)
+// @Description Returns active leave types for the leave request form dropdown
+// @Tags Leave (Employee)
+// @Produce json
+// @Param page query int false "Page number (default: 1)"
+// @Param page_size query int false "Items per page (default: 20)"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/leave/types [get]
+func (h *LeaveRequestHandler) GetActiveLeaveTypes(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+
+	tenantID := middleware.GetTenantID(c)
+	filters := map[string]interface{}{"is_active": true}
+
+	leaveTypes, total, err := h.service.ListActiveLeaveTypes(tenantID, page, pageSize, filters)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve leave types", err.Error())
+		return
+	}
+
+	totalPages := (total + int64(pageSize) - 1) / int64(pageSize)
+	if totalPages == 0 {
+		totalPages = 1
+	}
+
+	response.Success(c, "Leave types retrieved successfully", map[string]interface{}{
+		"data": leaveTypes,
+		"meta": map[string]interface{}{
+			"page":        page,
+			"per_page":    pageSize,
+			"total":       total,
+			"total_pages": totalPages,
+		},
+	})
+}
+
+// GetLeaveHolidays returns holidays for the leave calendar (employee use)
+// @Summary Get holidays (Employee)
+// @Description Returns holidays for the current or specified year, used for leave day calculation
+// @Tags Leave (Employee)
+// @Produce json
+// @Param year query int false "Year (default: current year)"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/leave/holidays [get]
+func (h *LeaveRequestHandler) GetLeaveHolidays(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+
+	year := time.Now().Year()
+	if yearStr := c.Query("year"); yearStr != "" {
+		if y, err := strconv.Atoi(yearStr); err == nil && y > 2000 && y < 2100 {
+			year = y
+		}
+	}
+
+	holidays, err := h.service.GetHolidaysByYear(year, tenantID)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve holidays", err.Error())
+		return
+	}
+
+	response.Success(c, "Holidays retrieved successfully", holidays)
+}

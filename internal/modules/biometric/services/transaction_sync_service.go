@@ -61,7 +61,6 @@ func (s *TransactionSyncService) SyncTransactions(tenantID *uint, transactions [
 		}
 
 		dbTxn := models.BioTimeTransaction{
-			TenantID:            tenantID,
 			BioTimeTransactionID: txn.ID.Value,
 			EmpCode:             txn.EmpCode,
 			FirstName:           txn.FirstName,

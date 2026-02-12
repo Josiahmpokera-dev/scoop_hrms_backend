@@ -10,10 +10,13 @@ import (
 type UserRole string
 
 const (
-	RoleAdmin UserRole = "admin"
-	RoleHR    UserRole = "hr"
-	RoleUser  UserRole = "user"
-	RoleIT    UserRole = "it"
+	RoleSuperAdmin UserRole = "super_admin"
+	RoleAdmin      UserRole = "admin"
+	RoleHR         UserRole = "hr"
+	RoleIT         UserRole = "it"
+	RoleManager    UserRole = "manager"
+	RoleEmployee   UserRole = "employee"
+	RoleUser       UserRole = "user" // Legacy base role — all users have this
 )
 
 // User status values (Status field). Blocked/suspended users cannot login.
@@ -53,14 +56,29 @@ func (User) TableName() string {
 	return "users"
 }
 
-// IsAdmin checks if user is an admin
+// IsAdmin checks if user is an admin (includes super_admin)
 func (u *User) IsAdmin() bool {
-	return u.Role == RoleAdmin
+	return u.Role == RoleAdmin || u.Role == RoleSuperAdmin
+}
+
+// IsSuperAdmin checks if user is a super admin
+func (u *User) IsSuperAdmin() bool {
+	return u.Role == RoleSuperAdmin
 }
 
 // IsHR checks if user is HR staff
 func (u *User) IsHR() bool {
 	return u.Role == RoleHR
+}
+
+// IsEmployee checks if user has the employee role
+func (u *User) IsEmployee() bool {
+	return u.Role == RoleEmployee || u.Role == RoleUser
+}
+
+// IsManager checks if user has the manager role
+func (u *User) IsManager() bool {
+	return u.Role == RoleManager
 }
 
 // FullName returns the full name of the user

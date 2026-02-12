@@ -26,6 +26,7 @@ import (
 	organizationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/models"
 	payrollModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
+	projectModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/models"
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
 	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
 	teamModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/models"
@@ -139,6 +140,10 @@ func main() {
 		&attendanceModels.OvertimePolicy{},
 		&attendanceModels.OvertimeRequest{},
 		&attendanceModels.OvertimeApproval{},
+		// Project & Daily Task models
+		&projectModels.Project{},
+		&projectModels.ProjectMember{},
+		&projectModels.DailyTask{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
@@ -161,19 +166,23 @@ func main() {
 
 	// Configure CORS middleware — accepts any origin.
 	// AllowOriginFunc mirrors the request Origin back in the response header,
-	// which is required when AllowCredentials is true (browser rejects "*").
+	// which is required when AllowCredentials is true (browsers reject "*").
+	// NOTE: When AllowCredentials is true, browsers also reject "*" for
+	// AllowHeaders, AllowMethods, and ExposeHeaders — they MUST be explicit.
 	router.Use(cors.New(cors.Config{
 		AllowOriginFunc: func(origin string) bool {
 			return true // Allow every origin (local dev, Docker, production)
 		},
 		AllowMethods: []string{
-			"*",
+			"GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD",
 		},
 		AllowHeaders: []string{
-			"*",
+			"Origin", "Content-Type", "Content-Length", "Accept", "Accept-Encoding",
+			"Accept-Language", "Authorization", "Cache-Control", "X-Requested-With",
+			"X-Tenant-ID", "X-Request-Id",
 		},
 		ExposeHeaders: []string{
-			"*",
+			"Content-Length", "Content-Type", "Authorization", "X-Request-Id",
 		},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,

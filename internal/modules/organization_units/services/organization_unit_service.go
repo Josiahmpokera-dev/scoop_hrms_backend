@@ -45,7 +45,6 @@ func (s *OrganizationUnitService) CreateOrganizationUnit(req *models.CreateOrgan
 	}
 
 	unit := &models.OrganizationUnit{
-		TenantID:       tenantID,
 		OrganizationID: req.OrganizationID,
 		Code:           req.Code,
 		Name:           req.Name,

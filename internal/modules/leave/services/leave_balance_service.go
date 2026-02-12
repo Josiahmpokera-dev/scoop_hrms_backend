@@ -60,7 +60,6 @@ func (s *LeaveBalanceService) InitializeBalance(employeeID, leaveTypeCode string
 	policy := policies[0] // Use first policy found
 
 	balance := &models.LeaveBalance{
-		TenantID:    tenantID,
 		EmployeeID:  employeeID,
 		LeaveTypeCode: leaveTypeCode,
 		Year:        year,

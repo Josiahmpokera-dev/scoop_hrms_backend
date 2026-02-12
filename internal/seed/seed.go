@@ -25,6 +25,9 @@ func Run() {
 	RunAdminUser()
 	RunHRUser()
 
+	// Reference data
+	RunTanzaniaHolidays()
+
 	log.Println("────────────────────────────────────────────────────────")
 	log.Printf("📋 SEED CREDENTIALS  (password: %s)", defaultPassword)
 	log.Println("────────────────────────────────────────────────────────")

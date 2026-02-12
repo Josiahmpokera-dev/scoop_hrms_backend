@@ -159,12 +159,10 @@ func (h *PayrollHandler) CreatePayrollRun(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
 	userID := getUserID(c)
 	userName := getUserName(c)
 
 	run := &models.PayrollRun{
-		TenantID:      tenantID,
 		PayMonth:      req.PayMonth,
 		PayYear:       req.PayYear,
 		PayFrequency:  req.PayFrequency,

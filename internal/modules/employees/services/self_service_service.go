@@ -340,7 +340,6 @@ func (s *SelfServiceService) CreateProfileUpdateRequest(userID uint, tenantID *u
 
 	// Create request
 	request := &models.ProfileUpdateRequest{
-		TenantID:      tenantID,
 		EmployeeID:    employee.ID,
 		UpdateRequestID: requestID,
 		Section:       validSection,
@@ -505,7 +504,6 @@ func (s *SelfServiceService) CreateServiceRequest(userID uint, tenantID *uint, r
 
 	// Create request
 	request := &models.ServiceRequest{
-		TenantID:      tenantID,
 		EmployeeID:    employee.ID,
 		RequestNumber: requestNumber,
 		Type:          validType,

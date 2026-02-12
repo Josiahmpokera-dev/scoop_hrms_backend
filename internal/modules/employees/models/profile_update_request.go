@@ -27,7 +27,6 @@ const (
 // ProfileUpdateRequest represents a profile update request that requires manager approval
 type ProfileUpdateRequest struct {
 	ID                uint                      `json:"id" gorm:"primaryKey"`
-	TenantID          *uint                     `json:"tenant_id,omitempty" gorm:"index"`
 	EmployeeID        uint                      `json:"employee_id" gorm:"index;not null"`
 	UpdateRequestID   string                    `json:"update_request_id" gorm:"uniqueIndex;not null;size:50"` // e.g., PRU-2026-001
 	Section           ProfileUpdateSection      `json:"section" gorm:"type:varchar(50);not null"`              // personal, emergency_contacts, address

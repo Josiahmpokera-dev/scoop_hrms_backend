@@ -20,13 +20,13 @@ func NewOrganizationService() *OrganizationService {
 
 // CreateOrganization creates a new organization
 func (s *OrganizationService) CreateOrganization(req *models.CreateOrganizationRequest, tenantID *uint, updatedBy *uint) (*models.Organization, error) {
+	_ = tenantID // reserved for future use
 	// Check if code already exists
 	if s.repo.ExistsByCode(req.Code) {
 		return nil, errors.New("organization with this code already exists")
 	}
 
 	organization := &models.Organization{
-		TenantID:          tenantID,
 		Code:              req.Code,
 		Name:              req.Name,
 		LegalName:         req.LegalName,

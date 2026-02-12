@@ -96,7 +96,6 @@ func (s *OffboardingService) InitiateSeparation(req *employeeModels.InitiateSepa
 	// Create workflow
 	workflow := &employeeModels.OffboardingWorkflow{
 		OffboardingID:         offboardingID,
-		TenantID:              tenantID,
 		EmployeeID:            req.EmployeeID,
 		EmployeeDBID:          &employee.ID,
 		SeparationType:        req.SeparationType,
@@ -131,11 +130,11 @@ func (s *OffboardingService) InitiateSeparation(req *employeeModels.InitiateSepa
 
 	// Create default clearances
 	clearances := []employeeModels.OffboardingClearance{
-		{OffboardingID: offboardingID, TenantID: tenantID, Department: "Manager", Status: "Pending"},
-		{OffboardingID: offboardingID, TenantID: tenantID, Department: "IT", Status: "Pending"},
-		{OffboardingID: offboardingID, TenantID: tenantID, Department: "HR", Status: "Pending"},
-		{OffboardingID: offboardingID, TenantID: tenantID, Department: "Finance", Status: "Pending"},
-		{OffboardingID: offboardingID, TenantID: tenantID, Department: "Assets", Status: "Pending"},
+		{OffboardingID: offboardingID, Department: "Manager", Status: "Pending"},
+		{OffboardingID: offboardingID, Department: "IT", Status: "Pending"},
+		{OffboardingID: offboardingID, Department: "HR", Status: "Pending"},
+		{OffboardingID: offboardingID, Department: "Finance", Status: "Pending"},
+		{OffboardingID: offboardingID, Department: "Assets", Status: "Pending"},
 	}
 
 	// Generate unique clearance IDs for each clearance
@@ -178,7 +177,6 @@ func (s *OffboardingService) createAssetReturnRecords(offboardingID, employeeID 
 		assetReturn := &employeeModels.OffboardingAssetReturn{
 			OffboardingID:      offboardingID,
 			AssetID:           asset.ID,
-			TenantID:          tenantID,
 			ReturnStatus:       "Pending",
 			ExpectedReturnDate: expectedReturnDate,
 		}
@@ -666,7 +664,6 @@ func (s *OffboardingService) CalculateSettlement(offboardingID string, req *empl
 		SettlementID:        settlementID,
 		OffboardingID:       offboardingID,
 		EmployeeID:          workflow.EmployeeID,
-		TenantID:            tenantID,
 		Status:              "Calculated",
 		CalculatedDate:      &now,
 		SettlementBreakdown: string(breakdownJSON),

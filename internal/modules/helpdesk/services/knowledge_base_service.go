@@ -47,7 +47,7 @@ func (s *KnowledgeBaseService) GetArticleByID(articleID uint, tenantID *uint, in
 
 // SubmitFeedback records helpful/not helpful feedback for an article
 func (s *KnowledgeBaseService) SubmitFeedback(articleID uint, userID uint, tenantID *uint, isHelpful bool) (helpful, notHelpful int, err error) {
-	article, err := s.kbRepo.FindByID(articleID)
+	_, err = s.kbRepo.FindByID(articleID)
 	if err != nil {
 		return 0, 0, errors.New("article not found")
 	}

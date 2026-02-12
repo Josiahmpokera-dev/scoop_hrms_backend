@@ -107,7 +107,6 @@ func (s *AssetSelfService) CreateAssetRequest(userID uint, tenantID *uint, reque
 
 	// Create request
 	request := &models.AssetRequest{
-		TenantID:         tenantID,
 		EmployeeID:       employee.EmployeeID,
 		RequestNumber:    requestNumber,
 		RequestType:      validType,
@@ -259,7 +258,6 @@ func (s *AssetSelfService) CreateAssetIssue(userID uint, tenantID *uint, assetID
 
 	// Create issue
 	issue := &models.AssetIssue{
-		TenantID:          tenantID,
 		EmployeeID:        employee.EmployeeID,
 		IssueNumber:       issueNumber,
 		AssetID:           assetID,

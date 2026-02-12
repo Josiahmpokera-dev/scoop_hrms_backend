@@ -56,7 +56,6 @@ func (s *SwapRequestService) CreateSwapRequest(req *models.CreateSwapRequestRequ
 	}
 
 	swapRequest := &models.SwapRequest{
-		TenantID:         tenantID,
 		RequestedBy:      requestedBy,
 		RequestedWith:    swapAssignment.EmployeeID,
 		AssignmentID:     req.AssignmentID,

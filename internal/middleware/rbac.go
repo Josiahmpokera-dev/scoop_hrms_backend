@@ -64,8 +64,8 @@ func PermissionMiddleware(permissionCode string) gin.HandlerFunc {
 // checkLegacyRolePermission checks permissions based on legacy role system.
 // Admin gets all permissions; other roles get a predefined subset for backward compatibility.
 func checkLegacyRolePermission(role models.UserRole, permissionCode string) bool {
-	// Admin has full access to everything
-	if role == models.RoleAdmin {
+	// Admin and Super Admin have full access to everything
+	if role == models.RoleAdmin || role == models.RoleSuperAdmin {
 		return true
 	}
 
@@ -101,6 +101,28 @@ func checkLegacyRolePermission(role models.UserRole, permissionCode string) bool
 			"helpdesk:read", "helpdesk:create", "helpdesk:manage", "helpdesk:manage_kb",
 			"user:read",
 			"attendance:read", "attendance:manage_config",
+		},
+		models.RoleManager: {
+			"dashboard:view",
+			"employee:read", "employee:update",
+			"leave:read", "leave:create", "leave:approve",
+			"attendance:read", "attendance:approve",
+			"shift:read", "shift:approve_swaps",
+			"department:read", "team:read", "position:read",
+			"organization:read", "location:read",
+			"helpdesk:read", "helpdesk:create",
+			"report:view",
+			"payroll:read", "asset:read",
+		},
+		models.RoleEmployee: {
+			"dashboard:view",
+			"employee:read",
+			"leave:read", "leave:create",
+			"shift:read",
+			"department:read", "team:read", "position:read",
+			"organization:read", "location:read",
+			"helpdesk:read", "helpdesk:create",
+			"payroll:read", "asset:read", "attendance:read",
 		},
 		models.RoleUser: {
 			"dashboard:view",

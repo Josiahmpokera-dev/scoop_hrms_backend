@@ -361,3 +361,89 @@ func (h *DashboardHandler) GetPendingApprovals(c *gin.Context) {
 
 	response.Success(c, "Pending approvals retrieved successfully", result)
 }
+
+// ────────────────────────── Employee Dashboard ──────────────────────────
+
+// GetEmployeeStatistics returns personal dashboard statistics for the logged-in employee
+// @Summary Get employee dashboard statistics
+// @Description Returns personal KPI stats: leave balance, hours this week, pending requests, next payday, attendance
+// @Tags Employee Dashboard
+// @Produce json
+// @Param date query string false "Date for statistics (default: today, format: YYYY-MM-DD)"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/dashboard/employee/statistics [get]
+func (h *DashboardHandler) GetEmployeeStatistics(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	uid := userID.(uint)
+
+	// Parse date
+	date := time.Now()
+	if dateStr := c.Query("date"); dateStr != "" {
+		if parsed, err := time.Parse("2006-01-02", dateStr); err == nil {
+			date = parsed
+		}
+	}
+
+	stats, err := h.dashboardService.GetEmployeeStatistics(uid, date)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve employee statistics", err.Error())
+		return
+	}
+
+	response.Success(c, "Employee dashboard statistics retrieved successfully", stats)
+}
+
+// GetEmployeeActivity returns recent activity feed for the logged-in employee
+// @Summary Get employee recent activity
+// @Description Returns the employee's recent activities: leave requests, timesheets, payslips, service requests
+// @Tags Employee Dashboard
+// @Produce json
+// @Param page query int false "Page number (default: 1)"
+// @Param page_size query int false "Items per page (default: 10, max: 50)"
+// @Param activity_type query string false "Filter: leave, timesheet, payslip, request, all"
+// @Param days query int false "Activities from last N days (default: 30, max: 365)"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/dashboard/employee/my-activity [get]
+func (h *DashboardHandler) GetEmployeeActivity(c *gin.Context) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+	uid := userID.(uint)
+
+	page := 1
+	if p := c.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
+	pageSize := 10
+	if ps := c.Query("page_size"); ps != "" {
+		if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 && parsed <= 50 {
+			pageSize = parsed
+		}
+	}
+
+	activityType := strings.TrimSpace(c.Query("activity_type"))
+
+	days := 30
+	if d := c.Query("days"); d != "" {
+		if parsed, err := strconv.Atoi(d); err == nil && parsed > 0 && parsed <= 365 {
+			days = parsed
+		}
+	}
+
+	result, err := h.dashboardService.GetMyActivity(uid, days, page, pageSize, activityType)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve employee activity", err.Error())
+		return
+	}
+
+	response.Success(c, "Employee recent activity retrieved successfully", result)
+}
