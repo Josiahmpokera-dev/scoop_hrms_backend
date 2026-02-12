@@ -120,17 +120,11 @@ func (h *OrganizationHandler) DeleteOrganization(c *gin.Context) {
 }
 
 // GetMyOrganization handles getting the current user's organization
-// This is useful after onboarding to get the organization that was created
+// In single-tenant mode, this returns the first (primary) organization in the system.
 func (h *OrganizationHandler) GetMyOrganization(c *gin.Context) {
-	// Get tenant_id from context
-	tenantID := middleware.GetTenantID(c)
+	// Single-tenant: no tenant filter needed — return the first organization
+	tenantID := middleware.GetTenantID(c) // may be nil in single-tenant mode, that's fine
 
-	if tenantID == nil {
-		response.BadRequest(c, "User is not associated with a tenant. Please complete onboarding first.", nil)
-		return
-	}
-
-	// Get the first organization for this tenant (usually the one created during onboarding)
 	organizations, total, err := h.service.ListOrganizations(tenantID, 1, 1, nil)
 	if err != nil {
 		response.InternalServerError(c, "Failed to retrieve organization", err.Error())
@@ -138,7 +132,7 @@ func (h *OrganizationHandler) GetMyOrganization(c *gin.Context) {
 	}
 
 	if total == 0 || len(organizations) == 0 {
-		response.NotFound(c, "No organization found for your account. Please create one first.")
+		response.NotFound(c, "No organization found. Please create one first.")
 		return
 	}
 

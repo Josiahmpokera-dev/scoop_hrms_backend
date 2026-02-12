@@ -159,7 +159,7 @@ func (r *DashboardRepository) GetEmployeeLeaveBalance(employeeID string, year in
 	}
 
 	if err := r.db.Model(&leaveModels.LeaveBalance{}).
-		Select("leave_type_code, current_balance as balance").
+		Select("leave_type_code, available as balance").
 		Where("employee_id = ? AND year = ?", employeeID, year).
 		Find(&results).Error; err != nil {
 		return nil, err
