@@ -26,6 +26,7 @@ import (
 	organizationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/models"
 	payrollModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
+	performanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/performance/models"
 	projectModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/models"
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
 	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
@@ -144,6 +145,21 @@ func main() {
 		&projectModels.Project{},
 		&projectModels.ProjectMember{},
 		&projectModels.DailyTask{},
+		// Performance Management models
+		&performanceModels.Goal{},
+		&performanceModels.KeyResult{},
+		&performanceModels.GoalCheckIn{},
+		&performanceModels.DepartmentTarget{},
+		&performanceModels.DepartmentTargetMilestone{},
+		&performanceModels.EmployeeTarget{},
+		&performanceModels.AppraisalCycle{},
+		&performanceModels.AppraisalWorkflowStep{},
+		&performanceModels.Appraisal{},
+		&performanceModels.Feedback360Campaign{},
+		&performanceModels.Feedback360RaterGroup{},
+		&performanceModels.TalentReview{},
+		&performanceModels.CalibrationSession{},
+		&performanceModels.SuccessionPlan{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}

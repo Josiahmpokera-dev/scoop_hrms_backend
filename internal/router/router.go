@@ -21,6 +21,7 @@ import (
 	positionHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/handlers"
 	roleHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/handlers"
 	shiftHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/handlers"
+	performanceHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/performance/handlers"
 	projectHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/handlers"
 	teamHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/handlers"
 	userHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/handlers"
@@ -962,6 +963,139 @@ func SetupRoutes(r *gin.Engine) {
 			selfServiceDailyTasks.GET("/:id", dailyTaskHandler.GetDailyTask)                 // Get task details
 			selfServiceDailyTasks.PUT("/:id", dailyTaskHandler.UpdateDailyTask)              // Update my task
 			selfServiceDailyTasks.DELETE("/:id", dailyTaskHandler.DeleteDailyTask)           // Delete my task
+		}
+
+		// =====================================================================
+		// Performance Management Module
+		// =====================================================================
+		goalHandler := performanceHandlers.NewGoalHandler()
+		deptTargetHandler := performanceHandlers.NewDepartmentTargetHandler()
+		empTargetHandler := performanceHandlers.NewEmployeeTargetHandler()
+		appraisalHandler := performanceHandlers.NewAppraisalHandler()
+		feedback360Handler := performanceHandlers.NewFeedback360Handler()
+		talentReviewHandler := performanceHandlers.NewTalentReviewHandler()
+		reportHandler := performanceHandlers.NewReportHandler()
+
+		performance := v1.Group("/performance")
+		performance.Use(middleware.AuthMiddleware())
+		{
+			// --- Dashboard (any authenticated user) ---
+			dashboard := performance.Group("/dashboard")
+			{
+				dashboard.GET("/stats", goalHandler.GetDashboardStats)
+				dashboard.GET("/upcoming-actions", goalHandler.GetUpcomingActions)
+			}
+
+			// --- Goals & OKRs ---
+			goals := performance.Group("/goals")
+			{
+				goals.GET("", goalHandler.ListGoals)                                        // List goals
+				goals.GET("/stats", goalHandler.GetGoalStats)                               // Goal statistics
+				goals.GET("/alignment", goalHandler.GetAlignmentMap)                        // Goal alignment map (Manager+)
+				goals.POST("", goalHandler.CreateGoal)                                      // Create goal
+				goals.POST("/assign", goalHandler.AssignGoal)                               // Assign goal to employee (Manager+)
+				goals.GET("/:id", goalHandler.GetGoal)                                      // Get goal detail
+				goals.PATCH("/:id", goalHandler.UpdateGoal)                                 // Update goal
+				goals.DELETE("/:id", goalHandler.DeleteGoal)                                // Delete goal
+				goals.POST("/:id/submit-for-approval", goalHandler.SubmitForApproval)       // Submit for manager approval
+				goals.PUT("/:id/approve", goalHandler.ApproveGoal)                          // Approve/reject goal
+				goals.POST("/:id/request-completion", goalHandler.RequestCompletion)         // Request completion verification
+				goals.PUT("/:id/verify-completion", goalHandler.VerifyCompletion)            // Verify/reject completion
+				goals.POST("/:id/link-project", goalHandler.LinkProject)                    // Link goal to project
+				goals.DELETE("/:id/unlink-project", goalHandler.UnlinkProject)              // Unlink goal from project
+				// Key Results
+				goals.POST("/:id/key-results", goalHandler.CreateKeyResult)
+				goals.PATCH("/:id/key-results/:krId", goalHandler.UpdateKeyResult)
+				goals.DELETE("/:id/key-results/:krId", goalHandler.DeleteKeyResult)
+				// Check-ins
+				goals.POST("/:id/check-ins", goalHandler.CreateCheckIn)
+			}
+
+			// --- Department Targets (Manager+) ---
+			deptTargets := performance.Group("/department-targets")
+			{
+				deptTargets.GET("", deptTargetHandler.ListTargets)
+				deptTargets.GET("/:id", deptTargetHandler.GetTarget)
+				deptTargets.POST("", middleware.ManagerMiddleware(), deptTargetHandler.CreateTarget)
+				deptTargets.PATCH("/:id", middleware.ManagerMiddleware(), deptTargetHandler.UpdateTarget)
+				deptTargets.DELETE("/:id", middleware.ManagerMiddleware(), deptTargetHandler.DeleteTarget)
+				deptTargets.POST("/:id/progress", middleware.ManagerMiddleware(), deptTargetHandler.UpdateProgress)
+				deptTargets.PUT("/:id/milestones/:milestoneId/complete", middleware.ManagerMiddleware(), deptTargetHandler.CompleteMilestone)
+				deptTargets.POST("/:id/link-goal", middleware.ManagerMiddleware(), deptTargetHandler.LinkGoal)
+				deptTargets.POST("/:id/link-project", middleware.ManagerMiddleware(), deptTargetHandler.LinkProject)
+				deptTargets.DELETE("/:id/unlink-project", middleware.ManagerMiddleware(), deptTargetHandler.UnlinkProject)
+			}
+
+			// --- Employee Targets (Manager+) ---
+			empTargets := performance.Group("/employee-targets")
+			{
+				empTargets.GET("", empTargetHandler.ListTargets)
+				empTargets.GET("/:id", empTargetHandler.GetTarget)
+				empTargets.POST("", middleware.ManagerMiddleware(), empTargetHandler.CreateTarget)
+				empTargets.POST("/bulk-assign", middleware.ManagerMiddleware(), empTargetHandler.BulkAssignTargets)
+				empTargets.PATCH("/:id", middleware.ManagerMiddleware(), empTargetHandler.UpdateTarget)
+				empTargets.DELETE("/:id", middleware.ManagerMiddleware(), empTargetHandler.DeleteTarget)
+				empTargets.POST("/:id/progress", empTargetHandler.UpdateProgress)
+			}
+
+			// --- Appraisal Cycles (HR/Admin) ---
+			appraisalCycles := performance.Group("/appraisal-cycles")
+			{
+				appraisalCycles.GET("", appraisalHandler.ListCycles)
+				appraisalCycles.GET("/active", appraisalHandler.GetActiveCycle)
+				appraisalCycles.GET("/:id", appraisalHandler.GetCycle)
+				appraisalCycles.POST("", middleware.HRMiddleware(), appraisalHandler.CreateCycle)
+				appraisalCycles.PUT("/:id", middleware.HRMiddleware(), appraisalHandler.UpdateCycle)
+				appraisalCycles.PATCH("/:id/status", middleware.HRMiddleware(), appraisalHandler.ChangeCycleStatus)
+				appraisalCycles.DELETE("/:id", middleware.AdminMiddleware(), appraisalHandler.DeleteCycle)
+			}
+
+			// --- Appraisals ---
+			appraisals := performance.Group("/appraisals")
+			{
+				appraisals.GET("", appraisalHandler.ListAppraisals)
+				appraisals.GET("/summary", appraisalHandler.GetAppraisalSummary)
+				appraisals.GET("/:id", appraisalHandler.GetAppraisal)
+				appraisals.POST("/:id/self-review", appraisalHandler.SubmitSelfReview)
+				appraisals.POST("/:id/manager-review", appraisalHandler.SubmitManagerReview)
+				appraisals.POST("/:id/calibration", middleware.HRMiddleware(), appraisalHandler.SubmitCalibration)
+				appraisals.PUT("/:id/send-back", appraisalHandler.SendBack)
+				appraisals.PUT("/:id/finalize", middleware.HRMiddleware(), appraisalHandler.Finalize)
+			}
+
+			// --- 360° Feedback ---
+			feedback360 := performance.Group("/feedback-360")
+			{
+				feedback360.GET("", feedback360Handler.ListCampaigns)
+				feedback360.GET("/:id", feedback360Handler.GetCampaign)
+				feedback360.POST("", middleware.HRMiddleware(), feedback360Handler.LaunchCampaign)
+			}
+
+			// --- Talent Review / 9-Box ---
+			talentReview := performance.Group("/talent-review")
+			{
+				talentReview.GET("", middleware.ManagerMiddleware(), talentReviewHandler.ListReviews)
+				talentReview.GET("/employees/:id", middleware.ManagerMiddleware(), talentReviewHandler.GetReview)
+				talentReview.PATCH("/employees/:id", middleware.HRMiddleware(), talentReviewHandler.UpdateReview)
+				talentReview.POST("/calibration-sessions", middleware.HRMiddleware(), talentReviewHandler.CreateCalibrationSession)
+				talentReview.POST("/employees/:id/succession", middleware.HRMiddleware(), talentReviewHandler.AddSuccessionPlan)
+			}
+
+			// --- Performance Reports (HR/Admin) ---
+			reports := performance.Group("/reports")
+			reports.Use(middleware.HRMiddleware())
+			{
+				reports.GET("/summary", reportHandler.GetSummary)
+				reports.GET("/rating-distribution", reportHandler.GetRatingDistribution)
+				reports.GET("/department-summary", reportHandler.GetDepartmentSummary)
+			}
+
+			// --- Project-Performance Alignment ---
+			projectAlignment := performance.Group("/project-alignment")
+			{
+				projectAlignment.GET("/:projectId", goalHandler.GetDashboardStats)     // Reuse for now
+				projectAlignment.GET("/summary", reportHandler.GetDepartmentSummary)    // Reuse for now
+			}
 		}
 	}
 }
