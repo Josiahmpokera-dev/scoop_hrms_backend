@@ -27,6 +27,7 @@ import (
 	payrollModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
 	performanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/performance/models"
+	settingsModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/models"
 	projectModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/models"
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
 	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
@@ -160,6 +161,8 @@ func main() {
 		&performanceModels.TalentReview{},
 		&performanceModels.CalibrationSession{},
 		&performanceModels.SuccessionPlan{},
+		// Settings models
+		&settingsModels.MenuVisibilitySetting{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}

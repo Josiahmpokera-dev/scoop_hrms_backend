@@ -22,6 +22,7 @@ import (
 	roleHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/handlers"
 	shiftHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/handlers"
 	performanceHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/performance/handlers"
+	settingsHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/handlers"
 	projectHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/handlers"
 	teamHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/handlers"
 	userHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/handlers"
@@ -963,6 +964,28 @@ func SetupRoutes(r *gin.Engine) {
 			selfServiceDailyTasks.GET("/:id", dailyTaskHandler.GetDailyTask)                 // Get task details
 			selfServiceDailyTasks.PUT("/:id", dailyTaskHandler.UpdateDailyTask)              // Update my task
 			selfServiceDailyTasks.DELETE("/:id", dailyTaskHandler.DeleteDailyTask)           // Delete my task
+		}
+
+		// =====================================================================
+		// Settings — Menu Visibility
+		// =====================================================================
+		menuVisHandler := settingsHandlers.NewMenuVisibilityHandler()
+
+		// Public endpoint: any authenticated user can fetch hidden keys
+		settingsPublic := v1.Group("/settings")
+		settingsPublic.Use(middleware.AuthMiddleware())
+		{
+			settingsPublic.GET("/menu-visibility/active", menuVisHandler.GetActive)
+		}
+
+		// Admin-only endpoints
+		settingsAdmin := v1.Group("/settings")
+		settingsAdmin.Use(middleware.AuthMiddleware(), middleware.AdminMiddleware())
+		{
+			settingsAdmin.GET("/menu-visibility", menuVisHandler.GetAll)
+			settingsAdmin.PUT("/menu-visibility", menuVisHandler.BulkUpdate)
+			settingsAdmin.PATCH("/menu-visibility/:menuKey", menuVisHandler.ToggleSingle)
+			settingsAdmin.POST("/menu-visibility/reset", menuVisHandler.Reset)
 		}
 
 		// =====================================================================
