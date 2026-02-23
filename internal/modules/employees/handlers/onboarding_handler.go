@@ -595,7 +595,7 @@ func (h *OnboardingHandler) SaveStepByEmployeeIDWithFiles(c *gin.Context) {
 				response.BadRequest(c, uploadErr.Error(), nil)
 				return
 			}
-			stepData["photo_url"] = photoURL
+			stepData["photo_url"] = storageService.ResolveURL(c.Request, photoURL)
 			stepData["photo_file_size"] = fileSize
 			stepData["photo_mime_type"] = mimeType
 		}
@@ -639,7 +639,7 @@ func (h *OnboardingHandler) SaveStepByEmployeeIDWithFiles(c *gin.Context) {
 				documents = append(documents, map[string]interface{}{
 					"document_type": documentType,
 					"file_name":     file.Filename,
-					"file_url":      fileURL,
+					"file_url":      storageService.ResolveURL(c.Request, fileURL),
 					"file_size":     fileSize,
 					"mime_type":     mimeType,
 					"description":   description,

@@ -102,6 +102,7 @@ func main() {
 		// Biometric models
 		&biometricModels.BioTimeConfig{},
 		&biometricModels.BioTimeTransaction{},
+		&biometricModels.BiometricEnrollment{},
 		// Shifts & Rosters models
 		&shiftModels.Shift{},
 		&shiftModels.ShiftLocation{}, // Join table for shifts and locations

@@ -23,6 +23,8 @@ import (
 	shiftHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/handlers"
 	performanceHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/performance/handlers"
 	settingsHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/handlers"
+	uploadHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/uploads/handlers"
+	bulkImportHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/bulk_import/handlers"
 	projectHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/handlers"
 	teamHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/handlers"
 	userHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/handlers"
@@ -534,8 +536,10 @@ func SetupRoutes(r *gin.Engine) {
 
 		// Biometric/BioTime routes
 		biotimeHandler := biometricHandlers.NewBioTimeHandler()
+		enrollmentHandler := biometricHandlers.NewEnrollmentHandler()
+
 		biometric := v1.Group("/biometric")
-		biometric.Use(middleware.AuthMiddleware(), middleware.HRMiddleware()) // Require HR/Admin for biometric operations
+		biometric.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
 			biometric.GET("/biotime/test-connection", biotimeHandler.TestConnection)
 			biometric.GET("/biotime/token", biotimeHandler.GetToken)
@@ -545,10 +549,22 @@ func SetupRoutes(r *gin.Engine) {
 			biometric.GET("/biotime/transactions", biotimeHandler.GetTransactions)
 			biometric.GET("/biotime/transactions/:id", biotimeHandler.GetTransaction)
 			biometric.POST("/biotime/backfill", biotimeHandler.BackfillTransactions)
-			// Daily attendance from database
 			biometric.GET("/attendance/daily", biotimeHandler.GetDailyAttendance)
-			// Late arrivals (exceptional cases)
 			biometric.GET("/attendance/exceptional", biotimeHandler.GetExceptional)
+
+			// Enrollment — link employees to biometric device users
+			biometric.GET("/enrollments", enrollmentHandler.List)
+			biometric.GET("/enrollments/statistics", enrollmentHandler.GetStatistics)
+			biometric.GET("/enrollments/unlinked", enrollmentHandler.GetUnlinked)
+			biometric.GET("/enrollments/device-users", enrollmentHandler.GetDeviceUsers)
+			biometric.POST("/enrollments/link", enrollmentHandler.Link)
+			biometric.POST("/enrollments/bulk-link", enrollmentHandler.BulkLink)
+			biometric.POST("/enrollments/auto-link", enrollmentHandler.AutoLink)
+			biometric.DELETE("/enrollments/:employeeId/unlink", enrollmentHandler.Unlink)
+
+			// Merged attendance (biometric + employee data)
+			biometric.GET("/attendance/merged", enrollmentHandler.GetMergedAttendance)
+			biometric.GET("/attendance/merged/:employeeId", enrollmentHandler.GetEmployeeAttendance)
 		}
 
 		// Shifts & Rosters routes
@@ -986,6 +1002,37 @@ func SetupRoutes(r *gin.Engine) {
 			settingsAdmin.PUT("/menu-visibility", menuVisHandler.BulkUpdate)
 			settingsAdmin.PATCH("/menu-visibility/:menuKey", menuVisHandler.ToggleSingle)
 			settingsAdmin.POST("/menu-visibility/reset", menuVisHandler.Reset)
+		}
+
+		// =====================================================================
+		// File Uploads (S3 / Local)
+		// =====================================================================
+		uploadHandler := uploadHandlers.NewUploadHandler()
+
+		uploads := v1.Group("/uploads")
+		uploads.Use(middleware.AuthMiddleware())
+		{
+			uploads.POST("/file", uploadHandler.UploadFile)
+			uploads.POST("/image", uploadHandler.UploadImage)
+			uploads.POST("/document", uploadHandler.UploadDocument)
+			uploads.DELETE("", uploadHandler.DeleteFile)
+			uploads.GET("/info", uploadHandler.GetStorageInfo)
+		}
+
+		// =====================================================================
+		// Bulk Import (Excel Upload)
+		// =====================================================================
+		bulkHandler := bulkImportHandlers.NewBulkImportHandler()
+
+		bulkImport := v1.Group("/bulk-import")
+		bulkImport.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			bulkImport.GET("/templates/employees", bulkHandler.DownloadEmployeeTemplate)
+			bulkImport.GET("/templates/departments", bulkHandler.DownloadDepartmentTemplate)
+			bulkImport.GET("/templates/positions", bulkHandler.DownloadPositionTemplate)
+			bulkImport.POST("/employees", bulkHandler.ImportEmployees)
+			bulkImport.POST("/departments", bulkHandler.ImportDepartments)
+			bulkImport.POST("/positions", bulkHandler.ImportPositions)
 		}
 
 		// =====================================================================

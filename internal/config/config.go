@@ -18,6 +18,22 @@ type Config struct {
 	BioTime        BioTimeConfig
 	RabbitMQ       RabbitMQConfig
 	LoginRateLimit LoginRateLimitConfig
+	AWS            AWSConfig
+}
+
+// AWSConfig holds AWS S3 storage configuration
+type AWSConfig struct {
+	Region          string
+	S3Bucket        string
+	S3BaseURL       string
+	S3DocsPrefix    string
+	AccessKeyID     string
+	SecretAccessKey string
+}
+
+// IsS3Enabled returns true when all required S3 fields are set.
+func (a *AWSConfig) IsS3Enabled() bool {
+	return a.S3Bucket != "" && a.AccessKeyID != "" && a.SecretAccessKey != "" && a.Region != ""
 }
 
 // LoginRateLimitConfig holds login rate limiting (failed attempts → block) configuration
@@ -121,6 +137,14 @@ func LoadConfig() (*Config, error) {
 		LoginRateLimit: LoginRateLimitConfig{
 			MaxAttempts:    getEnvInt("LOGIN_MAX_ATTEMPTS", 5),    // Block after N failed attempts
 			LockoutMinutes: getEnvInt("LOGIN_LOCKOUT_MINUTES", 0), // 0 = block until admin unblocks
+		},
+		AWS: AWSConfig{
+			Region:          getEnv("AWS_REGION", ""),
+			S3Bucket:        getEnv("AWS_S3_BUCKET", ""),
+			S3BaseURL:       getEnv("AWS_S3_BASE_URL", ""),
+			S3DocsPrefix:    getEnv("AWS_S3_DOCS_PREFIX", ""),
+			AccessKeyID:     getEnv("AWS_ACCESS_KEY_ID", ""),
+			SecretAccessKey: getEnv("AWS_SECRET_ACCESS_KEY", ""),
 		},
 	}
 

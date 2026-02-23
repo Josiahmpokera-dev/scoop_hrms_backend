@@ -396,7 +396,7 @@ func (h *TicketHandler) UploadAttachments(c *gin.Context) {
 		}
 		inputs = append(inputs, services.AttachmentInput{
 			Name: fileHeader.Filename,
-			URL:  url,
+			URL:  h.storageService.ResolveURL(c.Request, url),
 			Size: size,
 			Type: contentType,
 		})

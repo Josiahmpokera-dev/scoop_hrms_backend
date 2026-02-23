@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
@@ -98,8 +97,8 @@ func (h *FileUploadHandler) UploadDocument(c *gin.Context) {
 		return
 	}
 
-	// Convert relative URL to full URL
-	fullFileURL := h.getFullURL(c, fileURL)
+	// Convert stored URL to a full response URL (handles both S3 and local)
+	fullFileURL := h.storageService.ResolveURL(c.Request, fileURL)
 
 	// Get tenant ID
 	tenantID := middleware.GetTenantID(c)
@@ -214,28 +213,8 @@ func (h *FileUploadHandler) UploadDocument(c *gin.Context) {
 	})
 }
 
-// getFullURL converts a relative URL to a full URL using the request's scheme and host
-func (h *FileUploadHandler) getFullURL(c *gin.Context, relativeURL string) string {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	// Check X-Forwarded-Proto header for reverse proxy setups
-	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
-		scheme = proto
-	}
-
-	host := c.Request.Host
-	if host == "" {
-		host = "localhost:8080" // Default fallback
-	}
-
-	// Remove leading slash from relativeURL if present
-	if len(relativeURL) > 0 && relativeURL[0] == '/' {
-		relativeURL = relativeURL[1:]
-	}
-
-	return fmt.Sprintf("%s://%s/%s", scheme, host, relativeURL)
+func (h *FileUploadHandler) getFullURL(c *gin.Context, storedURL string) string {
+	return h.storageService.ResolveURL(c.Request, storedURL)
 }
 
 // UploadPhoto handles photo upload for employee onboarding
@@ -271,8 +250,8 @@ func (h *FileUploadHandler) UploadPhoto(c *gin.Context) {
 		return
 	}
 
-	// Convert relative URL to full URL
-	fullFileURL := h.getFullURL(c, fileURL)
+	// Convert stored URL to a full response URL (handles both S3 and local)
+	fullFileURL := h.storageService.ResolveURL(c.Request, fileURL)
 
 	// Return file information
 	response.Success(c, "Photo uploaded successfully", gin.H{
@@ -503,26 +482,6 @@ func (h *DocumentHandler) GetDocumentStatistics(c *gin.Context) {
 	response.Success(c, "Document statistics retrieved successfully", statistics)
 }
 
-// getFullURL converts a relative URL to a full URL using the request's scheme and host
-func (h *DocumentHandler) getFullURL(c *gin.Context, relativeURL string) string {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
-	}
-	// Check X-Forwarded-Proto header for reverse proxy setups
-	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
-		scheme = proto
-	}
-
-	host := c.Request.Host
-	if host == "" {
-		host = "localhost:8080" // Default fallback
-	}
-
-	// Remove leading slash from relativeURL if present (it will be added back)
-	if len(relativeURL) > 0 && relativeURL[0] == '/' {
-		relativeURL = relativeURL[1:]
-	}
-
-	return fmt.Sprintf("%s://%s/%s", scheme, host, relativeURL)
+func (h *DocumentHandler) getFullURL(c *gin.Context, storedURL string) string {
+	return h.storageService.ResolveURL(c.Request, storedURL)
 }
