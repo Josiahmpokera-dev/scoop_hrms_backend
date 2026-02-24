@@ -25,11 +25,12 @@ import (
 	organizationUnitModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/models"
 	organizationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/models"
 	payrollModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
-	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
 	performanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/performance/models"
-	settingsModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/models"
+	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
 	projectModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/models"
+	recruitmentModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/recruitment/models"
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
+	settingsModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/models"
 	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
 	teamModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/models"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
@@ -164,6 +165,14 @@ func main() {
 		&performanceModels.SuccessionPlan{},
 		// Settings models
 		&settingsModels.MenuVisibilitySetting{},
+		// Recruitment models
+		&recruitmentModels.JobRequisition{},
+		&recruitmentModels.JobOpening{},
+		&recruitmentModels.Candidate{},
+		&recruitmentModels.JobApplication{},
+		&recruitmentModels.Interview{},
+		&recruitmentModels.Offer{},
+		&recruitmentModels.TalentPoolCandidate{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}

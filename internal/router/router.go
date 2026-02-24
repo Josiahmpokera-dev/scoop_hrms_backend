@@ -7,6 +7,7 @@ import (
 	auditHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/handlers"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/auth/handlers"
 	biometricHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/handlers"
+	bulkImportHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/bulk_import/handlers"
 	costCenterHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/handlers"
 	dashboardHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/dashboard/handlers"
 	departmentHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/handlers"
@@ -18,15 +19,15 @@ import (
 	organizationUnitHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/handlers"
 	organizationHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/handlers"
 	payrollHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/handlers"
-	positionHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/handlers"
-	roleHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/handlers"
-	shiftHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/handlers"
 	performanceHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/performance/handlers"
-	settingsHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/handlers"
-	uploadHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/uploads/handlers"
-	bulkImportHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/bulk_import/handlers"
+	positionHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/handlers"
 	projectHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/handlers"
+	recruitmentHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/recruitment/handlers"
+	roleHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/handlers"
+	settingsHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/handlers"
+	shiftHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/handlers"
 	teamHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/handlers"
+	uploadHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/uploads/handlers"
 	userHandlers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/handlers"
 	"github.com/gin-gonic/gin"
 )
@@ -77,23 +78,23 @@ func SetupRoutes(r *gin.Engine) {
 		users := v1.Group("/users")
 		users.Use(middleware.AuthMiddleware())
 		{
-			users.POST("", middleware.HRMiddleware(), userHandler.CreateUser)                                       // Create user from employee (Admin/HR only)
+			users.POST("", middleware.HRMiddleware(), userHandler.CreateUser)                                  // Create user from employee (Admin/HR only)
 			users.GET("/available-employees", middleware.HRMiddleware(), userHandler.ListEmployeesWithoutUser) // List employees without user accounts (for picker)
 			users.GET("/special-roles", middleware.HRMiddleware(), userHandler.ListSpecialRoleUsers)           // List IT, HR, Admin users (HR/Admin only)
 			users.GET("", middleware.HRMiddleware(), userHandler.ListUsers)                                    // List users (HR/Admin only, for transfer-role pickers)
-			users.POST("/transfer-role", userHandler.TransferRole)                                   // Transfer role from one user to another (unchanged)
-			users.POST("/assign-role", middleware.AdminMiddleware(), userHandler.AssignRole)         // Assign admin/hr/it to a normal user (Admin only)
-			users.POST("/add-role", middleware.AdminMiddleware(), userHandler.AddRole)               // Add role to user (supports multiple roles) (Admin only)
-			users.POST("/remove-role", middleware.AdminMiddleware(), userHandler.RemoveRole)         // Remove role from user (Admin only)
-			users.POST("/set-roles", middleware.AdminMiddleware(), userHandler.SetRoles)             // Replace all roles for user (Admin only)
-			users.PUT("/change-roles", middleware.AdminMiddleware(), userHandler.ChangeRoles)        // Checkbox-style change roles (Admin only)
-			users.GET("/:id", middleware.HRMiddleware(), userHandler.GetUser)                        // Get user detail with roles (HR/Admin only)
-			users.GET("/:id/roles", middleware.HRMiddleware(), userHandler.GetUserRoles)             // Get all roles for a user (HR/Admin only)
-			users.POST("/:id/suspend", middleware.HRMiddleware(), userHandler.SuspendUser)           // Suspend user (HR/Admin only; user cannot login)
-			users.POST("/:id/unsuspend", middleware.HRMiddleware(), userHandler.UnsuspendUser)       // Unsuspend user (HR/Admin only; restores login)
-			users.POST("/:id/block", middleware.HRMiddleware(), userHandler.BlockUser)               // Block user (HR/Admin only; user cannot login)
-			users.POST("/:id/unblock", middleware.HRMiddleware(), userHandler.UnblockUser)           // Unblock user (HR/Admin only; restores login)
-			users.POST("/reset-password", middleware.HRMiddleware(), userHandler.ResetPassword)      // Reset user password (HR/Admin; default: GreenTelecom@2026)
+			users.POST("/transfer-role", userHandler.TransferRole)                                             // Transfer role from one user to another (unchanged)
+			users.POST("/assign-role", middleware.AdminMiddleware(), userHandler.AssignRole)                   // Assign admin/hr/it to a normal user (Admin only)
+			users.POST("/add-role", middleware.AdminMiddleware(), userHandler.AddRole)                         // Add role to user (supports multiple roles) (Admin only)
+			users.POST("/remove-role", middleware.AdminMiddleware(), userHandler.RemoveRole)                   // Remove role from user (Admin only)
+			users.POST("/set-roles", middleware.AdminMiddleware(), userHandler.SetRoles)                       // Replace all roles for user (Admin only)
+			users.PUT("/change-roles", middleware.AdminMiddleware(), userHandler.ChangeRoles)                  // Checkbox-style change roles (Admin only)
+			users.GET("/:id", middleware.HRMiddleware(), userHandler.GetUser)                                  // Get user detail with roles (HR/Admin only)
+			users.GET("/:id/roles", middleware.HRMiddleware(), userHandler.GetUserRoles)                       // Get all roles for a user (HR/Admin only)
+			users.POST("/:id/suspend", middleware.HRMiddleware(), userHandler.SuspendUser)                     // Suspend user (HR/Admin only; user cannot login)
+			users.POST("/:id/unsuspend", middleware.HRMiddleware(), userHandler.UnsuspendUser)                 // Unsuspend user (HR/Admin only; restores login)
+			users.POST("/:id/block", middleware.HRMiddleware(), userHandler.BlockUser)                         // Block user (HR/Admin only; user cannot login)
+			users.POST("/:id/unblock", middleware.HRMiddleware(), userHandler.UnblockUser)                     // Unblock user (HR/Admin only; restores login)
+			users.POST("/reset-password", middleware.HRMiddleware(), userHandler.ResetPassword)                // Reset user password (HR/Admin; default: GreenTelecom@2026)
 		}
 
 		// Roles routes (RBAC roles list; HR/Admin only)
@@ -108,9 +109,9 @@ func SetupRoutes(r *gin.Engine) {
 		features := v1.Group("/features")
 		features.Use(middleware.AuthMiddleware())
 		{
-			features.GET("", middleware.HRMiddleware(), featureHandler.GetAllFeatures)                   // List all features (HR/Admin)
-			features.GET("/my-access", featureHandler.GetMyFeatureAccess)                                // Get my feature access (any authenticated user)
-			features.GET("/roles/:id", middleware.HRMiddleware(), featureHandler.GetRoleFeatureAccess)    // Get role feature access (HR/Admin)
+			features.GET("", middleware.HRMiddleware(), featureHandler.GetAllFeatures)                     // List all features (HR/Admin)
+			features.GET("/my-access", featureHandler.GetMyFeatureAccess)                                  // Get my feature access (any authenticated user)
+			features.GET("/roles/:id", middleware.HRMiddleware(), featureHandler.GetRoleFeatureAccess)     // Get role feature access (HR/Admin)
 			features.PUT("/roles/:id", middleware.AdminMiddleware(), featureHandler.UpdateRolePermissions) // Update role permissions (Admin only)
 		}
 
@@ -127,11 +128,11 @@ func SetupRoutes(r *gin.Engine) {
 		dashboard := v1.Group("/dashboard")
 		dashboard.Use(middleware.AuthMiddleware())
 		{
-			dashboard.GET("/statistics", dashboardHandler.GetStatistics)                  // KPI stats (role-based: admin vs employee view)
-			dashboard.GET("/announcements", dashboardHandler.GetAnnouncements)            // Company announcements
+			dashboard.GET("/statistics", dashboardHandler.GetStatistics)                       // KPI stats (role-based: admin vs employee view)
+			dashboard.GET("/announcements", dashboardHandler.GetAnnouncements)                 // Company announcements
 			dashboard.POST("/announcements/:id/read", dashboardHandler.MarkAnnouncementAsRead) // Mark announcement as read
-			dashboard.GET("/quick-actions", dashboardHandler.GetQuickActions)             // Personalized quick action links
-			dashboard.GET("/my-activity", dashboardHandler.GetMyActivity)                 // Employee's recent activities
+			dashboard.GET("/quick-actions", dashboardHandler.GetQuickActions)                  // Personalized quick action links
+			dashboard.GET("/my-activity", dashboardHandler.GetMyActivity)                      // Employee's recent activities
 
 			// Admin/HR only dashboard routes
 			dashboard.GET("/events", middleware.HRMiddleware(), dashboardHandler.GetEvents)                      // Birthdays, anniversaries (HR/Admin)
@@ -149,18 +150,18 @@ func SetupRoutes(r *gin.Engine) {
 		notifications := v1.Group("/notifications")
 		notifications.Use(middleware.AuthMiddleware())
 		{
-			notifications.GET("/count", notificationHandler.GetNotificationCount)  // Get notification counts (badges)
-			notifications.GET("", notificationHandler.GetNotifications)            // Get notifications list
+			notifications.GET("/count", notificationHandler.GetNotificationCount) // Get notification counts (badges)
+			notifications.GET("", notificationHandler.GetNotifications)           // Get notifications list
 		}
 
 		// People Directory routes (require authentication)
 		peopleDirectory := v1.Group("/people-directory")
 		peopleDirectory.Use(middleware.AuthMiddleware())
 		{
-			peopleDirectory.GET("", peopleDirectoryHandler.SearchDirectory)            // Search/browse directory
-			peopleDirectory.GET("/filters", peopleDirectoryHandler.GetFilters)         // Get filter options
-			peopleDirectory.GET("/stats", peopleDirectoryHandler.GetStatistics)        // Get directory statistics
-			peopleDirectory.GET("/:id", peopleDirectoryHandler.GetEmployeeProfile)     // Get employee profile
+			peopleDirectory.GET("", peopleDirectoryHandler.SearchDirectory)        // Search/browse directory
+			peopleDirectory.GET("/filters", peopleDirectoryHandler.GetFilters)     // Get filter options
+			peopleDirectory.GET("/stats", peopleDirectoryHandler.GetStatistics)    // Get directory statistics
+			peopleDirectory.GET("/:id", peopleDirectoryHandler.GetEmployeeProfile) // Get employee profile
 		}
 
 		// Admin routes (require admin role)
@@ -270,16 +271,16 @@ func SetupRoutes(r *gin.Engine) {
 		employees := v1.Group("/employees")
 		employees.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
-			employees.POST("", employeeHandler.OnboardEmployee)                                 // Onboard new employee (legacy - single step)
-			employees.GET("", employeeHandler.ListEmployees)                                    // List all employees
-			employees.GET("/:id", employeeHandler.GetEmployee)                                  // Get employee by ID
-			employees.PUT("/:id", employeeHandler.UpdateEmployee)                               // Update employee
-			employees.DELETE("/:id", employeeHandler.DeleteEmployee)                            // Delete employee
-			employees.GET("/employee-id/:employee_id", employeeHandler.GetEmployeeByEmployeeID) // Get by employee ID
-			employees.GET("/department/:department_id", employeeHandler.ListByDepartment)       // List by department
-			employees.GET("/status/:status", employeeHandler.ListByStatus)                      // List by status
-			employees.GET("/managers", employeeHandler.ListManagers)                                                // List potential reporting managers (optional: ?department_id=X to filter & flag department head)
-			employees.GET("/department-manager/:department_id", employeeHandler.GetDepartmentManager)          // Get suggested manager for a department (department head)
+			employees.POST("", employeeHandler.OnboardEmployee)                                       // Onboard new employee (legacy - single step)
+			employees.GET("", employeeHandler.ListEmployees)                                          // List all employees
+			employees.GET("/:id", employeeHandler.GetEmployee)                                        // Get employee by ID
+			employees.PUT("/:id", employeeHandler.UpdateEmployee)                                     // Update employee
+			employees.DELETE("/:id", employeeHandler.DeleteEmployee)                                  // Delete employee
+			employees.GET("/employee-id/:employee_id", employeeHandler.GetEmployeeByEmployeeID)       // Get by employee ID
+			employees.GET("/department/:department_id", employeeHandler.ListByDepartment)             // List by department
+			employees.GET("/status/:status", employeeHandler.ListByStatus)                            // List by status
+			employees.GET("/managers", employeeHandler.ListManagers)                                  // List potential reporting managers (optional: ?department_id=X to filter & flag department head)
+			employees.GET("/department-manager/:department_id", employeeHandler.GetDepartmentManager) // Get suggested manager for a department (department head)
 
 			// Employee status management (POST with ID in body)
 			employees.POST("/terminate", employeeHandler.TerminateEmployee)   // Terminate employee
@@ -388,14 +389,14 @@ func SetupRoutes(r *gin.Engine) {
 		departments := v1.Group("/departments")
 		departments.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
-			departments.POST("", departmentHandler.CreateDepartment)       // Create department
-			departments.GET("", departmentHandler.ListDepartments)         // List departments
-			departments.GET("/root", departmentHandler.GetRootDepartments) // Get root departments
-			departments.GET("/:id", departmentHandler.GetDepartment)       // Get department by ID
-			departments.PUT("/:id", departmentHandler.UpdateDepartment)    // Update department
-			departments.DELETE("/:id", departmentHandler.DeleteDepartment)            // Delete department
-			departments.POST("/:id/assign-head", departmentHandler.AssignDepartmentHead)  // Assign employee as department head
-			departments.POST("/:id/remove-head", departmentHandler.RemoveDepartmentHead)  // Remove department head assignment
+			departments.POST("", departmentHandler.CreateDepartment)                     // Create department
+			departments.GET("", departmentHandler.ListDepartments)                       // List departments
+			departments.GET("/root", departmentHandler.GetRootDepartments)               // Get root departments
+			departments.GET("/:id", departmentHandler.GetDepartment)                     // Get department by ID
+			departments.PUT("/:id", departmentHandler.UpdateDepartment)                  // Update department
+			departments.DELETE("/:id", departmentHandler.DeleteDepartment)               // Delete department
+			departments.POST("/:id/assign-head", departmentHandler.AssignDepartmentHead) // Assign employee as department head
+			departments.POST("/:id/remove-head", departmentHandler.RemoveDepartmentHead) // Remove department head assignment
 			// POST-only action-based endpoint
 			departments.POST("/action", departmentHandler.HandleAction) // Action-based API
 		}
@@ -870,38 +871,38 @@ func SetupRoutes(r *gin.Engine) {
 		timesheets.Use(middleware.AuthMiddleware())
 		{
 			// My timesheets
-			timesheets.GET("", timesheetHandler.GetMyTimesheets)                              // List my weekly timesheets
-			timesheets.GET("/:timesheet_id", timesheetHandler.GetTimesheetByID)               // Get timesheet by ID
-			timesheets.POST("/entries", timesheetHandler.CreateEntry)                          // Create single entry
-			timesheets.POST("/entries/bulk", timesheetHandler.BulkCreateEntries)               // Bulk create entries for a week
-			timesheets.PUT("/entries/:entry_id", timesheetHandler.UpdateEntry)                 // Update entry
-			timesheets.DELETE("/entries/:entry_id", timesheetHandler.DeleteEntry)              // Delete entry
-			timesheets.POST("/:timesheet_id/submit", timesheetHandler.SubmitTimesheet)        // Submit for approval
-			timesheets.POST("/:timesheet_id/recall", timesheetHandler.RecallTimesheet)        // Recall submitted timesheet
-			timesheets.POST("/copy-last-week", timesheetHandler.CopyLastWeek)                 // Copy entries from last week
-			timesheets.GET("/stats", timesheetHandler.GetEmployeeStats)                       // Employee utilization stats
-			timesheets.GET("/team", timesheetHandler.GetTeamTimesheets)                       // Manager: team timesheets
+			timesheets.GET("", timesheetHandler.GetMyTimesheets)                       // List my weekly timesheets
+			timesheets.GET("/:timesheet_id", timesheetHandler.GetTimesheetByID)        // Get timesheet by ID
+			timesheets.POST("/entries", timesheetHandler.CreateEntry)                  // Create single entry
+			timesheets.POST("/entries/bulk", timesheetHandler.BulkCreateEntries)       // Bulk create entries for a week
+			timesheets.PUT("/entries/:entry_id", timesheetHandler.UpdateEntry)         // Update entry
+			timesheets.DELETE("/entries/:entry_id", timesheetHandler.DeleteEntry)      // Delete entry
+			timesheets.POST("/:timesheet_id/submit", timesheetHandler.SubmitTimesheet) // Submit for approval
+			timesheets.POST("/:timesheet_id/recall", timesheetHandler.RecallTimesheet) // Recall submitted timesheet
+			timesheets.POST("/copy-last-week", timesheetHandler.CopyLastWeek)          // Copy entries from last week
+			timesheets.GET("/stats", timesheetHandler.GetEmployeeStats)                // Employee utilization stats
+			timesheets.GET("/team", timesheetHandler.GetTeamTimesheets)                // Manager: team timesheets
 		}
 
 		// Timesheet - Approvals (Admin/HR)
 		timesheetApprovals := v1.Group("/attendance/timesheets/approvals")
 		timesheetApprovals.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
-			timesheetApprovals.GET("", timesheetHandler.GetPendingApprovals)                           // List pending approvals
-			timesheetApprovals.POST("/:timesheet_id", timesheetHandler.ApproveTimesheet)               // Approve/reject timesheet
+			timesheetApprovals.GET("", timesheetHandler.GetPendingApprovals)             // List pending approvals
+			timesheetApprovals.POST("/:timesheet_id", timesheetHandler.ApproveTimesheet) // Approve/reject timesheet
 		}
 
 		// Overtime - Employee Self-Service (all authenticated users)
 		overtime := v1.Group("/attendance/overtime")
 		overtime.Use(middleware.AuthMiddleware())
 		{
-			overtime.POST("/requests", overtimeHandler.CreateOTRequest)                          // Submit OT request
-			overtime.GET("/requests", overtimeHandler.GetMyOTRequests)                           // List my OT requests
-			overtime.GET("/requests/:request_id", overtimeHandler.GetOTRequestByID)              // Get OT request by ID
-			overtime.POST("/requests/:request_id/cancel", overtimeHandler.CancelOTRequest)       // Cancel OT request
-			overtime.GET("/policies", overtimeHandler.ListPolicies)                              // View OT policies
-			overtime.GET("/policies/:policy_id", overtimeHandler.GetPolicy)                     // View specific policy
-			overtime.GET("/stats", overtimeHandler.GetOvertimeStats)                             // OT statistics
+			overtime.POST("/requests", overtimeHandler.CreateOTRequest)                    // Submit OT request
+			overtime.GET("/requests", overtimeHandler.GetMyOTRequests)                     // List my OT requests
+			overtime.GET("/requests/:request_id", overtimeHandler.GetOTRequestByID)        // Get OT request by ID
+			overtime.POST("/requests/:request_id/cancel", overtimeHandler.CancelOTRequest) // Cancel OT request
+			overtime.GET("/policies", overtimeHandler.ListPolicies)                        // View OT policies
+			overtime.GET("/policies/:policy_id", overtimeHandler.GetPolicy)                // View specific policy
+			overtime.GET("/stats", overtimeHandler.GetOvertimeStats)                       // OT statistics
 		}
 
 		// Overtime - Admin/HR Management
@@ -909,14 +910,14 @@ func SetupRoutes(r *gin.Engine) {
 		overtimeAdmin.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
 			// Policy management
-			overtimeAdmin.POST("/policies", overtimeHandler.CreatePolicy)                           // Create OT policy
-			overtimeAdmin.PUT("/policies/:policy_id", overtimeHandler.UpdatePolicy)                 // Update OT policy
-			overtimeAdmin.DELETE("/policies/:policy_id", overtimeHandler.DeletePolicy)               // Delete OT policy
+			overtimeAdmin.POST("/policies", overtimeHandler.CreatePolicy)              // Create OT policy
+			overtimeAdmin.PUT("/policies/:policy_id", overtimeHandler.UpdatePolicy)    // Update OT policy
+			overtimeAdmin.DELETE("/policies/:policy_id", overtimeHandler.DeletePolicy) // Delete OT policy
 
 			// Request management
-			overtimeAdmin.GET("/requests", overtimeHandler.ListAllRequests)                          // List all OT requests
-			overtimeAdmin.GET("/pending", overtimeHandler.GetPendingApprovals)                       // List pending approvals
-			overtimeAdmin.POST("/requests/:request_id/approve", overtimeHandler.ApproveOTRequest)    // Approve/reject OT request
+			overtimeAdmin.GET("/requests", overtimeHandler.ListAllRequests)                       // List all OT requests
+			overtimeAdmin.GET("/pending", overtimeHandler.GetPendingApprovals)                    // List pending approvals
+			overtimeAdmin.POST("/requests/:request_id/approve", overtimeHandler.ApproveOTRequest) // Approve/reject OT request
 		}
 
 		// Attendance Reports (Admin/HR)
@@ -928,46 +929,47 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceReports.GET("/trends", attendanceReportsHandler.GetTrends)
 			attendanceReports.GET("/by-department", attendanceReportsHandler.GetDepartmentStats)
 			attendanceReports.GET("/compliance", attendanceReportsHandler.GetComplianceViolations)
-			attendanceReports.GET("/overtime", attendanceReportsHandler.GetOvertimeAnalysis) // Replaces previous overtime endpoint
+			attendanceReports.GET("/overtime", attendanceReportsHandler.GetOvertimeAnalysis)          // Replaces previous overtime endpoint
 			attendanceReports.GET("/overtime-analysis", attendanceReportsHandler.GetOvertimeAnalysis) // Alias for frontend compatibility
 			attendanceReports.POST("/export", attendanceReportsHandler.ExportReport)
 
 			// Legacy/Other endpoints
-			attendanceReports.GET("/timesheets", attendanceReportsHandler.GetTimesheetSummaryReport)       // Timesheet summary
-			attendanceReports.GET("/project-utilization", attendanceReportsHandler.GetProjectUtilizationReport) // Project utilization
+			attendanceReports.GET("/timesheets", attendanceReportsHandler.GetTimesheetSummaryReport)              // Timesheet summary
+			attendanceReports.GET("/project-utilization", attendanceReportsHandler.GetProjectUtilizationReport)   // Project utilization
 			attendanceReports.GET("/employee-utilization", attendanceReportsHandler.GetEmployeeUtilizationReport) // Employee utilization
 		}
 
 		// ============ Projects & Daily Tasks ============
 		projectHandler := projectHandlers.NewProjectHandler()
 		dailyTaskHandler := projectHandlers.NewDailyTaskHandler()
+		recruitmentHandler := recruitmentHandlers.NewRecruitmentHandler()
 
 		// Projects - Management (HR/Admin/Manager)
 		projects := v1.Group("/projects")
 		projects.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
-			projects.GET("/statistics", projectHandler.GetStatistics)               // Project statistics
-			projects.GET("", projectHandler.ListProjects)                           // List all projects
-			projects.POST("", projectHandler.CreateProject)                         // Create project
-			projects.GET("/:id", projectHandler.GetProject)                         // Get project details
-			projects.PUT("/:id", projectHandler.UpdateProject)                      // Update project
-			projects.DELETE("/:id", projectHandler.DeleteProject)                   // Delete project
-			projects.POST("/:id/members", projectHandler.AddMembers)               // Add members to project
-			projects.POST("/:id/members/remove", projectHandler.RemoveMember)      // Remove member from project
-			projects.GET("/:id/members", projectHandler.ListMembers)               // List project members
-			projects.GET("/:id/progress", projectHandler.GetProjectProgress)       // Get project progress
-			projects.POST("/assign", projectHandler.AssignProject)                 // Assign project to employee(s)
-			projects.POST("/unassign", projectHandler.UnassignProject)             // Unassign employee from project
+			projects.GET("/statistics", projectHandler.GetStatistics)         // Project statistics
+			projects.GET("", projectHandler.ListProjects)                     // List all projects
+			projects.POST("", projectHandler.CreateProject)                   // Create project
+			projects.GET("/:id", projectHandler.GetProject)                   // Get project details
+			projects.PUT("/:id", projectHandler.UpdateProject)                // Update project
+			projects.DELETE("/:id", projectHandler.DeleteProject)             // Delete project
+			projects.POST("/:id/members", projectHandler.AddMembers)          // Add members to project
+			projects.POST("/:id/members/remove", projectHandler.RemoveMember) // Remove member from project
+			projects.GET("/:id/members", projectHandler.ListMembers)          // List project members
+			projects.GET("/:id/progress", projectHandler.GetProjectProgress)  // Get project progress
+			projects.POST("/assign", projectHandler.AssignProject)            // Assign project to employee(s)
+			projects.POST("/unassign", projectHandler.UnassignProject)        // Unassign employee from project
 		}
 
 		// Daily Tasks - Management (HR/Admin view all tasks)
 		dailyTasks := v1.Group("/daily-tasks")
 		dailyTasks.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
-			dailyTasks.GET("", dailyTaskHandler.ListDailyTasks)                              // List all daily tasks
-			dailyTasks.GET("/categories", dailyTaskHandler.GetTaskCategories)                 // Get task categories
+			dailyTasks.GET("", dailyTaskHandler.ListDailyTasks)                                    // List all daily tasks
+			dailyTasks.GET("/categories", dailyTaskHandler.GetTaskCategories)                      // Get task categories
 			dailyTasks.GET("/project/:project_id/summary", dailyTaskHandler.GetProjectTaskSummary) // Project task summary
-			dailyTasks.GET("/:id", dailyTaskHandler.GetDailyTask)                            // Get task details
+			dailyTasks.GET("/:id", dailyTaskHandler.GetDailyTask)                                  // Get task details
 		}
 
 		// Self-Service: Projects & Daily Tasks (all authenticated employees)
@@ -981,14 +983,60 @@ func SetupRoutes(r *gin.Engine) {
 		selfServiceDailyTasks := v1.Group("/self-service/daily-tasks")
 		selfServiceDailyTasks.Use(middleware.AuthMiddleware())
 		{
-			selfServiceDailyTasks.POST("", dailyTaskHandler.CreateDailyTask)                 // Log a daily task
-			selfServiceDailyTasks.GET("", dailyTaskHandler.GetMyTasks)                       // List my daily tasks
-			selfServiceDailyTasks.GET("/today", dailyTaskHandler.GetMyTodayTasks)             // Get today's tasks
-			selfServiceDailyTasks.GET("/summary", dailyTaskHandler.GetMyTaskSummary)          // Get my task summary
-			selfServiceDailyTasks.GET("/categories", dailyTaskHandler.GetTaskCategories)      // Get task categories
-			selfServiceDailyTasks.GET("/:id", dailyTaskHandler.GetDailyTask)                 // Get task details
-			selfServiceDailyTasks.PUT("/:id", dailyTaskHandler.UpdateDailyTask)              // Update my task
-			selfServiceDailyTasks.DELETE("/:id", dailyTaskHandler.DeleteDailyTask)           // Delete my task
+			selfServiceDailyTasks.POST("", dailyTaskHandler.CreateDailyTask)             // Log a daily task
+			selfServiceDailyTasks.GET("", dailyTaskHandler.GetMyTasks)                   // List my daily tasks
+			selfServiceDailyTasks.GET("/today", dailyTaskHandler.GetMyTodayTasks)        // Get today's tasks
+			selfServiceDailyTasks.GET("/summary", dailyTaskHandler.GetMyTaskSummary)     // Get my task summary
+			selfServiceDailyTasks.GET("/categories", dailyTaskHandler.GetTaskCategories) // Get task categories
+			selfServiceDailyTasks.GET("/:id", dailyTaskHandler.GetDailyTask)             // Get task details
+			selfServiceDailyTasks.PUT("/:id", dailyTaskHandler.UpdateDailyTask)          // Update my task
+			selfServiceDailyTasks.DELETE("/:id", dailyTaskHandler.DeleteDailyTask)       // Delete my task
+		}
+
+		// =====================================================================
+		// Recruitment Module
+		// =====================================================================
+
+		// Public Routes (No Auth)
+		recruitmentPublic := v1.Group("/recruitment/public")
+		{
+			recruitmentPublic.POST("/apply", recruitmentHandler.SubmitApplication)
+			// Maybe public job listing too?
+			// recruitmentPublic.GET("/openings", recruitmentHandler.ListJobOpenings) // If public
+		}
+
+		// Protected Routes
+		recruitment := v1.Group("/recruitment")
+		recruitment.Use(middleware.AuthMiddleware()) // Add HR/Recruiter role check if needed
+		{
+			// Requisitions
+			recruitment.POST("/requisitions", recruitmentHandler.CreateRequisition)
+			recruitment.GET("/requisitions", recruitmentHandler.ListRequisitions)
+			recruitment.GET("/requisitions/:id", recruitmentHandler.GetRequisition)
+			recruitment.POST("/requisitions/:id/approval", recruitmentHandler.ApproveRequisition)
+			recruitment.PUT("/requisitions/:id", recruitmentHandler.UpdateRequisition)
+
+			// Job Openings
+			recruitment.POST("/openings", recruitmentHandler.CreateJobOpening)
+			recruitment.GET("/openings", recruitmentHandler.ListJobOpenings)
+			recruitment.POST("/openings/:id/publish", recruitmentHandler.PublishJobOpening)
+
+			// Candidates
+			recruitment.GET("/candidates", recruitmentHandler.ListCandidates)
+			recruitment.PATCH("/candidates/:id/stage", recruitmentHandler.UpdateCandidateStage)
+
+			// Interviews
+			recruitment.POST("/interviews", recruitmentHandler.ScheduleInterview)
+			recruitment.POST("/interviews/:id/feedback", recruitmentHandler.SubmitFeedback)
+
+			// Offers
+			recruitment.POST("/offers", recruitmentHandler.CreateOffer)
+			recruitment.POST("/offers/:id/approval", recruitmentHandler.ApproveOffer)
+			recruitment.POST("/offers/:id/send", recruitmentHandler.SendOffer)
+
+			// Talent Pool
+			recruitment.POST("/talent-pool", recruitmentHandler.AddToTalentPool)
+			recruitment.GET("/talent-pool/search", recruitmentHandler.SearchTalentPool)
 		}
 
 		// =====================================================================
@@ -1068,20 +1116,20 @@ func SetupRoutes(r *gin.Engine) {
 			// --- Goals & OKRs ---
 			goals := performance.Group("/goals")
 			{
-				goals.GET("", goalHandler.ListGoals)                                        // List goals
-				goals.GET("/stats", goalHandler.GetGoalStats)                               // Goal statistics
-				goals.GET("/alignment", goalHandler.GetAlignmentMap)                        // Goal alignment map (Manager+)
-				goals.POST("", goalHandler.CreateGoal)                                      // Create goal
-				goals.POST("/assign", goalHandler.AssignGoal)                               // Assign goal to employee (Manager+)
-				goals.GET("/:id", goalHandler.GetGoal)                                      // Get goal detail
-				goals.PATCH("/:id", goalHandler.UpdateGoal)                                 // Update goal
-				goals.DELETE("/:id", goalHandler.DeleteGoal)                                // Delete goal
-				goals.POST("/:id/submit-for-approval", goalHandler.SubmitForApproval)       // Submit for manager approval
-				goals.PUT("/:id/approve", goalHandler.ApproveGoal)                          // Approve/reject goal
-				goals.POST("/:id/request-completion", goalHandler.RequestCompletion)         // Request completion verification
-				goals.PUT("/:id/verify-completion", goalHandler.VerifyCompletion)            // Verify/reject completion
-				goals.POST("/:id/link-project", goalHandler.LinkProject)                    // Link goal to project
-				goals.DELETE("/:id/unlink-project", goalHandler.UnlinkProject)              // Unlink goal from project
+				goals.GET("", goalHandler.ListGoals)                                  // List goals
+				goals.GET("/stats", goalHandler.GetGoalStats)                         // Goal statistics
+				goals.GET("/alignment", goalHandler.GetAlignmentMap)                  // Goal alignment map (Manager+)
+				goals.POST("", goalHandler.CreateGoal)                                // Create goal
+				goals.POST("/assign", goalHandler.AssignGoal)                         // Assign goal to employee (Manager+)
+				goals.GET("/:id", goalHandler.GetGoal)                                // Get goal detail
+				goals.PATCH("/:id", goalHandler.UpdateGoal)                           // Update goal
+				goals.DELETE("/:id", goalHandler.DeleteGoal)                          // Delete goal
+				goals.POST("/:id/submit-for-approval", goalHandler.SubmitForApproval) // Submit for manager approval
+				goals.PUT("/:id/approve", goalHandler.ApproveGoal)                    // Approve/reject goal
+				goals.POST("/:id/request-completion", goalHandler.RequestCompletion)  // Request completion verification
+				goals.PUT("/:id/verify-completion", goalHandler.VerifyCompletion)     // Verify/reject completion
+				goals.POST("/:id/link-project", goalHandler.LinkProject)              // Link goal to project
+				goals.DELETE("/:id/unlink-project", goalHandler.UnlinkProject)        // Unlink goal from project
 				// Key Results
 				goals.POST("/:id/key-results", goalHandler.CreateKeyResult)
 				goals.PATCH("/:id/key-results/:krId", goalHandler.UpdateKeyResult)
@@ -1172,8 +1220,8 @@ func SetupRoutes(r *gin.Engine) {
 			// --- Project-Performance Alignment ---
 			projectAlignment := performance.Group("/project-alignment")
 			{
-				projectAlignment.GET("/:projectId", goalHandler.GetDashboardStats)     // Reuse for now
-				projectAlignment.GET("/summary", reportHandler.GetDepartmentSummary)    // Reuse for now
+				projectAlignment.GET("/:projectId", goalHandler.GetDashboardStats)   // Reuse for now
+				projectAlignment.GET("/summary", reportHandler.GetDepartmentSummary) // Reuse for now
 			}
 		}
 	}
