@@ -923,8 +923,17 @@ func SetupRoutes(r *gin.Engine) {
 		attendanceReports := v1.Group("/attendance/reports")
 		attendanceReports.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
+			// New endpoints per ATTENDANCE_REPORTS_API.md
+			attendanceReports.GET("/summary", attendanceReportsHandler.GetSummary)
+			attendanceReports.GET("/trends", attendanceReportsHandler.GetTrends)
+			attendanceReports.GET("/by-department", attendanceReportsHandler.GetDepartmentStats)
+			attendanceReports.GET("/compliance", attendanceReportsHandler.GetComplianceViolations)
+			attendanceReports.GET("/overtime", attendanceReportsHandler.GetOvertimeAnalysis) // Replaces previous overtime endpoint
+			attendanceReports.GET("/overtime-analysis", attendanceReportsHandler.GetOvertimeAnalysis) // Alias for frontend compatibility
+			attendanceReports.POST("/export", attendanceReportsHandler.ExportReport)
+
+			// Legacy/Other endpoints
 			attendanceReports.GET("/timesheets", attendanceReportsHandler.GetTimesheetSummaryReport)       // Timesheet summary
-			attendanceReports.GET("/overtime", attendanceReportsHandler.GetOvertimeSummaryReport)           // Overtime summary
 			attendanceReports.GET("/project-utilization", attendanceReportsHandler.GetProjectUtilizationReport) // Project utilization
 			attendanceReports.GET("/employee-utilization", attendanceReportsHandler.GetEmployeeUtilizationReport) // Employee utilization
 		}

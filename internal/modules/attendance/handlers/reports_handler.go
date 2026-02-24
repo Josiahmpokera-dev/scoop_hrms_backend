@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/models"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/services"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -12,14 +14,166 @@ import (
 
 // AttendanceReportsHandler handles attendance module reports
 type AttendanceReportsHandler struct {
-	db *gorm.DB
+	db      *gorm.DB
+	service *services.AttendanceReportService
 }
 
 // NewAttendanceReportsHandler creates a new reports handler
 func NewAttendanceReportsHandler() *AttendanceReportsHandler {
 	return &AttendanceReportsHandler{
-		db: database.GetDB(),
+		db:      database.GetDB(),
+		service: services.NewAttendanceReportService(),
 	}
+}
+
+// GetSummary returns high-level attendance KPIs
+// Endpoint: GET /attendance/reports/summary
+func (h *AttendanceReportsHandler) GetSummary(c *gin.Context) {
+	startDate := c.Query("startDate")
+	endDate := c.Query("endDate")
+	deptIDStr := c.Query("departmentId")
+
+	if startDate == "" || endDate == "" {
+		response.BadRequest(c, "startDate and endDate are required", nil)
+		return
+	}
+
+	var deptID *uint
+	if deptIDStr != "" {
+		id, err := strconv.ParseUint(deptIDStr, 10, 32)
+		if err == nil {
+			uid := uint(id)
+			deptID = &uid
+		}
+	}
+
+	summary, err := h.service.GetSummary(startDate, endDate, deptID)
+	if err != nil {
+		response.InternalServerError(c, "Failed to fetch attendance summary", err)
+		return
+	}
+
+	response.Success(c, "Attendance summary retrieved successfully", summary)
+}
+
+// GetTrends returns attendance trends
+// Endpoint: GET /attendance/reports/trends
+func (h *AttendanceReportsHandler) GetTrends(c *gin.Context) {
+	startDate := c.Query("startDate")
+	endDate := c.Query("endDate")
+	deptIDStr := c.Query("departmentId")
+	interval := c.DefaultQuery("interval", "daily")
+
+	if startDate == "" || endDate == "" {
+		response.BadRequest(c, "startDate and endDate are required", nil)
+		return
+	}
+
+	var deptID *uint
+	if deptIDStr != "" {
+		id, err := strconv.ParseUint(deptIDStr, 10, 32)
+		if err == nil {
+			uid := uint(id)
+			deptID = &uid
+		}
+	}
+
+	trends, err := h.service.GetTrends(startDate, endDate, deptID, interval)
+	if err != nil {
+		response.InternalServerError(c, "Failed to fetch attendance trends", err)
+		return
+	}
+
+	response.Success(c, "Attendance trends retrieved successfully", trends)
+}
+
+// GetDepartmentStats returns department-wise attendance
+// Endpoint: GET /attendance/reports/by-department
+func (h *AttendanceReportsHandler) GetDepartmentStats(c *gin.Context) {
+	date := c.Query("date")
+	// orgIDStr := c.Query("organizationId") // Not used in repo yet, but can be added
+
+	if date == "" {
+		response.BadRequest(c, "date is required", nil)
+		return
+	}
+
+	stats, err := h.service.GetDepartmentStats(date, nil)
+	if err != nil {
+		response.InternalServerError(c, "Failed to fetch department stats", err)
+		return
+	}
+
+	response.Success(c, "Department statistics retrieved successfully", stats)
+}
+
+// GetComplianceViolations returns compliance issues
+// Endpoint: GET /attendance/reports/compliance
+func (h *AttendanceReportsHandler) GetComplianceViolations(c *gin.Context) {
+	startDate := c.Query("startDate")
+	endDate := c.Query("endDate")
+	deptIDStr := c.Query("departmentId")
+	severity := c.Query("severity")
+
+	if startDate == "" || endDate == "" {
+		response.BadRequest(c, "startDate and endDate are required", nil)
+		return
+	}
+
+	var deptID *uint
+	if deptIDStr != "" {
+		id, err := strconv.ParseUint(deptIDStr, 10, 32)
+		if err == nil {
+			uid := uint(id)
+			deptID = &uid
+		}
+	}
+
+	violations, err := h.service.GetComplianceViolations(startDate, endDate, deptID, severity)
+	if err != nil {
+		response.InternalServerError(c, "Failed to fetch compliance violations", err)
+		return
+	}
+
+	response.Success(c, "Compliance violations retrieved successfully", violations)
+}
+
+// GetOvertimeAnalysis returns overtime analysis
+// Endpoint: GET /attendance/reports/overtime
+func (h *AttendanceReportsHandler) GetOvertimeAnalysis(c *gin.Context) {
+	startDate := c.Query("startDate")
+	endDate := c.Query("endDate")
+
+	if startDate == "" || endDate == "" {
+		response.BadRequest(c, "startDate and endDate are required", nil)
+		return
+	}
+
+	analysis, err := h.service.GetOvertimeAnalysis(startDate, endDate)
+	if err != nil {
+		response.InternalServerError(c, "Failed to fetch overtime analysis", err)
+		return
+	}
+
+	response.Success(c, "Overtime analysis retrieved successfully", analysis)
+}
+
+// ExportReport triggers a report export
+// Endpoint: POST /attendance/reports/export
+func (h *AttendanceReportsHandler) ExportReport(c *gin.Context) {
+	var req models.ExportReportRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request body", err)
+		return
+	}
+
+	result, err := h.service.ExportReport(req)
+	if err != nil {
+		response.InternalServerError(c, "Failed to initiate report export", err)
+		return
+	}
+
+	response.Success(c, "Report export initiated successfully", result)
 }
 
 // GetTimesheetSummaryReport returns a summary of timesheets
@@ -46,12 +200,12 @@ func (h *AttendanceReportsHandler) GetTimesheetSummaryReport(c *gin.Context) {
 
 	// Summary stats
 	var summary struct {
-		TotalEntries    int64   `json:"total_entries"`
-		TotalHours      float64 `json:"total_hours"`
-		BillableHours   float64 `json:"billable_hours"`
+		TotalEntries     int64   `json:"total_entries"`
+		TotalHours       float64 `json:"total_hours"`
+		BillableHours    float64 `json:"billable_hours"`
 		NonBillableHours float64 `json:"non_billable_hours"`
-		UniqueEmployees int64   `json:"unique_employees"`
-		UniqueProjects  int64   `json:"unique_projects"`
+		UniqueEmployees  int64   `json:"unique_employees"`
+		UniqueProjects   int64   `json:"unique_projects"`
 	}
 
 	h.db.Model(&models.TimesheetEntry{}).
