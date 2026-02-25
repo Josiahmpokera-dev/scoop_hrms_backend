@@ -1,22 +1,31 @@
 package services
 
 import (
+	"bytes"
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/recruitment/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/recruitment/repositories"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/email"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/storage"
 	"github.com/google/uuid"
 )
 
 type RecruitmentService struct {
-	repo *repositories.RecruitmentRepository
+	repo    *repositories.RecruitmentRepository
+	storage *storage.StorageService
+	email   *email.EmailService
 }
 
 func NewRecruitmentService() *RecruitmentService {
 	return &RecruitmentService{
-		repo: repositories.NewRecruitmentRepository(),
+		repo:    repositories.NewRecruitmentRepository(),
+		storage: storage.NewStorageService(),
+		email:   email.NewEmailService(),
 	}
 }
 
@@ -199,6 +208,58 @@ func (s *RecruitmentService) ListJobOpenings(status, department string) ([]model
 // --- Applications ---
 
 func (s *RecruitmentService) SubmitApplication(reqData models.ApplyJobRequest) (*models.JobApplication, error) {
+	// Handle Resume Upload
+	resumeURL := reqData.Resume
+	if reqData.Resume != "" && !strings.HasPrefix(reqData.Resume, "http") {
+		// Assuming Base64
+		b64data := reqData.Resume
+
+		// Extract extension from Base64 header if present (e.g., data:application/pdf;base64,)
+		ext := ".pdf" // Default
+		if strings.HasPrefix(b64data, "data:") {
+			parts := strings.Split(b64data, ";")
+			if len(parts) > 0 {
+				mime := strings.TrimPrefix(parts[0], "data:")
+				switch mime {
+				case "application/pdf":
+					ext = ".pdf"
+				case "application/msword":
+					ext = ".doc"
+				case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+					ext = ".docx"
+				case "image/jpeg":
+					ext = ".jpg"
+				case "image/png":
+					ext = ".png"
+				}
+			}
+		}
+
+		if idx := strings.Index(b64data, ","); idx != -1 {
+			b64data = b64data[idx+1:]
+		}
+
+		decoded, err := base64.StdEncoding.DecodeString(b64data)
+		if err == nil {
+			// Upload
+			var filename string
+			if reqData.ResumeName != "" {
+				filename = reqData.ResumeName
+			} else {
+				filename = fmt.Sprintf("resume_%s_%s_%d%s", reqData.FirstName, reqData.LastName, time.Now().Unix(), ext)
+			}
+
+			url, err := s.storage.UploadReader(bytes.NewReader(decoded), filename, "recruitment/resumes", uuid.New().String())
+			if err == nil {
+				resumeURL = url
+			} else {
+				return nil, fmt.Errorf("failed to upload resume: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("failed to decode resume base64: %w", err)
+		}
+	}
+
 	// Check if candidate exists by email
 	candidate, _ := s.repo.GetCandidateByEmail(reqData.Email)
 
@@ -210,7 +271,7 @@ func (s *RecruitmentService) SubmitApplication(reqData models.ApplyJobRequest) (
 			LastName:     reqData.LastName,
 			Email:        reqData.Email,
 			Phone:        reqData.Phone,
-			ResumeURL:    reqData.Resume, // Assume URL or handle upload separately
+			ResumeURL:    resumeURL, // Use the uploaded URL
 			LinkedInURL:  reqData.LinkedInURL,
 			PortfolioURL: reqData.PortfolioURL,
 			CoverLetter:  reqData.CoverLetter,
@@ -219,6 +280,14 @@ func (s *RecruitmentService) SubmitApplication(reqData models.ApplyJobRequest) (
 		}
 		if err := s.repo.CreateCandidate(candidate); err != nil {
 			return nil, err
+		}
+	} else {
+		// Update candidate resume if provided
+		if resumeURL != "" && resumeURL != candidate.ResumeURL {
+			candidate.ResumeURL = resumeURL
+			candidate.UpdatedAt = time.Now()
+			// Also update other fields if needed, but for now just Resume
+			s.repo.UpdateCandidate(candidate)
 		}
 	}
 
@@ -313,7 +382,20 @@ func (s *RecruitmentService) ScheduleInterview(reqData models.ScheduleInterviewR
 		interview.ScheduledDate = t
 	}
 
-	return interview, s.repo.CreateInterview(interview)
+	if err := s.repo.CreateInterview(interview); err != nil {
+		return nil, err
+	}
+
+	// Send email to candidate
+	candidate, _ := s.repo.GetCandidateByID(reqData.CandidateID)
+	if candidate != nil {
+		subject := fmt.Sprintf("Interview Scheduled: %s", reqData.Round)
+		body := fmt.Sprintf("Dear %s,\n\nYour interview for %s is scheduled on %s at %s.\nMode: %s\n\nBest regards,\nRecruitment Team",
+			candidate.FirstName, reqData.Round, reqData.ScheduledDate, reqData.ScheduledTime, reqData.Mode)
+		s.email.SendEmail(candidate.Email, subject, body)
+	}
+
+	return interview, nil
 }
 
 func (s *RecruitmentService) SubmitFeedback(interviewID string, reqData models.SubmitFeedbackRequest) error {
@@ -395,12 +477,20 @@ func (s *RecruitmentService) SendOffer(id string) error {
 		return errors.New("offer must be approved before sending")
 	}
 
+	// Fetch candidate to get email
+	candidate, err := s.repo.GetCandidateByID(offer.CandidateID)
+	if err != nil {
+		return fmt.Errorf("candidate not found: %w", err)
+	}
+
 	offer.Status = "Sent"
 	now := time.Now()
 	offer.SentAt = &now
 
-	// Mock Email Sending
-	fmt.Printf("Sending offer to candidate %s\n", offer.CandidateID)
+	// Send Email
+	subject := "Job Offer from Our Company"
+	body := fmt.Sprintf("Dear %s,\n\nWe are pleased to offer you the position. Please find the details attached.\n\nBest regards,\nRecruitment Team", candidate.FirstName)
+	s.email.SendEmail(candidate.Email, subject, body)
 
 	return s.repo.UpdateOffer(offer)
 }

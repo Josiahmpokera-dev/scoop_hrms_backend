@@ -996,47 +996,46 @@ func SetupRoutes(r *gin.Engine) {
 		// =====================================================================
 		// Recruitment Module
 		// =====================================================================
-
+		
 		// Public Routes (No Auth)
 		recruitmentPublic := v1.Group("/recruitment/public")
 		{
 			recruitmentPublic.POST("/apply", recruitmentHandler.SubmitApplication)
-			// Maybe public job listing too?
-			// recruitmentPublic.GET("/openings", recruitmentHandler.ListJobOpenings) // If public
+			recruitmentPublic.GET("/openings", recruitmentHandler.ListPublicJobOpenings)
 		}
 
 		// Protected Routes
 		recruitment := v1.Group("/recruitment")
-		recruitment.Use(middleware.AuthMiddleware()) // Add HR/Recruiter role check if needed
+		recruitment.Use(middleware.AuthMiddleware())
 		{
 			// Requisitions
-			recruitment.POST("/requisitions", recruitmentHandler.CreateRequisition)
-			recruitment.GET("/requisitions", recruitmentHandler.ListRequisitions)
-			recruitment.GET("/requisitions/:id", recruitmentHandler.GetRequisition)
-			recruitment.POST("/requisitions/:id/approval", recruitmentHandler.ApproveRequisition)
-			recruitment.PUT("/requisitions/:id", recruitmentHandler.UpdateRequisition)
+			recruitment.POST("/requisitions", middleware.PermissionMiddleware("recruitment:create"), recruitmentHandler.CreateRequisition)
+			recruitment.GET("/requisitions", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ListRequisitions)
+			recruitment.GET("/requisitions/:id", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.GetRequisition)
+			recruitment.POST("/requisitions/:id/approval", middleware.PermissionMiddleware("recruitment:approve"), recruitmentHandler.ApproveRequisition)
+			recruitment.PUT("/requisitions/:id", middleware.PermissionMiddleware("recruitment:update"), recruitmentHandler.UpdateRequisition)
 
 			// Job Openings
-			recruitment.POST("/openings", recruitmentHandler.CreateJobOpening)
-			recruitment.GET("/openings", recruitmentHandler.ListJobOpenings)
-			recruitment.POST("/openings/:id/publish", recruitmentHandler.PublishJobOpening)
+			recruitment.POST("/openings", middleware.PermissionMiddleware("recruitment:create"), recruitmentHandler.CreateJobOpening)
+			recruitment.GET("/openings", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ListJobOpenings)
+			recruitment.POST("/openings/:id/publish", middleware.PermissionMiddleware("recruitment:publish"), recruitmentHandler.PublishJobOpening)
 
 			// Candidates
-			recruitment.GET("/candidates", recruitmentHandler.ListCandidates)
-			recruitment.PATCH("/candidates/:id/stage", recruitmentHandler.UpdateCandidateStage)
+			recruitment.GET("/candidates", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ListCandidates)
+			recruitment.PATCH("/candidates/:id/stage", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.UpdateCandidateStage)
 
 			// Interviews
-			recruitment.POST("/interviews", recruitmentHandler.ScheduleInterview)
-			recruitment.POST("/interviews/:id/feedback", recruitmentHandler.SubmitFeedback)
+			recruitment.POST("/interviews", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ScheduleInterview)
+			recruitment.POST("/interviews/:id/feedback", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.SubmitFeedback)
 
 			// Offers
-			recruitment.POST("/offers", recruitmentHandler.CreateOffer)
-			recruitment.POST("/offers/:id/approval", recruitmentHandler.ApproveOffer)
-			recruitment.POST("/offers/:id/send", recruitmentHandler.SendOffer)
+			recruitment.POST("/offers", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.CreateOffer)
+			recruitment.POST("/offers/:id/approval", middleware.PermissionMiddleware("recruitment:approve"), recruitmentHandler.ApproveOffer)
+			recruitment.POST("/offers/:id/send", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.SendOffer)
 
 			// Talent Pool
-			recruitment.POST("/talent-pool", recruitmentHandler.AddToTalentPool)
-			recruitment.GET("/talent-pool/search", recruitmentHandler.SearchTalentPool)
+			recruitment.POST("/talent-pool", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.AddToTalentPool)
+			recruitment.GET("/talent-pool/search", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.SearchTalentPool)
 		}
 
 		// =====================================================================

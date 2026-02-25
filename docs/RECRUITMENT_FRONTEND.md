@@ -1,38 +1,247 @@
-# Recruitment Module - Frontend Integration Guide
+# Recruitment Module - Frontend API Reference
 
-This document is designed to assist frontend developers in integrating with the Recruitment Module API. It provides TypeScript interfaces, enum definitions, and usage flows.
+This document provides a comprehensive reference for the Recruitment Module API, tailored for frontend developers building the **Career Portal** (Public) and the **HR Dashboard** (Protected).
 
-## Base URLs
-- **Development**: `http://localhost:8080/api/v1/recruitment`
-- **Production**: `https://api.scoop-hrms.com/v1/recruitment`
+## 🌍 Base Configuration
 
-## Authentication
-Include the `Authorization` header in all requests (except `/public/apply`).
-```javascript
-headers: {
-  "Authorization": "Bearer <your_jwt_token>"
-}
-```
+- **Development Base URL**: `http://localhost:8080/api/v1/recruitment`
+- **Production Base URL**: `https://api.scoop-hrms.com/v1/recruitment`
+
+### Authentication
+- **Public Endpoints**: No authentication required.
+- **Protected Endpoints**: Require `Authorization: Bearer <token>` header.
 
 ---
 
-## 1. Type Definitions (TypeScript)
+## 🔓 Public Endpoints (Career Portal)
 
-### Enums & Constants
+These endpoints are for external candidates to view jobs and apply.
+
+### 1. List Published Jobs
+Get a list of all active job openings for the career page.
+
+- **Endpoint**: `GET /public/openings`
+- **Query Params**: 
+  - `department` (optional): Filter by department name.
+- **Response**:
+  ```json
+  {
+    "success": true,
+    "message": "Job openings retrieved successfully",
+    "data": [
+      {
+        "id": "JOB-1735001234",
+        "jobTitle": "Senior Backend Engineer",
+        "jobDescription": "We are looking for...",
+        "department": "Engineering",
+        "location": "Dar es Salaam",
+        "employmentType": "Full-time",
+        "experienceMin": 3,
+        "experienceMax": 5,
+        "mustHaveSkills": ["Go", "PostgreSQL"],
+        "postedAt": "2024-02-25T10:00:00Z"
+      }
+    ]
+  }
+  ```
+
+### 2. Submit Application
+Allow a candidate to apply for a specific job. Supports Base64 resume upload.
+
+- **Endpoint**: `POST /public/apply`
+- **Headers**: `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "jobId": "JOB-1735001234",
+    "firstName": "Juma",
+    "lastName": "Mkapes",
+    "email": "juma.m@example.com",
+    "phone": "+255712345678",
+    "resume": "data:application/pdf;base64,JVBERi0xLjQKJ...", // Base64 encoded file
+    "resumeName": "Juma_CV_2024.pdf", // Optional: Original filename
+    "linkedInUrl": "https://linkedin.com/in/juma",
+    "portfolioUrl": "https://github.com/juma",
+    "coverLetter": "I am excited to apply..."
+  }
+  ```
+- **Response**:
+  ```json
+  {
+    "success": true,
+    "message": "Application submitted successfully",
+    "data": {
+      "id": "APP-12345",
+      "stage": "Applied",
+      "appliedDate": "2024-02-25T12:00:00Z"
+    }
+  }
+  ```
+
+---
+
+## 🔒 Protected Endpoints (HR Dashboard)
+
+These endpoints require a valid JWT token with Recruitment permissions.
+
+### 📋 Job Requisitions
+
+#### List Requisitions
+- **Endpoint**: `GET /requisitions`
+- **Query Params**: 
+  - `status` (optional): Filter by status (e.g., `Pending`, `Approved`)
+  - `department` (optional): Filter by department
+  - `page`, `limit`: Pagination controls
+- **Response**: List of requisitions with pagination metadata.
+
+#### Get Requisition Details
+- **Endpoint**: `GET /requisitions/{id}`
+- **Response**: Detailed view of a single requisition.
+
+#### Create Requisition
+- **Endpoint**: `POST /requisitions`
+- **Body**:
+  ```json
+  {
+    "requisitionNo": "REQ-2024-001",
+    "jobTitle": "Product Manager",
+    "department": "Product",
+    "headcount": 1,
+    "priority": "High",
+    "justification": "Expansion of product line",
+    "targetStartDate": "2024-04-01"
+  }
+  ```
+
+#### Approve/Reject Requisition
+- **Endpoint**: `POST /requisitions/{id}/approval`
+- **Body**:
+  ```json
+  {
+    "action": "Approve", // or "Reject"
+    "comments": "Budget approved for Q2"
+  }
+  ```
+
+### 📢 Job Openings
+
+#### Create Job Opening (from Requisition)
+- **Endpoint**: `POST /openings`
+- **Body**:
+  ```json
+  {
+    "requisitionId": "REQ-UUID",
+    "jobTitle": "Product Manager",
+    "jobDescription": "Full markdown description...",
+    "responsibilities": ["Roadmap planning", "Stakeholder management"],
+    "mustHaveSkills": ["Agile", "JIRA"],
+    "salaryRange": {
+      "min": 2000000,
+      "max": 4000000,
+      "currency": "TZS"
+    },
+    "expiryDate": "2024-03-30T23:59:59Z"
+  }
+  ```
+
+#### Publish Job
+- **Endpoint**: `POST /openings/{id}/publish`
+- **Body**:
+  ```json
+  {
+    "platforms": ["LinkedIn", "Website", "Internal"],
+    "expiryDate": "2024-04-15T23:59:59Z" // Optional override
+  }
+  ```
+
+### 👥 Candidates & Applications
+
+#### List Candidates
+- **Endpoint**: `GET /candidates`
+- **Query Params**: `jobId`, `stage` (e.g., `Screening`, `Interview`)
+
+#### Update Application Stage
+- **Endpoint**: `PATCH /candidates/{id}/stage`
+- **Body**:
+  ```json
+  {
+    "stage": "Interview",
+    "notes": "Passed screening, moving to technical round"
+  }
+  ```
+
+### 🗓 Interviews
+
+#### Schedule Interview
+- **Endpoint**: `POST /interviews`
+- **Body**:
+  ```json
+  {
+    "candidateId": "CAND-UUID",
+    "jobId": "JOB-UUID",
+    "interviewType": "Technical",
+    "round": 1,
+    "scheduledDate": "2024-02-28",
+    "scheduledTime": "14:00",
+    "duration": 60,
+    "mode": "Google Meet",
+    "interviewers": ["tech.lead@company.com"]
+  }
+  ```
+
+#### Submit Feedback
+- **Endpoint**: `POST /interviews/{id}/feedback`
+- **Body**:
+  ```json
+  {
+    "interviewerEmail": "tech.lead@company.com",
+    "rating": 4, // 1-5
+    "strengths": ["Strong coding skills"],
+    "concerns": ["Communication could be clearer"],
+    "recommendation": "Hire"
+  }
+  ```
+
+### 🤝 Offers
+
+#### Create Offer
+- **Endpoint**: `POST /offers`
+- **Body**:
+  ```json
+  {
+    "candidateId": "CAND-UUID",
+    "jobId": "JOB-UUID",
+    "joiningDate": "2024-04-01",
+    "probationPeriod": 3,
+    "compensation": {
+      "annualCTC": 36000000,
+      "currency": "TZS",
+      "components": [
+        { "component": "Basic", "amount": 2000000 },
+        { "component": "Allowance", "amount": 1000000 }
+      ]
+    },
+    "expiryDate": "2024-03-10T23:59:59Z"
+  }
+  ```
+
+#### Send Offer (Email)
+- **Endpoint**: `POST /offers/{id}/send`
+- **Response**: Triggers email to candidate with offer details.
+
+---
+
+## 🛠 TypeScript Interfaces
+
+Use these definitions to type your frontend data.
 
 ```typescript
+// --- Enums ---
 export enum RequisitionStatus {
   Draft = "Draft",
   PendingApproval = "Pending Approval",
   Approved = "Approved",
-  Rejected = "Rejected",
-  Closed = "Closed"
-}
-
-export enum JobOpeningStatus {
-  Draft = "Draft",
-  Published = "Published",
-  Closed = "Closed"
+  Rejected = "Rejected"
 }
 
 export enum ApplicationStage {
@@ -44,208 +253,59 @@ export enum ApplicationStage {
   Rejected = "Rejected"
 }
 
-export enum InterviewType {
-  PhoneScreen = "Phone Screen",
-  Technical = "Technical",
-  HR = "HR",
-  Managerial = "Managerial"
+// --- Requests ---
+export interface ApplyJobRequest {
+  jobId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  resume: string; // Base64 string starting with "data:..."
+  resumeName?: string; // "my_cv.pdf"
+  linkedInUrl?: string;
+  coverLetter?: string;
 }
 
-export enum OfferStatus {
-  Draft = "Draft",
-  PendingApproval = "Pending Approval",
-  Approved = "Approved",
-  Sent = "Sent",
-  Accepted = "Accepted",
-  Rejected = "Rejected"
-}
-```
-
-### Interfaces
-
-```typescript
-// --- Requisition ---
-export interface JobRequisition {
-  id: string;
-  requisitionNo: string;
-  jobTitle: string;
-  department: string;
-  location: string;
-  grade: string;
-  headcount: number;
-  employmentType: string;
-  hiringManager: string;
-  requestedBy: string;
-  targetStartDate: string; // ISO Date
-  estimatedBudget: number;
-  currency: string;
-  justification: string;
-  status: RequisitionStatus;
-  approvalFlow: ApprovalStep[];
-  createdAt: string;
-}
-
-export interface ApprovalStep {
-  requisitionId: string;
-  approver: string;
-  role: string;
-  status: string;
-  comments: string;
-  timestamp: string;
-}
-
-// --- Job Opening ---
+// --- Models ---
 export interface JobOpening {
   id: string;
-  requisitionId: string;
   jobTitle: string;
   jobDescription: string;
-  responsibilities: string[];
+  department: string; // Populated from Requisition
+  status: "Draft" | "Published" | "Closed";
   mustHaveSkills: string[];
   niceToHaveSkills: string[];
-  experienceMin: number;
-  experienceMax: number;
-  education: string[];
-  salaryMin: number;
-  salaryMax: number;
-  salaryCurrency: string;
-  expiryDate: string;
-  status: JobOpeningStatus;
-  platforms: string[];
+  salaryMin?: number;
+  salaryMax?: number;
+  salaryCurrency?: string;
 }
 
-// --- Candidate & Application ---
 export interface Candidate {
   id: string;
   firstName: string;
   lastName: string;
   email: string;
-  phone: string;
   resumeUrl: string;
-  linkedInUrl?: string;
-  portfolioUrl?: string;
-  coverLetter?: string;
-}
-
-export interface JobApplication {
-  id: string;
-  candidateId: string;
-  jobOpeningId: string;
-  stage: ApplicationStage;
-  appliedDate: string;
-  notes?: string;
-  interview?: Interview[];
-  offer?: Offer;
-}
-
-// --- Interview ---
-export interface Interview {
-  id: string;
-  candidateId: string;
-  jobOpeningId: string;
-  applicationId: string;
-  interviewType: InterviewType;
-  round: number;
-  scheduledDate: string;
-  scheduledTime: string;
-  durationMin: number;
-  mode: string;
-  interviewers: string[];
-  status: string;
-  feedback?: InterviewFeedback[];
-}
-
-export interface InterviewFeedback {
-  interviewerEmail: string;
-  rating: number; // 1-5
-  strengths: string[];
-  concerns: string[];
-  recommendation: string;
-  comments: string;
-}
-
-// --- Offer ---
-export interface Offer {
-  id: string;
-  candidateId: string;
-  jobOpeningId: string;
-  applicationId: string;
-  joiningDate: string;
-  probationPeriod: number; // Months
-  annualCTC: number;
-  currency: string;
-  components: SalaryComponent[];
-  benefits: string[];
-  expiryDate: string;
-  status: OfferStatus;
-}
-
-export interface SalaryComponent {
-  component: string;
-  amount: number;
+  applications: JobApplication[];
 }
 ```
 
----
+## ⚠️ Error Handling
 
-## 2. API Integration Flows
+All API errors follow this format:
 
-### Flow 1: Creating and Publishing a Job
-1. **Create Requisition**: `POST /requisitions`
-   - Initial status: `Pending Approval`.
-2. **Approve Requisition**: `POST /requisitions/{id}/approval`
-   - Required status for next step: `Approved`.
-3. **Create Job Opening**: `POST /openings`
-   - Links to `requisitionId`.
-   - Initial status: `Draft`.
-4. **Publish Job**: `POST /openings/{id}/publish`
-   - Updates status to `Published`.
-   - Job is now visible for applications.
+```json
+{
+  "success": false,
+  "message": "Error description here",
+  "error": "Detailed technical error (optional)"
+}
+```
 
-### Flow 2: Candidate Application & Hiring
-1. **Submit Application**: `POST /public/apply` (Public Endpoint)
-   - Creates `Candidate` and `JobApplication`.
-   - Initial stage: `Applied`.
-2. **Review & Update Stage**: `PATCH /candidates/{id}/stage`
-   - Move to `Screening` or `Interview`.
-   - *Note*: Use `applicationId` or `candidateId` as needed by implementation.
-3. **Schedule Interview**: `POST /interviews`
-   - Requires valid `candidateId` and `jobId`.
-4. **Submit Feedback**: `POST /interviews/{id}/feedback`
-   - After interview is conducted.
-5. **Create Offer**: `POST /offers`
-   - When candidate passes all rounds.
-6. **Approve & Send Offer**: `POST /offers/{id}/approval` -> `POST /offers/{id}/send`.
-
----
-
-## 3. Endpoints Summary
-
-| Feature | Method | Endpoint | Description |
-|---|---|---|---|
-| **Requisitions** | GET | `/requisitions` | List with filters (status, department) |
-| | POST | `/requisitions` | Create new requisition |
-| | GET | `/requisitions/:id` | Get details |
-| | PUT | `/requisitions/:id` | Update details |
-| | POST | `/requisitions/:id/approval` | Approve/Reject |
-| **Job Openings** | GET | `/openings` | List openings |
-| | POST | `/openings` | Create from approved requisition |
-| | POST | `/openings/:id/publish` | Publish to platforms |
-| **Candidates** | GET | `/candidates` | List candidates (filter by job/stage) |
-| | POST | `/public/apply` | **Public**: Submit application |
-| | PATCH | `/candidates/:id/stage` | Update application stage |
-| **Interviews** | POST | `/interviews` | Schedule interview |
-| | POST | `/interviews/:id/feedback` | Submit feedback |
-| **Offers** | POST | `/offers` | Create offer |
-| | POST | `/offers/:id/approval` | Approve offer |
-| | POST | `/offers/:id/send` | Email offer to candidate |
-| **Talent Pool** | POST | `/talent-pool` | Add candidate manually |
-| | GET | `/talent-pool/search` | Search by skills/location |
-
----
-
-## 4. Key Notes for Frontend
-- **Dates**: All dates should be sent in ISO 8601 format (`YYYY-MM-DD` or `YYYY-MM-DDTHH:mm:ssZ`) unless specified otherwise.
-- **Rich Text**: Fields like `jobDescription` and `responsibilities` may contain HTML or Markdown.
-- **Resume Upload**: The `/public/apply` endpoint expects a `resume` string (Base64) or URL. If implementing file upload, ensure the file is uploaded to storage first (e.g., AWS S3) and the URL is sent to this API.
-- **Error Handling**: Check `error.response.data.message` for user-friendly error messages.
+**Common Status Codes:**
+- `200 OK`: Success
+- `400 Bad Request`: Validation failed (check body/params)
+- `401 Unauthorized`: Missing or invalid JWT token
+- `403 Forbidden`: User lacks permission for this action
+- `404 Not Found`: Resource (Job, Candidate) not found
+- `500 Internal Server Error`: Server-side issue

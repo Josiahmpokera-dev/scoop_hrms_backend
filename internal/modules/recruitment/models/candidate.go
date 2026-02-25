@@ -47,6 +47,7 @@ type ApplyJobRequest struct {
 	Email        string `json:"email" binding:"required,email"`
 	Phone        string `json:"phone"`
 	Resume       string `json:"resume"` // Base64 or URL
+	ResumeName   string `json:"resumeName"`
 	LinkedInURL  string `json:"linkedInUrl"`
 	PortfolioURL string `json:"portfolioUrl"`
 	CoverLetter  string `json:"coverLetter"`

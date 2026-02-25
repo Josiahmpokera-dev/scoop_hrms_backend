@@ -98,9 +98,22 @@ func (r *RecruitmentRepository) CreateCandidate(candidate *models.Candidate) err
 	return r.db.Create(candidate).Error
 }
 
+func (r *RecruitmentRepository) UpdateCandidate(candidate *models.Candidate) error {
+	return r.db.Save(candidate).Error
+}
+
 func (r *RecruitmentRepository) GetCandidateByEmail(email string) (*models.Candidate, error) {
 	var candidate models.Candidate
 	err := r.db.Where("email = ?", email).First(&candidate).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &candidate, err
+}
+
+func (r *RecruitmentRepository) GetCandidateByID(id string) (*models.Candidate, error) {
+	var candidate models.Candidate
+	err := r.db.First(&candidate, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, nil
 	}

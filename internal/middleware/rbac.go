@@ -93,6 +93,9 @@ func checkLegacyRolePermission(role models.UserRole, permissionCode string) bool
 			"helpdesk:read", "helpdesk:create", "helpdesk:manage", "helpdesk:manage_kb",
 			"user:read",
 			"report:view", "report:export",
+			// Recruitment permissions
+			"recruitment:read", "recruitment:create", "recruitment:update", "recruitment:delete",
+			"recruitment:approve", "recruitment:publish", "recruitment:manage_candidates",
 		},
 		models.RoleIT: {
 			"dashboard:view",

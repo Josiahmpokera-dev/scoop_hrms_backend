@@ -88,7 +88,45 @@ func (s *StorageService) ResolveURL(r *http.Request, storedURL string) string {
 	return fmt.Sprintf("%s://%s/%s", scheme, host, clean)
 }
 
+// UploadReader uploads a file from an io.Reader.
+// Returns: fileURL, error.
+func (s *StorageService) UploadReader(r io.Reader, filename string, folder string, identifier string) (string, error) {
+	if s.s3 != nil {
+		ext := filepath.Ext(filename)
+		timestamp := time.Now().UnixNano()
+		key := fmt.Sprintf("%s/%s/%d%s", folder, identifier, timestamp, ext)
+		contentType := getMimeTypeFromExtension(ext)
+		return s.s3.UploadReader(r, key, contentType)
+	}
+	return s.uploadLocalReader(r, filename, folder, identifier)
+}
+
 // ---------- Local storage (unchanged legacy behaviour) ----------
+
+func (s *StorageService) uploadLocalReader(r io.Reader, filename string, folder string, identifier string) (string, error) {
+	uploadDir := filepath.Join(s.basePath, folder, identifier)
+	if err := os.MkdirAll(uploadDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create upload directory: %w", err)
+	}
+
+	ext := filepath.Ext(filename)
+	timestamp := time.Now().UnixNano()
+	newFilename := fmt.Sprintf("%d%s", timestamp, ext)
+	filePath := filepath.Join(uploadDir, newFilename)
+
+	dst, err := os.Create(filePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to create destination file: %w", err)
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, r); err != nil {
+		return "", fmt.Errorf("failed to save file: %w", err)
+	}
+
+	relativeURL := fmt.Sprintf("%s/%s/%s/%s", s.baseURL, folder, identifier, newFilename)
+	return relativeURL, nil
+}
 
 func (s *StorageService) uploadLocal(file *multipart.FileHeader, folder string, identifier string) (string, int64, string, error) {
 	uploadDir := filepath.Join(s.basePath, folder, identifier)

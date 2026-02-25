@@ -143,6 +143,19 @@ func (h *RecruitmentHandler) ListJobOpenings(c *gin.Context) {
 	response.Success(c, "Job openings retrieved successfully", jobs)
 }
 
+func (h *RecruitmentHandler) ListPublicJobOpenings(c *gin.Context) {
+	status := "Published"
+	department := c.Query("department")
+
+	jobs, err := h.service.ListJobOpenings(status, department)
+	if err != nil {
+		response.InternalServerError(c, "Failed to list job openings", err)
+		return
+	}
+
+	response.Success(c, "Job openings retrieved successfully", jobs)
+}
+
 // --- Applications ---
 
 func (h *RecruitmentHandler) SubmitApplication(c *gin.Context) {
