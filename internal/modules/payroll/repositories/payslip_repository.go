@@ -1,14 +1,24 @@
 package repositories
 
 import (
+	"log"
+
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	"gorm.io/gorm"
 )
 
+// PayrollEncryptionService defines the interface for payroll data encryption
+type PayrollEncryptionService interface {
+	EncryptPayslip(payslip *models.Payslip) error
+	DecryptPayslip(payslip *models.Payslip) error
+	DecryptAllPayslips(payslips []models.Payslip) error
+}
+
 // PayslipRepository handles database operations for payslips
 type PayslipRepository struct {
-	db *gorm.DB
+	db                *gorm.DB
+	encryptionService PayrollEncryptionService
 }
 
 // NewPayslipRepository creates a new repository instance
@@ -18,8 +28,23 @@ func NewPayslipRepository() *PayslipRepository {
 	}
 }
 
+// NewPayslipRepositoryWithEncryption creates a new repository instance with encryption service
+func NewPayslipRepositoryWithEncryption(encryptionService PayrollEncryptionService) *PayslipRepository {
+	return &PayslipRepository{
+		db:                database.DB,
+		encryptionService: encryptionService,
+	}
+}
+
 // Create creates a new payslip
 func (r *PayslipRepository) Create(payslip *models.Payslip) error {
+	// Encrypt sensitive data before saving
+	if r.encryptionService != nil {
+		if err := r.encryptionService.EncryptPayslip(payslip); err != nil {
+			return err
+		}
+	}
+
 	return r.db.Create(payslip).Error
 }
 
@@ -38,6 +63,15 @@ func (r *PayslipRepository) GetByID(id uint, tenantID *uint) (*models.Payslip, e
 	if err := query.First(&payslip).Error; err != nil {
 		return nil, err
 	}
+
+	// Decrypt sensitive data after loading
+	if r.encryptionService != nil {
+		if err := r.encryptionService.DecryptPayslip(&payslip); err != nil {
+			// Log error but don't fail the operation
+			log.Printf("Warning: Failed to decrypt payslip %d: %v", id, err)
+		}
+	}
+
 	return &payslip, nil
 }
 
@@ -51,11 +85,27 @@ func (r *PayslipRepository) GetByEmployeeAndPeriod(employeeID uint, payMonth, pa
 	if err := query.First(&payslip).Error; err != nil {
 		return nil, err
 	}
+
+	// Decrypt sensitive data after loading
+	if r.encryptionService != nil {
+		if err := r.encryptionService.DecryptPayslip(&payslip); err != nil {
+			// Log error but don't fail the operation
+			log.Printf("Warning: Failed to decrypt payslip for employee %d: %v", employeeID, err)
+		}
+	}
+
 	return &payslip, nil
 }
 
 // Update updates a payslip
 func (r *PayslipRepository) Update(payslip *models.Payslip) error {
+	// Encrypt sensitive data before saving
+	if r.encryptionService != nil {
+		if err := r.encryptionService.EncryptPayslip(payslip); err != nil {
+			return err
+		}
+	}
+
 	return r.db.Save(payslip).Error
 }
 
@@ -89,6 +139,14 @@ func (r *PayslipRepository) List(tenantID *uint, payMonth, payYear int, employee
 	offset := (page - 1) * pageSize
 	if err := query.Order("pay_year DESC, pay_month DESC, employee_name ASC").Offset(offset).Limit(pageSize).Find(&payslips).Error; err != nil {
 		return nil, 0, err
+	}
+
+	// Decrypt sensitive data for all payslips
+	if r.encryptionService != nil {
+		if err := r.encryptionService.DecryptAllPayslips(payslips); err != nil {
+			// Log error but don't fail the operation
+			log.Printf("Warning: Failed to decrypt some payslips: %v", err)
+		}
 	}
 
 	return payslips, total, nil

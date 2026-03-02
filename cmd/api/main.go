@@ -173,6 +173,8 @@ func main() {
 		&recruitmentModels.Interview{},
 		&recruitmentModels.Offer{},
 		&recruitmentModels.TalentPoolCandidate{},
+		// Attendance: Manual Punch models
+		&attendanceModels.ManualPunch{},
 	); err != nil {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}

@@ -865,6 +865,7 @@ func SetupRoutes(r *gin.Engine) {
 		timesheetHandler := attendanceHandlers.NewTimesheetHandler()
 		overtimeHandler := attendanceHandlers.NewOvertimeHandler()
 		attendanceReportsHandler := attendanceHandlers.NewAttendanceReportsHandler()
+		manualPunchHandler := attendanceHandlers.NewManualPunchHandler()
 
 		// Timesheet - Employee Self-Service (all authenticated users)
 		timesheets := v1.Group("/attendance/timesheets")
@@ -939,6 +940,23 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceReports.GET("/employee-utilization", attendanceReportsHandler.GetEmployeeUtilizationReport) // Employee utilization
 		}
 
+		// ============ Attendance Module: Manual Punches ============
+		manualPunches := v1.Group("/attendance/manual-punches")
+		manualPunches.Use(middleware.AuthMiddleware())
+		{
+			// Employee self-service endpoints
+			manualPunches.POST("", manualPunchHandler.CreateManualPunch)            // Create manual punch request
+			manualPunches.GET("/my", manualPunchHandler.GetMyManualPunches)         // Get my manual punch requests
+			manualPunches.POST("/:id/cancel", manualPunchHandler.CancelManualPunch) // Cancel my pending request
+			manualPunches.GET("/:id", manualPunchHandler.GetManualPunchByID)        // Get specific manual punch
+
+			// Admin/HR endpoints (require HR permissions)
+			manualPunches.GET("", middleware.HRMiddleware(), manualPunchHandler.GetAllManualPunches)                  // Get all manual punches (admin)
+			manualPunches.GET("/pending", middleware.HRMiddleware(), manualPunchHandler.GetPendingManualPunches)      // Get pending requests (admin)
+			manualPunches.PATCH("/:id/status", middleware.HRMiddleware(), manualPunchHandler.UpdateManualPunchStatus) // Approve/reject request
+			manualPunches.DELETE("/:id", middleware.HRMiddleware(), manualPunchHandler.DeleteManualPunch)             // Delete manual punch (admin)
+		}
+
 		// ============ Projects & Daily Tasks ============
 		projectHandler := projectHandlers.NewProjectHandler()
 		dailyTaskHandler := projectHandlers.NewDailyTaskHandler()
@@ -996,7 +1014,7 @@ func SetupRoutes(r *gin.Engine) {
 		// =====================================================================
 		// Recruitment Module
 		// =====================================================================
-		
+
 		// Public Routes (No Auth)
 		recruitmentPublic := v1.Group("/recruitment/public")
 		{

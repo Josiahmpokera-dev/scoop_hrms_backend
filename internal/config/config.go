@@ -19,6 +19,7 @@ type Config struct {
 	RabbitMQ       RabbitMQConfig
 	LoginRateLimit LoginRateLimitConfig
 	AWS            AWSConfig
+	Encryption     EncryptionConfig
 }
 
 // AWSConfig holds AWS S3 storage configuration
@@ -29,6 +30,11 @@ type AWSConfig struct {
 	S3DocsPrefix    string
 	AccessKeyID     string
 	SecretAccessKey string
+}
+
+// EncryptionConfig holds encryption configuration for sensitive data
+type EncryptionConfig struct {
+	Key string // Encryption key for sensitive payroll data (32 bytes recommended)
 }
 
 // IsS3Enabled returns true when all required S3 fields are set.
@@ -145,6 +151,9 @@ func LoadConfig() (*Config, error) {
 			S3DocsPrefix:    getEnv("AWS_S3_DOCS_PREFIX", ""),
 			AccessKeyID:     getEnv("AWS_ACCESS_KEY_ID", ""),
 			SecretAccessKey: getEnv("AWS_SECRET_ACCESS_KEY", ""),
+		},
+		Encryption: EncryptionConfig{
+			Key: getEnv("ENCRYPTION_KEY", "hrms-payroll-encryption-key-2024!"),
 		},
 	}
 
