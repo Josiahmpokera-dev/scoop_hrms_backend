@@ -503,6 +503,239 @@ func (h *SelfServiceHandler) CreateServiceRequest(c *gin.Context) {
 	response.Success(c, "Service request created successfully", responseData)
 }
 
+// CreateHRLetterRequest handles creating an HR letter request (convenience endpoint)
+// @Summary Create HR letter request
+// @Description Create a new HR letter request (convenience endpoint that uses service requests)
+// @Tags Self-Service
+// @Accept json
+// @Produce json
+// @Param request body map[string]interface{} true "HR letter request"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/self-service/hr-letters [post]
+func (h *SelfServiceHandler) CreateHRLetterRequest(c *gin.Context) {
+	user, exists := c.Get("user")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	userObj, ok := user.(*userModels.User)
+	if !ok {
+		response.Unauthorized(c, "Invalid user context")
+		return
+	}
+
+	var req map[string]interface{}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	// Set default type to HR letter
+	req["type"] = "hr_letter"
+	
+	// Ensure required fields for HR letters
+	if _, ok := req["letter_type"]; !ok {
+		response.BadRequest(c, "letter_type is required for HR letters", nil)
+		return
+	}
+
+	if _, ok := req["purpose"]; !ok {
+		response.BadRequest(c, "purpose is required for HR letters", nil)
+		return
+	}
+
+	// Set default category if not provided
+	if _, ok := req["category"]; !ok {
+		req["category"] = "HR Letter"
+	}
+
+	// Set default subject if not provided
+	if _, ok := req["subject"]; !ok {
+		letterType, _ := req["letter_type"].(string)
+		req["subject"] = "Request for " + letterType + " Letter"
+	}
+
+	// Call the existing service request creation
+	tenantID := middleware.GetTenantID(c)
+	updatedBy := &userObj.ID
+
+	requestType, _ := req["type"].(string)
+	category, _ := req["category"].(string)
+	subject, _ := req["subject"].(string)
+	
+	var description *string
+	if d, ok := req["description"].(string); ok {
+		description = &d
+	}
+
+	priority := "medium"
+	if p, ok := req["priority"].(string); ok {
+		priority = p
+	}
+
+	// Extract HR letter specific data
+	additionalData := map[string]interface{}{}
+	if letterType, ok := req["letter_type"].(string); ok {
+		additionalData["letter_type"] = letterType
+	}
+	if purpose, ok := req["purpose"].(string); ok {
+		additionalData["purpose"] = purpose
+	}
+	if addressedTo, ok := req["addressed_to"].(string); ok {
+		additionalData["addressed_to"] = addressedTo
+	}
+	if notes, ok := req["additional_notes"].(string); ok {
+		additionalData["additional_notes"] = notes
+	}
+
+	serviceRequest, err := h.service.CreateServiceRequest(userObj.ID, tenantID, requestType, category, subject, description, priority, additionalData, updatedBy)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	// Format response specifically for HR letters
+	responseData := map[string]interface{}{
+		"id":             serviceRequest.ID,
+		"request_number": serviceRequest.RequestNumber,
+		"type":           string(serviceRequest.Type),
+		"category":       serviceRequest.Category,
+		"subject":        serviceRequest.Subject,
+		"status":         string(serviceRequest.Status),
+		"priority":       string(serviceRequest.Priority),
+		"requested_date": serviceRequest.RequestedDate,
+		"sla_hours":      serviceRequest.SLAHours,
+		"letter_type":    serviceRequest.LetterType,
+		"purpose":       serviceRequest.Purpose,
+		"addressed_to":   serviceRequest.AddressedTo,
+	}
+
+	if serviceRequest.AssignedTo != nil {
+		responseData["assigned_to"] = map[string]interface{}{
+			"name": *serviceRequest.AssignedTo,
+		}
+	}
+
+	if serviceRequest.EstimatedCompletionDate != nil {
+		responseData["estimated_completion_date"] = *serviceRequest.EstimatedCompletionDate
+	}
+
+	response.Success(c, "HR letter request created successfully", responseData)
+}
+
+// ListHRLetterRequests handles getting HR letter requests (convenience endpoint)
+// @Summary Get HR letter requests
+// @Description Retrieve list of HR letter requests for the authenticated user
+// @Tags Self-Service
+// @Produce json
+// @Param page query int false "Page number"
+// @Param page_size query int false "Items per page"
+// @Param status query string false "Request status"
+// @Param letter_type query string false "Letter type filter"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/self-service/hr-letters [get]
+func (h *SelfServiceHandler) ListHRLetterRequests(c *gin.Context) {
+	user, exists := c.Get("user")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	userObj, ok := user.(*userModels.User)
+	if !ok {
+		response.Unauthorized(c, "Invalid user context")
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+
+	// Parse query parameters
+	page := 1
+	if p := c.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
+	pageSize := 20
+	if ps := c.Query("page_size"); ps != "" {
+		if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 && parsed <= 100 {
+			pageSize = parsed
+		}
+	}
+
+	// Build filters specifically for HR letters
+	filters := map[string]interface{}{
+		"type": "hr_letter", // Only HR letters
+	}
+
+	if status := c.Query("status"); status != "" {
+		filters["status"] = status
+	}
+
+	if letterType := c.Query("letter_type"); letterType != "" {
+		filters["letter_type"] = letterType
+	}
+
+	// Get HR letter requests using the existing service
+	requests, total, err := h.service.ListServiceRequests(userObj.ID, tenantID, page, pageSize, filters)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	// Format response specifically for HR letters
+	var hrLetters []map[string]interface{}
+	for _, req := range requests {
+		hrLetter := map[string]interface{}{
+			"id":             req.ID,
+			"request_number": req.RequestNumber,
+			"type":           string(req.Type),
+			"category":       req.Category,
+			"subject":        req.Subject,
+			"description":    req.Description,
+			"status":         string(req.Status),
+			"priority":       string(req.Priority),
+			"letter_type":    req.LetterType,
+			"purpose":       req.Purpose,
+			"addressed_to":   req.AddressedTo,
+			"additional_notes": req.AdditionalNotes,
+			"requested_date": req.RequestedDate,
+			"completed_date": req.CompletedDate,
+			"sla_hours":      req.SLAHours,
+		}
+
+		if req.AssignedTo != nil {
+			hrLetter["assigned_to"] = map[string]interface{}{
+				"name": *req.AssignedTo,
+			}
+		}
+
+		if req.EstimatedCompletionDate != nil {
+			hrLetter["estimated_completion_date"] = *req.EstimatedCompletionDate
+		}
+
+		hrLetters = append(hrLetters, hrLetter)
+	}
+
+	// Build response with pagination
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	meta := &response.Meta{
+		Page:       page,
+		PerPage:    pageSize,
+		Total:      total,
+		TotalPages: totalPages,
+	}
+
+	responseData := map[string]interface{}{
+		"letters": hrLetters,
+		"pagination": meta,
+	}
+
+	response.SuccessWithMeta(c, "HR letter requests retrieved successfully", responseData, meta)
+}
+
 // CancelServiceRequest handles cancelling a service request
 // @Summary Cancel service request
 // @Description Cancel a pending service request

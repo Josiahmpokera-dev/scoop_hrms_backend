@@ -252,6 +252,10 @@ func SetupRoutes(r *gin.Engine) {
 			selfService.POST("/requests/:request_id/cancel", selfServiceHandler.CancelServiceRequest)
 			// TODO: selfService.GET("/requests/:request_id/download", selfServiceHandler.DownloadRequestDocument)
 
+			// HR Letters (convenience endpoints for HR letter requests)
+			selfService.GET("/hr-letters", selfServiceHandler.ListHRLetterRequests)
+			selfService.POST("/hr-letters", selfServiceHandler.CreateHRLetterRequest)
+
 			// People Directory
 			selfService.GET("/directory", selfServiceHandler.SearchDirectory)
 			selfService.GET("/directory/:employee_id", selfServiceHandler.GetDirectoryEmployeeDetails)

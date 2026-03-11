@@ -223,3 +223,4 @@ func (s *EncryptionService) IsEncrypted(value string) bool {
 	
 	// Additional checks could be added here
 	return len(value) > 20 && !strings.Contains(value, " ") && strings.Contains(value, "=")
+}

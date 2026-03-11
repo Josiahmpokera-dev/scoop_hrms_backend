@@ -135,6 +135,36 @@ func RunRoles() {
 				"attendance:read",
 			},
 		},
+
+		{
+			Code:        "hod",
+			Name:        "Head of Department",
+			Description: "Department head with oversight for department employees, leave, attendance, and approvals",
+			Permissions: []string{
+				// Dashboard
+				"dashboard:view", "dashboard:department_view",
+				// Employees (department level access)
+				"employee:read", "employee:update", "employee:department_view",
+				// Leave (department approvals)
+				"leave:read", "leave:create", "leave:approve", "leave:department_view",
+				// Attendance (department oversight)
+				"attendance:read", "attendance:approve", "attendance:department_view",
+				// Shifts (department oversight)
+				"shift:read", "shift:approve_swaps", "shift:department_view",
+				// Organization (department management)
+				"department:read", "department:update",
+				"team:read", "team:update",
+				"position:read", "position:update",
+				"organization:read", "location:read",
+				"cost_center:read",
+				// Payroll (department reports)
+				"payroll:read", "payroll:department_reports",
+				// Helpdesk (department tickets)
+				"helpdesk:read", "helpdesk:create", "helpdesk:department_view",
+				// Reports (department level)
+			"report:view", "report:department_export",
+			},
+		},
 	}
 
 	for _, roleData := range defaultRoles {
