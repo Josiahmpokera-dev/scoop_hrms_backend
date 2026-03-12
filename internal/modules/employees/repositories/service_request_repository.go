@@ -67,6 +67,42 @@ func (r *ServiceRequestRepository) FindByEmployeeID(employeeID uint, tenantID *u
 	return requests, total, err
 }
 
+// FindAll finds all service requests with pagination and filters (for HR/admin use)
+func (r *ServiceRequestRepository) FindAll(tenantID *uint, page, pageSize int, filters map[string]interface{}) ([]models.ServiceRequest, int64, error) {
+	var requests []models.ServiceRequest
+	var total int64
+
+	offset := (page - 1) * pageSize
+	query := r.db.Model(&models.ServiceRequest{})
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	// Apply filters
+	if requestType, ok := filters["type"].(string); ok && requestType != "" {
+		query = query.Where("type = ?", requestType)
+	}
+	if status, ok := filters["status"].(string); ok && status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if priority, ok := filters["priority"].(string); ok && priority != "" {
+		query = query.Where("priority = ?", priority)
+	}
+	if letterType, ok := filters["letter_type"].(string); ok && letterType != "" {
+		query = query.Where("letter_type = ?", letterType)
+	}
+
+	// Count total
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	// Get paginated results
+	err := query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&requests).Error
+	return requests, total, err
+}
+
 // Update updates a service request
 func (r *ServiceRequestRepository) Update(request *models.ServiceRequest) error {
 	return r.db.Save(request).Error

@@ -18,9 +18,10 @@ Complete API documentation covering **Employee self-service** leave requests, **
 7. [Submit Leave Application](#7-submit-leave-application)
 8. [List My Leave Requests](#8-list-my-leave-requests)
 9. [Get Leave Request Detail](#9-get-leave-request-detail)
-10. [Update Leave Request (Draft/Returned)](#10-update-leave-request)
-11. [Cancel Leave Request](#11-cancel-leave-request)
-12. [Delete Draft Leave Request](#12-delete-draft-leave-request)
+10. [Get Approval Workflow Status](#10-get-approval-workflow-status)
+11. [Update Leave Request (Draft/Returned)](#11-update-leave-request)
+12. [Cancel Leave Request](#12-cancel-leave-request)
+13. [Delete Draft Leave Request](#13-delete-draft-leave-request)
 
 ### Part B — HR/Admin Management APIs
 13. [List All Leave Requests (HR View)](#13-list-all-leave-requests-hr-view)
@@ -45,9 +46,30 @@ Complete API documentation covering **Employee self-service** leave requests, **
 
 ---
 
-## Authentication
+## Authentication & Role-Based Access
 
-| Scope              | Middleware                          | Who Can Access              |
+### Role-Based Access Control
+
+| Role               | Leave Management Permissions                                                                 | Middleware                  |
+|--------------------|----------------------------------------------------------------------------------------|----------------------------|
+| **Employee**       | View own balances, submit requests, track own approvals, cancel own requests          | `AuthMiddleware`           |
+| **Head of Department (HOD)** | Approve/reject team member requests, add approval notes, view department leave calendar | `ManagerMiddleware`        |
+| **HR Admin**       | Full access: approve/reject all requests, manage policies, view all leave data        | `HRMiddleware`             |
+| **Super Admin**    | Full system access including configuration and reporting                              | `AdminMiddleware`          |
+
+### Approval Workflow Access by Role
+
+| API Endpoint                      | Employee | HOD  | HR   | Admin | Description |
+|-----------------------------------|----------|------|------|-------|-------------|
+| `/leave/balances`                | ✅       | ✅   | ✅   | ✅    | View leave balances |
+| `/leave/requests` (own)          | ✅       | ✅   | ✅   | ✅    | View own requests |
+| `/leave/requests` (all)         | ❌       | ✅   | ✅   | ✅    | View all requests |
+| `/leave/requests/:id/approve`    | ❌       | ✅   | ✅   | ✅    | Approve requests |
+| `/leave/requests/:id/reject`     | ❌       | ✅   | ✅   | ✅    | Reject requests |
+| `/leave/admin/requests`          | ❌       | ❌   | ✅   | ✅    | Admin leave management |
+| `/leave/policies`                | ❌       | ❌   | ✅   | ✅    | Manage leave policies |
+
+---
 |--------------------|-------------------------------------|-----------------------------|
 | Employee (Self)    | `AuthMiddleware`                    | Any authenticated user      |
 | HR/Admin           | `AuthMiddleware` + `HRMiddleware`   | Admin, Super Admin, HR      |
@@ -269,6 +291,83 @@ GET /api/v1/leave/policies/guidelines
 ```
 
 **Auth:** Any authenticated user
+
+### Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Policy guidelines retrieved successfully",
+  "data": [
+    {
+      "policy_name": "Tanzania Annual Leave Policy",
+      "leave_type_code": "AL",
+      "leave_type_name": "Annual Leave",
+      "entitlement": 28,
+      "description": "28 days paid annual leave. Leave entitlement starts accruing after successful completion of 3-month probation period.",
+      "accrual_frequency": "Annual",
+      "proration_on_join": true,
+      "carry_forward": true,
+      "carry_forward_limit": 14,
+      "encashment_allowed": true,
+      "encashment_limit": 7,
+      "minimum_notice_days": 3,
+      "maximum_days_per_request": 14
+    },
+    {
+      "policy_name": "Tanzania Maternity Leave Policy",
+      "leave_type_code": "ML",
+      "leave_type_name": "Maternity Leave",
+      "entitlement": 100,
+      "description": "84-100 days paid maternity leave for expecting and new mothers. Requires medical certificate and 30 days advance notice.",
+      "accrual_frequency": "Per Pregnancy",
+      "proration_on_join": false,
+      "carry_forward": false,
+      "minimum_notice_days": 30,
+      "maximum_days_per_request": 100,
+      "requires_documentation": true
+    },
+    {
+      "policy_name": "Tanzania Paternity Leave Policy",
+      "leave_type_code": "PL",
+      "leave_type_name": "Paternity Leave",
+      "entitlement": 3,
+      "description": "3 days paid paternity leave for new fathers. Available per birth event with 7 days advance notice.",
+      "accrual_frequency": "Per Birth Event",
+      "proration_on_join": false,
+      "carry_forward": false,
+      "minimum_notice_days": 7,
+      "maximum_days_per_request": 3
+    },
+    {
+      "policy_name": "Tanzania Compassionate Leave Policy",
+      "leave_type_code": "CL",
+      "leave_type_name": "Compassionate Leave",
+      "entitlement": 4,
+      "description": "4 days paid compassionate leave for bereavement or family emergencies. Available immediately with no notice requirement.",
+      "accrual_frequency": "Annual",
+      "proration_on_join": true,
+      "carry_forward": false,
+      "minimum_notice_days": 0,
+      "maximum_days_per_request": 4
+    },
+    {
+      "policy_name": "Tanzania Emergency Leave Policy",
+      "leave_type_code": "EL",
+      "leave_type_name": "Emergency Leave",
+      "entitlement": 5,
+      "description": "5 days emergency leave per year for urgent unforeseen circumstances. Available during probation period with no notice requirement. Negative balance allowed for genuine emergencies.",
+      "accrual_frequency": "Annual",
+      "proration_on_join": true,
+      "carry_forward": false,
+      "negative_balance_allowed": true,
+      "minimum_notice_days": 0,
+      "maximum_days_per_request": 3,
+      "half_day_allowed": true
+    }
+  ]
+}
+```
 
 ---
 
@@ -548,6 +647,97 @@ GET /api/v1/leave/requests/:request_id
 ```
 
 **Auth:** Request owner or HR/Admin
+
+## 10. Get Approval Workflow Status
+
+Get detailed approval workflow status with notes and timestamps for a specific leave request. This endpoint is specifically designed for employees to track their approval progress.
+
+```
+GET /api/v1/leave/requests/:request_id/approval-status
+```
+
+**Auth:** Request owner only
+
+### Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Approval workflow status retrieved successfully",
+  "data": {
+    "request_id": 42,
+    "application_number": "LV-2026-00042",
+    "current_status": "pending",
+    "current_level": 1,
+    "current_approver_type": "head_of_department",
+    "current_approver_name": "Mike Kamau",
+    "submission_date": "2026-02-06T10:30:00Z",
+    "estimated_completion_date": "2026-02-10T23:59:59Z",
+    "approval_workflow": [
+      {
+        "level": 1,
+        "approver_type": "head_of_department",
+        "approver_name": "Mike Kamau",
+        "department": "Engineering",
+        "status": "pending",
+        "expected_action_date": "2026-02-07T23:59:59Z",
+        "actual_action_date": null,
+        "remarks": null,
+        "is_current": true,
+        "approval_timeframe": "1-2 business days"
+      },
+      {
+        "level": 2,
+        "approver_type": "hr_department",
+        "approver_name": "Fatma Salim",
+        "department": "Human Resources",
+        "status": "pending",
+        "expected_action_date": "2026-02-09T23:59:59Z",
+        "actual_action_date": null,
+        "remarks": null,
+        "is_current": false,
+        "approval_timeframe": "1 business day"
+      },
+      {
+        "level": 3,
+        "approver_type": "director_ceo",
+        "approver_name": "John Mwanga",
+        "department": "Executive",
+        "status": "not_applicable",
+        "expected_action_date": null,
+        "actual_action_date": null,
+        "remarks": null,
+        "is_current": false,
+        "approval_timeframe": "N/A"
+      }
+    ],
+    "approval_history": [
+      {
+        "timestamp": "2026-02-06T10:30:00Z",
+        "action": "submitted",
+        "by": "Employee (EMP060)",
+        "remarks": "Leave application submitted for family vacation"
+      }
+    ],
+    "next_steps": "Awaiting Head of Department approval. Typically processed within 1-2 business days.",
+    "contact_information": {
+      "hod_email": "mike.kamau@company.com",
+      "hod_phone": "+255712000020",
+      "hr_email": "hr@company.com",
+      "hr_phone": "+255712000010"
+    }
+  }
+}
+```
+
+### Key Features:
+- **Real-time tracking**: Shows current approval level and status
+- **Expected timelines**: Provides estimated completion dates for each level
+- **Contact information**: Department contacts for follow-up
+- **Historical tracking**: Complete audit trail of all actions
+- **Next steps guidance**: Clear instructions on what to expect next
+
+---
 
 ### Response — `200 OK`
 
@@ -1151,14 +1341,18 @@ draft ──► pending ──► approved
 
 ## Leave Types
 
-| Code      | Name              | Category   | Paid | Requires Docs |
-|-----------|-------------------|------------|------|---------------|
-| `annual`  | Annual Leave      | earned     | Yes  | No            |
-| `sick`    | Sick Leave        | statutory  | Yes  | Yes (>3 days) |
-| `maternity`| Maternity Leave  | statutory  | Yes  | Yes           |
-| `paternity`| Paternity Leave  | statutory  | Yes  | Yes           |
-| `comp`    | Compassionate     | emergency  | Yes  | No            |
-| `unpaid`  | Unpaid Leave      | other      | No   | No            |
+| Code      | Name              | Category   | Paid | Requires Docs | Description |
+|-----------|-------------------|------------|------|---------------|-------------|
+| `AL`      | Annual Leave      | annual     | Yes  | No            | 28 days paid annual leave, starts after 3-month probation |
+| `SL`      | Sick Leave        | medical    | Yes  | Yes (>3 days) | Paid sick leave with medical certificate requirement |
+| `ML`      | Maternity Leave  | family     | Yes  | Yes           | 84-100 days paid maternity leave for expecting mothers |
+| `PL`      | Paternity Leave  | family     | Yes  | Yes           | 3 days paid paternity leave for new fathers |
+| `CL`      | Compassionate Leave | compassionate | Yes  | No            | 4 days paid compassionate leave for emergencies |
+| `EL`      | Emergency Leave   | emergency  | Yes  | No            | 5 days emergency leave, available during probation |
+| `UL`      | Unpaid Leave      | unpaid     | No   | No            | Unpaid leave for personal reasons |
+| `STL`     | Study Leave       | education  | Yes  | Yes           | Paid study leave for educational commitments |
+| `WFH`     | Work From Home    | remote     | Yes  | No            | Remote work arrangement |
+| `HL`      | Half Day Leave    | other      | Yes  | No            | Half-day leave (morning or afternoon) |
 
 ## Approval Levels
 

@@ -46,7 +46,10 @@ func RunDevelopmentData() {
 	// 6. Seed Leave Types
 	seedLeaveTypes()
 
-	// 7. Seed Leave Balances for all test employees
+	// 7. Seed Leave Policies
+	seedLeavePolicies()
+
+	// 8. Seed Leave Balances for all test employees
 	seedLeaveBalances()
 
 	log.Println("✅ Development test data seeding completed.")
@@ -1139,4 +1142,181 @@ func RunTeamLeads() {
 		}
 		log.Printf("  ✅ Team lead assigned: %s -> %s %s", a.TeamCode, emp.FirstName, emp.LastName)
 	}
+}
+
+// ─── Leave Policies ───────────────────────────────────────────────────────
+
+// seedLeavePolicies seeds default leave policies for Tanzania
+func seedLeavePolicies() {
+	repo := leaveRepos.NewLeavePolicyRepository()
+
+	policies := []struct {
+		PolicyName             string
+		Country                string
+		LeaveTypeCode          string
+		Entitlement            int
+		AccrualFrequency       string
+		ProrationOnJoin        bool
+		ProrationOnExit        bool
+		CarryForward           bool
+		CarryForwardLimit      *int
+		CarryForwardExpiry     *time.Time
+		EncashmentAllowed      bool
+		EncashmentLimit        *int
+		NegativeBalanceAllowed bool
+		SandwichRules          bool
+		HalfDayAllowed         bool
+		MinimumNoticeDays      int
+		MaximumDaysPerRequest  *int
+		IsActive               bool
+	}{
+		// Annual Leave Policy - 28 days, starts after 3-month probation
+		{
+			PolicyName:             "Tanzania Annual Leave Policy",
+			Country:                "Tanzania",
+			LeaveTypeCode:          "AL",
+			Entitlement:            28,
+			AccrualFrequency:       "Annual",
+			ProrationOnJoin:        true,
+			ProrationOnExit:        true,
+			CarryForward:           true,
+			CarryForwardLimit:      intPtr(14), // Max 14 days can be carried forward
+			CarryForwardExpiry:     timePtr(time.Date(time.Now().Year(), 12, 31, 0, 0, 0, 0, time.UTC)),
+			EncashmentAllowed:      true,
+			EncashmentLimit:        intPtr(7), // Max 7 days can be encashed
+			NegativeBalanceAllowed: false,
+			SandwichRules:          true,
+			HalfDayAllowed:         true,
+			MinimumNoticeDays:      3,
+			MaximumDaysPerRequest:  intPtr(14), // Max 14 days per request
+			IsActive:               true,
+		},
+		// Maternity Leave Policy - 84-100 days paid
+		{
+			PolicyName:             "Tanzania Maternity Leave Policy",
+			Country:                "Tanzania",
+			LeaveTypeCode:          "ML",
+			Entitlement:            100, // Up to 100 days as requested
+			AccrualFrequency:       "Per Pregnancy",
+			ProrationOnJoin:        false,
+			ProrationOnExit:        false,
+			CarryForward:           false,
+			CarryForwardLimit:      nil,
+			CarryForwardExpiry:     nil,
+			EncashmentAllowed:      false,
+			EncashmentLimit:        nil,
+			NegativeBalanceAllowed: false,
+			SandwichRules:          false,
+			HalfDayAllowed:         false,
+			MinimumNoticeDays:      30, // 30 days notice for maternity leave
+			MaximumDaysPerRequest:  intPtr(100),
+			IsActive:               true,
+		},
+		// Paternity Leave Policy - 3 days
+		{
+			PolicyName:             "Tanzania Paternity Leave Policy",
+			Country:                "Tanzania",
+			LeaveTypeCode:          "PL",
+			Entitlement:            3,
+			AccrualFrequency:       "Per Birth Event",
+			ProrationOnJoin:        false,
+			ProrationOnExit:        false,
+			CarryForward:           false,
+			CarryForwardLimit:      nil,
+			CarryForwardExpiry:     nil,
+			EncashmentAllowed:      false,
+			EncashmentLimit:        nil,
+			NegativeBalanceAllowed: false,
+			SandwichRules:          false,
+			HalfDayAllowed:         false,
+			MinimumNoticeDays:      7,
+			MaximumDaysPerRequest:  intPtr(3),
+			IsActive:               true,
+		},
+		// Compassionate Leave Policy - 4 days
+		{
+			PolicyName:             "Tanzania Compassionate Leave Policy",
+			Country:                "Tanzania",
+			LeaveTypeCode:          "CL",
+			Entitlement:            4,
+			AccrualFrequency:       "Annual",
+			ProrationOnJoin:        true,
+			ProrationOnExit:        false,
+			CarryForward:           false,
+			CarryForwardLimit:      nil,
+			CarryForwardExpiry:     nil,
+			EncashmentAllowed:      false,
+			EncashmentLimit:        nil,
+			NegativeBalanceAllowed: false,
+			SandwichRules:          false,
+			HalfDayAllowed:         false,
+			MinimumNoticeDays:      0, // Immediate leave for emergencies
+			MaximumDaysPerRequest:  intPtr(4),
+			IsActive:               true,
+		},
+		// Emergency Leave Policy - Available during probation
+		{
+			PolicyName:             "Tanzania Emergency Leave Policy",
+			Country:                "Tanzania",
+			LeaveTypeCode:          "EL",
+			Entitlement:            5, // 5 days emergency leave per year
+			AccrualFrequency:       "Annual",
+			ProrationOnJoin:        true,
+			ProrationOnExit:        true,
+			CarryForward:           false,
+			CarryForwardLimit:      nil,
+			CarryForwardExpiry:     nil,
+			EncashmentAllowed:      false,
+			EncashmentLimit:        nil,
+			NegativeBalanceAllowed: true, // Allow negative balance for emergencies
+			SandwichRules:          false,
+			HalfDayAllowed:         true,
+			MinimumNoticeDays:      0,         // No notice required for emergencies
+			MaximumDaysPerRequest:  intPtr(3), // Max 3 days per emergency request
+			IsActive:               true,
+		},
+	}
+
+	for _, p := range policies {
+		existing, _ := repo.FindByCountryAndLeaveType(p.Country, p.LeaveTypeCode, nil)
+		if existing != nil {
+			continue
+		}
+
+		policy := &leaveModels.LeavePolicy{
+			PolicyName:             p.PolicyName,
+			Country:                p.Country,
+			LeaveTypeCode:          p.LeaveTypeCode,
+			Entitlement:            p.Entitlement,
+			AccrualFrequency:       p.AccrualFrequency,
+			ProrationOnJoin:        p.ProrationOnJoin,
+			ProrationOnExit:        p.ProrationOnExit,
+			CarryForward:           p.CarryForward,
+			CarryForwardLimit:      p.CarryForwardLimit,
+			CarryForwardExpiry:     p.CarryForwardExpiry,
+			EncashmentAllowed:      p.EncashmentAllowed,
+			EncashmentLimit:        p.EncashmentLimit,
+			NegativeBalanceAllowed: p.NegativeBalanceAllowed,
+			SandwichRules:          p.SandwichRules,
+			HalfDayAllowed:         p.HalfDayAllowed,
+			MinimumNoticeDays:      p.MinimumNoticeDays,
+			MaximumDaysPerRequest:  p.MaximumDaysPerRequest,
+			IsActive:               p.IsActive,
+		}
+
+		if err := repo.Create(policy); err != nil {
+			log.Printf("  Warning: Failed to create leave policy %s: %v", p.PolicyName, err)
+			continue
+		}
+		log.Printf("  ✅ Leave policy created: %s", p.PolicyName)
+	}
+}
+
+// Helper functions for pointer types
+func intPtr(i int) *int {
+	return &i
+}
+
+func timePtr(t time.Time) *time.Time {
+	return &t
 }

@@ -176,18 +176,6 @@ func SetupRoutes(r *gin.Engine) {
 			})
 		}
 
-		// HR routes (require HR or Admin role)
-		hr := v1.Group("/hr")
-		hr.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
-		{
-			// HR routes will be added here
-			hr.GET("/dashboard", func(c *gin.Context) {
-				c.JSON(200, gin.H{
-					"message": "HR dashboard",
-				})
-			})
-		}
-
 		// Organization routes (require authentication - HR or Admin)
 		organizations := v1.Group("/organizations")
 		organizations.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
@@ -270,6 +258,23 @@ func SetupRoutes(r *gin.Engine) {
 			selfService.GET("/assets/issues", assetSelfServiceHandler.ListAssetIssues)
 			selfService.POST("/assets/issues", assetSelfServiceHandler.CreateAssetIssue)
 			selfService.GET("/assets/issues/:issue_id", assetSelfServiceHandler.GetAssetIssueDetails)
+		}
+
+		// HR routes (require HR or Admin role)
+		hr := v1.Group("/hr")
+		hr.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			// HR routes will be added here
+			hr.GET("/dashboard", func(c *gin.Context) {
+				c.JSON(200, gin.H{
+					"message": "HR dashboard",
+				})
+			})
+
+			// HR Approval endpoints for Service Requests & Letters
+			hr.GET("/requests/pending", selfServiceHandler.GetPendingHRRequests)
+			hr.POST("/requests/:request_id/approve", selfServiceHandler.ApproveServiceRequest)
+			hr.POST("/requests/:request_id/reject", selfServiceHandler.RejectServiceRequest)
 		}
 
 		employees := v1.Group("/employees")
@@ -393,14 +398,15 @@ func SetupRoutes(r *gin.Engine) {
 		departments := v1.Group("/departments")
 		departments.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
-			departments.POST("", departmentHandler.CreateDepartment)                     // Create department
-			departments.GET("", departmentHandler.ListDepartments)                       // List departments
-			departments.GET("/root", departmentHandler.GetRootDepartments)               // Get root departments
-			departments.GET("/:id", departmentHandler.GetDepartment)                     // Get department by ID
-			departments.PUT("/:id", departmentHandler.UpdateDepartment)                  // Update department
-			departments.DELETE("/:id", departmentHandler.DeleteDepartment)               // Delete department
-			departments.POST("/:id/assign-head", departmentHandler.AssignDepartmentHead) // Assign employee as department head
-			departments.POST("/:id/remove-head", departmentHandler.RemoveDepartmentHead) // Remove department head assignment
+			departments.POST("", departmentHandler.CreateDepartment)                                                           // Create department
+			departments.GET("", departmentHandler.ListDepartments)                                                             // List departments
+			departments.GET("/root", departmentHandler.GetRootDepartments)                                                     // Get root departments
+			departments.GET("/:id", departmentHandler.GetDepartment)                                                           // Get department by ID
+			departments.PUT("/:id", departmentHandler.UpdateDepartment)                                                        // Update department
+			departments.DELETE("/:id", departmentHandler.DeleteDepartment)                                                     // Delete department
+			departments.POST("/:id/assign-head", departmentHandler.AssignDepartmentHead)                                       // Assign employee as department head
+			departments.POST("/:id/remove-head", departmentHandler.RemoveDepartmentHead)                                       // Remove department head assignment
+			departments.POST("/:id/change-head", middleware.AdminMiddleware(), departmentHandler.ChangeDepartmentHeadWithRole) // Change department head with role update (Admin only)
 			// POST-only action-based endpoint
 			departments.POST("/action", departmentHandler.HandleAction) // Action-based API
 		}

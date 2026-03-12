@@ -466,10 +466,10 @@ func (s *UserService) setUserStatus(callerUserID, targetUserID uint, status, act
 // This allows a user to have multiple roles like ["admin", "employee"] or ["hr", "manager"].
 // Only Admin can call this.
 func (s *UserService) AddRoleToUser(callerUserID uint, targetUserID uint, role string) ([]string, error) {
-	allowedRoles := map[string]bool{"super_admin": true, "admin": true, "hr": true, "it": true, "manager": true, "employee": true, "user": true}
+	allowedRoles := map[string]bool{"super_admin": true, "admin": true, "hr": true, "it": true, "manager": true, "employee": true, "user": true, "hod": true}
 	role = strings.ToLower(strings.TrimSpace(role))
 	if !allowedRoles[role] {
-		return nil, errors.New("role must be super_admin, admin, hr, it, manager, employee, or user")
+		return nil, errors.New("role must be super_admin, admin, hr, it, manager, employee, user, or hod")
 	}
 
 	caller, err := s.userRepo.FindByID(callerUserID)

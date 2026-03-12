@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	departmentRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
 	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
-	departmentRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
 	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
 	positionRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
 	"gorm.io/gorm"
@@ -60,22 +60,22 @@ func (s *SelfServiceService) GetEmployeeProfile(userID uint, tenantID *uint) (ma
 
 	// Get basic information
 	basicInfo, _ := s.basicInfoRepo.FindByEmployeeID(employee.ID)
-	
+
 	// Get employment details
 	employmentDetails, _ := s.employmentDetailsRepo.FindByEmployeeID(employee.ID)
-	
+
 	// Get emergency contacts
 	emergencyContacts, _ := s.emergencyContactRepo.FindByEmployeeID(employee.ID)
-	
+
 	// Get addresses
 	addresses, _ := s.addressRepo.FindByEmployeeID(employee.ID)
-	
+
 	// Get documents
 	documents, _ := s.documentRepo.FindByEmployeeID(employee.ID)
-	
+
 	// Get profile update status
 	pendingRequests, _ := s.profileUpdateRepo.FindPendingByEmployeeID(employee.ID, tenantID)
-	
+
 	// Build response
 	response := map[string]interface{}{
 		"employee_id": employee.EmployeeID,
@@ -145,13 +145,13 @@ func (s *SelfServiceService) GetEmployeeProfile(userID uint, tenantID *uint) (ma
 
 	// Job information
 	job := map[string]interface{}{
-		"employee_id": employee.EmployeeID,
-		"official_email": nil,
+		"employee_id":     employee.EmployeeID,
+		"official_email":  nil,
 		"date_of_joining": nil,
-		"grade": employee.Grade,
+		"grade":           employee.Grade,
 		"employment_type": employee.EmploymentType,
-		"work_phone": employee.WorkPhone,
-		"shift": employee.Shift,
+		"work_phone":      employee.WorkPhone,
+		"shift":           employee.Shift,
 	}
 
 	if employmentDetails != nil {
@@ -220,7 +220,7 @@ func (s *SelfServiceService) GetEmployeeProfile(userID uint, tenantID *uint) (ma
 					addressParts = append(addressParts, *loc.Country)
 				}
 				address := strings.Join(addressParts, ", ")
-				
+
 				job["work_location"] = map[string]interface{}{
 					"id":      loc.ID,
 					"name":    loc.Name,
@@ -238,10 +238,10 @@ func (s *SelfServiceService) GetEmployeeProfile(userID uint, tenantID *uint) (ma
 					managerEmail = *manager.WorkEmail
 				}
 				job["reporting_manager"] = map[string]interface{}{
-					"id":         manager.ID,
+					"id":          manager.ID,
 					"employee_id": manager.EmployeeID,
-					"full_name":  manager.FullName(),
-					"email":      managerEmail,
+					"full_name":   manager.FullName(),
+					"email":       managerEmail,
 				}
 			}
 		}
@@ -252,13 +252,13 @@ func (s *SelfServiceService) GetEmployeeProfile(userID uint, tenantID *uint) (ma
 	contactsList := []map[string]interface{}{}
 	for _, contact := range emergencyContacts {
 		contactMap := map[string]interface{}{
-			"id":          contact.ID,
-			"name":        contact.ContactName,
+			"id":           contact.ID,
+			"name":         contact.ContactName,
 			"relationship": contact.Relationship,
-			"phone":       contact.PhoneNumber,
-			"email":       contact.Email,
-			"address":     contact.Address,
-			"is_primary":  contact.IsPrimary,
+			"phone":        contact.PhoneNumber,
+			"email":        contact.Email,
+			"address":      contact.Address,
+			"is_primary":   contact.IsPrimary,
 		}
 		contactsList = append(contactsList, contactMap)
 	}
@@ -281,9 +281,9 @@ func (s *SelfServiceService) GetEmployeeProfile(userID uint, tenantID *uint) (ma
 	// Profile update status
 	hasPending := len(pendingRequests) > 0
 	updateStatus := map[string]interface{}{
-		"has_pending_updates": hasPending,
+		"has_pending_updates":      hasPending,
 		"last_update_request_date": nil,
-		"last_update_status": nil,
+		"last_update_status":       nil,
 	}
 	if len(pendingRequests) > 0 {
 		latest := pendingRequests[0]
@@ -340,14 +340,14 @@ func (s *SelfServiceService) CreateProfileUpdateRequest(userID uint, tenantID *u
 
 	// Create request
 	request := &models.ProfileUpdateRequest{
-		EmployeeID:    employee.ID,
+		EmployeeID:      employee.ID,
 		UpdateRequestID: requestID,
-		Section:       validSection,
-		Status:        models.ProfileUpdateStatusPending,
-		UpdatesJSON:   string(updatesJSON),
-		Reason:        reason,
-		SubmittedAt:   time.Now(),
-		UpdatedBy:     updatedBy,
+		Section:         validSection,
+		Status:          models.ProfileUpdateStatusPending,
+		UpdatesJSON:     string(updatesJSON),
+		Reason:          reason,
+		SubmittedAt:     time.Now(),
+		UpdatedBy:       updatedBy,
 	}
 
 	// Get manager for approval (from employment details)
@@ -384,9 +384,9 @@ func (s *SelfServiceService) GetProfileUpdateStatus(userID uint, tenantID *uint)
 	for _, req := range allRequests {
 		reqMap := map[string]interface{}{
 			"update_request_id": req.UpdateRequestID,
-			"section":          string(req.Section),
-			"status":           string(req.Status),
-			"submitted_at":     req.SubmittedAt,
+			"section":           string(req.Section),
+			"status":            string(req.Status),
+			"submitted_at":      req.SubmittedAt,
 		}
 
 		if req.Status == models.ProfileUpdateStatusPending {
@@ -513,7 +513,7 @@ func (s *SelfServiceService) CreateServiceRequest(userID uint, tenantID *uint, r
 		Status:        models.ServiceRequestStatusSubmitted,
 		Priority:      validPriority,
 		SLAHours:      slaHours,
-		RequestedDate:  time.Now(),
+		RequestedDate: time.Now(),
 		UpdatedBy:     updatedBy,
 	}
 
@@ -602,6 +602,141 @@ func (s *SelfServiceService) CancelServiceRequest(userID uint, requestID uint, r
 	return nil
 }
 
+// GetPendingHRRequests gets all pending service requests assigned to HR with employee information
+func (s *SelfServiceService) GetPendingHRRequests(tenantID *uint, page, pageSize int, filters map[string]interface{}) ([]map[string]interface{}, int64, error) {
+	// Build base query for HR requests
+	queryFilters := map[string]interface{}{
+		"type":   string(models.ServiceRequestTypeHRLetter),
+		"status": string(models.ServiceRequestStatusSubmitted),
+	}
+
+	// Merge additional filters
+	for key, value := range filters {
+		queryFilters[key] = value
+	}
+
+	// Get all HR requests
+	requests, totalCount, err := s.serviceRequestRepo.FindAll(tenantID, page, pageSize, queryFilters)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Enrich requests with employee information
+	enrichedRequests := make([]map[string]interface{}, 0, len(requests))
+
+	for _, request := range requests {
+		// Get employee information
+		employee, err := s.employeeRepo.FindByID(request.EmployeeID)
+		if err != nil {
+			// Skip if employee not found but continue with other requests
+			continue
+		}
+
+		// Get employee basic information
+		basicInfo, err := s.basicInfoRepo.FindByEmployeeID(request.EmployeeID)
+		if err != nil {
+			// Skip if basic info not found but continue with other requests
+			continue
+		}
+
+		// Get employment details for department information
+		employmentDetails, err := s.employmentDetailsRepo.FindByEmployeeID(request.EmployeeID)
+		var departmentName, positionTitle *string
+		if err == nil && employmentDetails != nil {
+			if employmentDetails.DepartmentID != nil {
+				department, err := s.departmentRepo.FindByID(*employmentDetails.DepartmentID)
+				if err == nil {
+					departmentName = &department.Name
+				}
+			}
+
+			if employmentDetails.PositionID != nil {
+				position, err := s.positionRepo.FindByID(*employmentDetails.PositionID)
+				if err == nil {
+					positionTitle = &position.Title
+				}
+			}
+		}
+
+		// Create enriched response object
+		enrichedRequest := map[string]interface{}{
+			"request": request,
+			"employee": map[string]interface{}{
+				"id":           employee.ID,
+				"employee_id":  employee.EmployeeID,
+				"first_name":   basicInfo.FirstName,
+				"last_name":    basicInfo.LastName,
+				"full_name":    fmt.Sprintf("%s %s", basicInfo.FirstName, basicInfo.LastName),
+				"email":        employee.Email,
+				"department":   departmentName,
+				"position":     positionTitle,
+				"phone_number": basicInfo.MobileNumber,
+			},
+		}
+
+		enrichedRequests = append(enrichedRequests, enrichedRequest)
+	}
+
+	return enrichedRequests, totalCount, nil
+}
+
+// ApproveServiceRequest approves a service request (HR only)
+func (s *SelfServiceService) ApproveServiceRequest(requestID uint, approverUserID uint, notes *string) (*models.ServiceRequest, error) {
+	// Get request
+	request, err := s.serviceRequestRepo.FindByID(requestID)
+	if err != nil {
+		return nil, errors.New("service request not found")
+	}
+
+	// Check if request can be approved
+	if request.Status != models.ServiceRequestStatusSubmitted && request.Status != models.ServiceRequestStatusInProgress {
+		return nil, errors.New("only submitted or in-progress requests can be approved")
+	}
+
+	// Update request status
+	request.Status = models.ServiceRequestStatusApproved
+	request.UpdatedBy = &approverUserID
+
+	// Set completion date
+	now := time.Now()
+	request.CompletedDate = &now
+
+	if err := s.serviceRequestRepo.Update(request); err != nil {
+		return nil, fmt.Errorf("failed to approve service request: %w", err)
+	}
+
+	return request, nil
+}
+
+// RejectServiceRequest rejects a service request (HR only)
+func (s *SelfServiceService) RejectServiceRequest(requestID uint, approverUserID uint, reason string) (*models.ServiceRequest, error) {
+	// Get request
+	request, err := s.serviceRequestRepo.FindByID(requestID)
+	if err != nil {
+		return nil, errors.New("service request not found")
+	}
+
+	// Check if request can be rejected
+	if request.Status != models.ServiceRequestStatusSubmitted && request.Status != models.ServiceRequestStatusInProgress {
+		return nil, errors.New("only submitted or in-progress requests can be rejected")
+	}
+
+	// Update request status
+	request.Status = models.ServiceRequestStatusRejected
+	request.UpdatedBy = &approverUserID
+
+	// Set completion date and rejection reason
+	now := time.Now()
+	request.CompletedDate = &now
+	request.CancelledReason = &reason
+
+	if err := s.serviceRequestRepo.Update(request); err != nil {
+		return nil, fmt.Errorf("failed to reject service request: %w", err)
+	}
+
+	return request, nil
+}
+
 // SearchEmployees searches employees in the directory (for People Directory)
 func (s *SelfServiceService) SearchEmployees(tenantID *uint, search *string, departmentID, positionID, locationID *uint, status *string, page, pageSize int) ([]models.Employee, int64, error) {
 	return s.employeeRepo.SearchEmployees(tenantID, search, departmentID, positionID, locationID, status, page, pageSize)
@@ -624,10 +759,10 @@ func (s *SelfServiceService) GetEmployeeDirectoryDetails(employeeID string, tena
 	response := map[string]interface{}{
 		"id":          employee.ID,
 		"employee_id": employee.EmployeeID,
-		"full_name":  employee.FullName(),
-		"first_name": employee.FirstName,
-		"last_name":  employee.LastName,
-		"status":     string(employee.Status),
+		"full_name":   employee.FullName(),
+		"first_name":  employee.FirstName,
+		"last_name":   employee.LastName,
+		"status":      string(employee.Status),
 	}
 
 	// Photo
@@ -691,7 +826,7 @@ func (s *SelfServiceService) GetEmployeeDirectoryDetails(employeeID string, tena
 					addressParts = append(addressParts, *loc.Country)
 				}
 				address := strings.Join(addressParts, ", ")
-				
+
 				response["location"] = map[string]interface{}{
 					"id":      loc.ID,
 					"name":    loc.Name,
@@ -709,11 +844,11 @@ func (s *SelfServiceService) GetEmployeeDirectoryDetails(employeeID string, tena
 					managerEmail = *manager.WorkEmail
 				}
 				response["reporting_manager"] = map[string]interface{}{
-					"id":         manager.ID,
+					"id":          manager.ID,
 					"employee_id": manager.EmployeeID,
-					"full_name":  manager.FullName(),
+					"full_name":   manager.FullName(),
 					"designation": nil,
-					"email":      managerEmail,
+					"email":       managerEmail,
 				}
 			}
 		}

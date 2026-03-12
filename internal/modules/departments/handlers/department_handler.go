@@ -11,6 +11,8 @@ import (
 	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
 	positionRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
+	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
+	userServices "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/services"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/types"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-gonic/gin"
@@ -29,24 +31,24 @@ type HeadOfDepartmentInfo struct {
 
 // DepartmentResponse represents the department response with location name and enriched head-of-department info
 type DepartmentResponse struct {
-	ID                  uint                  `json:"id"`
-	TenantID            *uint                 `json:"tenant_id,omitempty"`
-	OrganizationID      *uint                 `json:"organization_id,omitempty"`
-	OrganizationUnitID  *uint                 `json:"organization_unit_id,omitempty"`
-	Code                string                `json:"code"`
-	Name                string                `json:"name"`
-	Description         *string               `json:"description,omitempty"`
-	Level               *string               `json:"level,omitempty"`
-	DepartmentType      *string               `json:"department_type,omitempty"`
-	ParentDepartmentID  *uint                 `json:"parent_department_id,omitempty"`
-	HeadOfDepartment    *HeadOfDepartmentInfo `json:"head_of_department"` // Enriched employee data (null if not assigned)
-	EmployeeCapacity    *int                  `json:"employee_capacity,omitempty"`
-	Location            *string               `json:"location,omitempty"` // Location name instead of location_id
-	LocationID          *uint                 `json:"location_id,omitempty"`
-	IsActive            bool                  `json:"is_active"`
-	CreatedAt           string                `json:"created_at"`
-	UpdatedAt           string                `json:"updated_at"`
-	UpdatedBy           *uint                 `json:"updated_by,omitempty"`
+	ID                 uint                  `json:"id"`
+	TenantID           *uint                 `json:"tenant_id,omitempty"`
+	OrganizationID     *uint                 `json:"organization_id,omitempty"`
+	OrganizationUnitID *uint                 `json:"organization_unit_id,omitempty"`
+	Code               string                `json:"code"`
+	Name               string                `json:"name"`
+	Description        *string               `json:"description,omitempty"`
+	Level              *string               `json:"level,omitempty"`
+	DepartmentType     *string               `json:"department_type,omitempty"`
+	ParentDepartmentID *uint                 `json:"parent_department_id,omitempty"`
+	HeadOfDepartment   *HeadOfDepartmentInfo `json:"head_of_department"` // Enriched employee data (null if not assigned)
+	EmployeeCapacity   *int                  `json:"employee_capacity,omitempty"`
+	Location           *string               `json:"location,omitempty"` // Location name instead of location_id
+	LocationID         *uint                 `json:"location_id,omitempty"`
+	IsActive           bool                  `json:"is_active"`
+	CreatedAt          string                `json:"created_at"`
+	UpdatedAt          string                `json:"updated_at"`
+	UpdatedBy          *uint                 `json:"updated_by,omitempty"`
 }
 
 type DepartmentHandler struct {
@@ -54,6 +56,7 @@ type DepartmentHandler struct {
 	locationRepo *locationRepos.LocationRepository
 	employeeRepo *employeeRepos.EmployeeRepository
 	positionRepo *positionRepos.JobPositionRepository
+	userRepo     *userRepos.UserRepository
 }
 
 func NewDepartmentHandler() *DepartmentHandler {
@@ -62,27 +65,28 @@ func NewDepartmentHandler() *DepartmentHandler {
 		locationRepo: locationRepos.NewLocationRepository(),
 		employeeRepo: employeeRepos.NewEmployeeRepository(),
 		positionRepo: positionRepos.NewJobPositionRepository(),
+		userRepo:     userRepos.NewUserRepository(),
 	}
 }
 
 // toDepartmentResponse converts Department model to DepartmentResponse with location name and enriched head-of-department
 func (h *DepartmentHandler) toDepartmentResponse(dept *models.Department) *DepartmentResponse {
 	resp := &DepartmentResponse{
-		ID:                  dept.ID,
-		OrganizationID:      dept.OrganizationID,
-		OrganizationUnitID:  dept.OrganizationUnitID,
-		Code:                dept.Code,
-		Name:                dept.Name,
-		Description:         dept.Description,
-		Level:               dept.Level,
-		DepartmentType:      dept.DepartmentType,
-		ParentDepartmentID:  dept.ParentDepartmentID,
-		EmployeeCapacity:    dept.EmployeeCapacity,
-		LocationID:          dept.LocationID,
-		IsActive:            dept.IsActive,
-		CreatedAt:           dept.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedAt:           dept.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
-		UpdatedBy:           dept.UpdatedBy,
+		ID:                 dept.ID,
+		OrganizationID:     dept.OrganizationID,
+		OrganizationUnitID: dept.OrganizationUnitID,
+		Code:               dept.Code,
+		Name:               dept.Name,
+		Description:        dept.Description,
+		Level:              dept.Level,
+		DepartmentType:     dept.DepartmentType,
+		ParentDepartmentID: dept.ParentDepartmentID,
+		EmployeeCapacity:   dept.EmployeeCapacity,
+		LocationID:         dept.LocationID,
+		IsActive:           dept.IsActive,
+		CreatedAt:          dept.CreatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedAt:          dept.UpdatedAt.Format("2006-01-02T15:04:05Z07:00"),
+		UpdatedBy:          dept.UpdatedBy,
 	}
 
 	// Enrich head of department with employee data
@@ -223,7 +227,7 @@ func (h *DepartmentHandler) ListDepartments(c *gin.Context) {
 	}
 
 	tenantID := middleware.GetTenantID(c)
-	
+
 	// Build filters from query parameters
 	filters := make(map[string]interface{})
 	if isActive := c.Query("is_active"); isActive != "" {
@@ -264,7 +268,7 @@ func (h *DepartmentHandler) ListDepartments(c *gin.Context) {
 // GetRootDepartments handles getting root departments
 func (h *DepartmentHandler) GetRootDepartments(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
-	
+
 	departments, err := h.service.GetRootDepartments(tenantID)
 	if err != nil {
 		response.InternalServerError(c, "Failed to get root departments", err.Error())
@@ -481,6 +485,90 @@ func (h *DepartmentHandler) RemoveDepartmentHead(c *gin.Context) {
 
 	departmentResponse := h.toDepartmentResponse(department)
 	response.Success(c, "Department head removed successfully", departmentResponse)
+}
+
+// ChangeDepartmentHeadWithRole updates the department head and adds the HOD role to the user
+// @Summary Change department head with role update
+// @Description Change the head of department and automatically add the HOD role to the new head. Only accessible to admin and superadmin.
+// @Tags Departments
+// @Accept json
+// @Produce json
+// @Param id path int true "Department ID"
+// @Param body body object true "Request body" example({"employee_id": 5, "reason": "Promotion to department head"})
+// @Security ApiKeyAuth
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/departments/{id}/change-head [post]
+func (h *DepartmentHandler) ChangeDepartmentHeadWithRole(c *gin.Context) {
+	idStr := c.Param("id")
+	id, err := strconv.ParseUint(idStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid department ID", nil)
+		return
+	}
+
+	var req struct {
+		EmployeeID uint   `json:"employee_id" binding:"required"`
+		Reason     string `json:"reason,omitempty"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	user, _ := c.Get("user")
+	var updatedBy *uint
+	if userObj, ok := user.(*userModels.User); ok {
+		updatedBy = &userObj.ID
+	}
+
+	// 1. Assign the department head using existing service
+	department, err := h.service.AssignDepartmentHead(uint(id), req.EmployeeID, updatedBy)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	// 2. Find the user associated with the employee
+	employee, err := h.employeeRepo.FindByID(req.EmployeeID)
+	if err != nil || employee == nil {
+		response.BadRequest(c, "Employee not found", nil)
+		return
+	}
+
+	// 3. Check if employee has a user account
+	if employee.UserID == nil || *employee.UserID == 0 {
+		response.BadRequest(c, "Employee does not have a user account", nil)
+		return
+	}
+
+	// 4. Add HOD role to the user using the user service
+	// First, let me check if the user already has the HOD role
+	userService := userServices.NewUserService()
+	userRoles, err := userService.GetUserRoles(*employee.UserID)
+	if err != nil {
+		response.InternalServerError(c, "Failed to check user roles", err.Error())
+		return
+	}
+
+	hasHodRole := false
+	for _, role := range userRoles {
+		if role == "hod" {
+			hasHodRole = true
+			break
+		}
+	}
+
+	if !hasHodRole {
+		// Add HOD role to the user
+		_, err := userService.AddRoleToUser(*updatedBy, *employee.UserID, "hod")
+		if err != nil {
+			response.InternalServerError(c, "Failed to add HOD role to user", err.Error())
+			return
+		}
+	}
+
+	departmentResponse := h.toDepartmentResponse(department)
+	response.Success(c, "Department head changed successfully and HOD role assigned", departmentResponse)
 }
 
 // Helper function to map map[string]interface{} to struct

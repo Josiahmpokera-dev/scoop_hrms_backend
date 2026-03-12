@@ -113,9 +113,9 @@ func (h *SelfServiceHandler) UpdateProfile(c *gin.Context) {
 	// Build response
 	responseData := map[string]interface{}{
 		"update_request_id": updateRequest.UpdateRequestID,
-		"section":          string(updateRequest.Section),
-		"status":           string(updateRequest.Status),
-		"submitted_at":     updateRequest.SubmittedAt,
+		"section":           string(updateRequest.Section),
+		"status":            string(updateRequest.Status),
+		"submitted_at":      updateRequest.SubmittedAt,
 	}
 
 	// Get approver info
@@ -293,16 +293,16 @@ func (h *SelfServiceHandler) ListServiceRequests(c *gin.Context) {
 	formattedRequests := []map[string]interface{}{}
 	for _, req := range requests {
 		reqMap := map[string]interface{}{
-			"id":             req.ID,
-			"request_number": req.RequestNumber,
-			"type":           string(req.Type),
-			"category":       req.Category,
-			"subject":        req.Subject,
-			"status":         string(req.Status),
-			"priority":       string(req.Priority),
-			"requested_date": req.RequestedDate,
-			"completed_date": req.CompletedDate,
-			"sla_hours":      req.SLAHours,
+			"id":              req.ID,
+			"request_number":  req.RequestNumber,
+			"type":            string(req.Type),
+			"category":        req.Category,
+			"subject":         req.Subject,
+			"status":          string(req.Status),
+			"priority":        string(req.Priority),
+			"requested_date":  req.RequestedDate,
+			"completed_date":  req.CompletedDate,
+			"sla_hours":       req.SLAHours,
 			"is_downloadable": req.DocumentURL != nil && *req.DocumentURL != "",
 		}
 
@@ -361,17 +361,17 @@ func (h *SelfServiceHandler) GetServiceRequestDetails(c *gin.Context) {
 
 	// Format response
 	responseData := map[string]interface{}{
-		"id":             request.ID,
-		"request_number": request.RequestNumber,
-		"type":           string(request.Type),
-		"category":       request.Category,
-		"subject":        request.Subject,
-		"description":    request.Description,
-		"status":         string(request.Status),
-		"priority":       string(request.Priority),
-		"requested_date": request.RequestedDate,
-		"completed_date": request.CompletedDate,
-		"sla_hours":      request.SLAHours,
+		"id":              request.ID,
+		"request_number":  request.RequestNumber,
+		"type":            string(request.Type),
+		"category":        request.Category,
+		"subject":         request.Subject,
+		"description":     request.Description,
+		"status":          string(request.Status),
+		"priority":        string(request.Priority),
+		"requested_date":  request.RequestedDate,
+		"completed_date":  request.CompletedDate,
+		"sla_hours":       request.SLAHours,
 		"is_downloadable": request.DocumentURL != nil && *request.DocumentURL != "",
 	}
 
@@ -383,7 +383,7 @@ func (h *SelfServiceHandler) GetServiceRequestDetails(c *gin.Context) {
 
 	if request.DocumentURL != nil {
 		responseData["document"] = map[string]interface{}{
-			"file_url": *request.DocumentURL,
+			"file_url":  *request.DocumentURL,
 			"file_name": request.FileName,
 		}
 	}
@@ -533,7 +533,7 @@ func (h *SelfServiceHandler) CreateHRLetterRequest(c *gin.Context) {
 
 	// Set default type to HR letter
 	req["type"] = "hr_letter"
-	
+
 	// Ensure required fields for HR letters
 	if _, ok := req["letter_type"]; !ok {
 		response.BadRequest(c, "letter_type is required for HR letters", nil)
@@ -563,7 +563,7 @@ func (h *SelfServiceHandler) CreateHRLetterRequest(c *gin.Context) {
 	requestType, _ := req["type"].(string)
 	category, _ := req["category"].(string)
 	subject, _ := req["subject"].(string)
-	
+
 	var description *string
 	if d, ok := req["description"].(string); ok {
 		description = &d
@@ -607,7 +607,7 @@ func (h *SelfServiceHandler) CreateHRLetterRequest(c *gin.Context) {
 		"requested_date": serviceRequest.RequestedDate,
 		"sla_hours":      serviceRequest.SLAHours,
 		"letter_type":    serviceRequest.LetterType,
-		"purpose":       serviceRequest.Purpose,
+		"purpose":        serviceRequest.Purpose,
 		"addressed_to":   serviceRequest.AddressedTo,
 	}
 
@@ -689,21 +689,21 @@ func (h *SelfServiceHandler) ListHRLetterRequests(c *gin.Context) {
 	var hrLetters []map[string]interface{}
 	for _, req := range requests {
 		hrLetter := map[string]interface{}{
-			"id":             req.ID,
-			"request_number": req.RequestNumber,
-			"type":           string(req.Type),
-			"category":       req.Category,
-			"subject":        req.Subject,
-			"description":    req.Description,
-			"status":         string(req.Status),
-			"priority":       string(req.Priority),
-			"letter_type":    req.LetterType,
-			"purpose":       req.Purpose,
-			"addressed_to":   req.AddressedTo,
+			"id":               req.ID,
+			"request_number":   req.RequestNumber,
+			"type":             string(req.Type),
+			"category":         req.Category,
+			"subject":          req.Subject,
+			"description":      req.Description,
+			"status":           string(req.Status),
+			"priority":         string(req.Priority),
+			"letter_type":      req.LetterType,
+			"purpose":          req.Purpose,
+			"addressed_to":     req.AddressedTo,
 			"additional_notes": req.AdditionalNotes,
-			"requested_date": req.RequestedDate,
-			"completed_date": req.CompletedDate,
-			"sla_hours":      req.SLAHours,
+			"requested_date":   req.RequestedDate,
+			"completed_date":   req.CompletedDate,
+			"sla_hours":        req.SLAHours,
 		}
 
 		if req.AssignedTo != nil {
@@ -729,7 +729,7 @@ func (h *SelfServiceHandler) ListHRLetterRequests(c *gin.Context) {
 	}
 
 	responseData := map[string]interface{}{
-		"letters": hrLetters,
+		"letters":    hrLetters,
 		"pagination": meta,
 	}
 
@@ -1001,4 +1001,147 @@ func (h *SelfServiceHandler) GetYTDSummary(c *gin.Context) {
 // @Router /api/v1/self-service/payslips/query [post]
 func (h *SelfServiceHandler) RaiseSalaryQuery(c *gin.Context) {
 	response.BadRequest(c, "Salary query functionality is not yet implemented. This feature requires the payroll module to be integrated.", nil)
+}
+
+// GetPendingHRRequests handles getting pending service requests for HR approval
+// @Summary Get pending HR requests
+// @Description Retrieve all pending service requests that require HR approval
+// @Tags HR
+// @Produce json
+// @Param page query int false "Page number"
+// @Param page_size query int false "Items per page"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/hr/requests/pending [get]
+func (h *SelfServiceHandler) GetPendingHRRequests(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+
+	// Parse pagination parameters
+	page := 1
+	if p := c.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
+	pageSize := 50
+	if ps := c.Query("page_size"); ps != "" {
+		if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 {
+			pageSize = parsed
+		}
+	}
+
+	// Get pending HR requests
+	requests, totalCount, err := h.service.GetPendingHRRequests(tenantID, page, pageSize, nil)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve pending HR requests", err)
+		return
+	}
+
+	// Create paginated response
+	responseData := map[string]interface{}{
+		"requests": requests,
+		"pagination": map[string]interface{}{
+			"page":        page,
+			"page_size":   pageSize,
+			"total":       totalCount,
+			"total_pages": (int(totalCount) + pageSize - 1) / pageSize,
+		},
+	}
+
+	response.Success(c, "Pending HR requests retrieved successfully", responseData)
+}
+
+// ApproveServiceRequest handles approving a service request
+// @Summary Approve service request
+// @Description Approve a pending service request (HR only)
+// @Tags HR
+// @Accept json
+// @Produce json
+// @Param request_id path int true "Service Request ID"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/hr/requests/{request_id}/approve [post]
+func (h *SelfServiceHandler) ApproveServiceRequest(c *gin.Context) {
+	// Parse request ID
+	requestID, err := strconv.ParseUint(c.Param("request_id"), 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid request ID", nil)
+		return
+	}
+
+	// Get current user for approval tracking
+	user, exists := c.Get("user")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	userObj, ok := user.(*userModels.User)
+	if !ok {
+		response.Unauthorized(c, "Invalid user context")
+		return
+	}
+
+	// Approve the service request (notes parameter is optional, pass nil)
+	approvedRequest, err := h.service.ApproveServiceRequest(uint(requestID), userObj.ID, nil)
+	if err != nil {
+		response.InternalServerError(c, "Failed to approve service request", err)
+		return
+	}
+
+	response.Success(c, "Service request approved successfully", approvedRequest)
+}
+
+// RejectServiceRequest handles rejecting a service request
+// @Summary Reject service request
+// @Description Reject a pending service request (HR only)
+// @Tags HR
+// @Accept json
+// @Produce json
+// @Param request_id path int true "Service Request ID"
+// @Param request body map[string]interface{} false "Rejection reason"
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/hr/requests/{request_id}/reject [post]
+func (h *SelfServiceHandler) RejectServiceRequest(c *gin.Context) {
+	// Parse request ID
+	requestID, err := strconv.ParseUint(c.Param("request_id"), 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid request ID", nil)
+		return
+	}
+
+	// Get current user for rejection tracking
+	user, exists := c.Get("user")
+	if !exists {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	userObj, ok := user.(*userModels.User)
+	if !ok {
+		response.Unauthorized(c, "Invalid user context")
+		return
+	}
+
+	// Parse rejection reason from request body
+	var requestBody map[string]interface{}
+	if err := c.ShouldBindJSON(&requestBody); err != nil {
+		response.BadRequest(c, "Invalid request body", err)
+		return
+	}
+
+	reason := ""
+	if reasonVal, exists := requestBody["reason"]; exists {
+		if reasonStr, ok := reasonVal.(string); ok {
+			reason = reasonStr
+		}
+	}
+
+	// Reject the service request
+	rejectedRequest, err := h.service.RejectServiceRequest(uint(requestID), userObj.ID, reason)
+	if err != nil {
+		response.InternalServerError(c, "Failed to reject service request", err)
+		return
+	}
+
+	response.Success(c, "Service request rejected successfully", rejectedRequest)
 }

@@ -196,6 +196,21 @@ type AnnouncementsListResponse struct {
 }
 
 // ========================================
+// Approval Counts Types
+// ========================================
+
+// ApprovalCountsResponse represents counts of pending approvals for different roles
+type ApprovalCountsResponse struct {
+	Role        string `json:"role"`                    // User role (hr, admin, manager, etc.)
+	Total       int    `json:"total"`                    // Total pending approvals
+	HRRequests  int    `json:"hr_requests"`             // Pending HR service requests & letters
+	Overtime    int    `json:"overtime"`                 // Pending overtime approvals
+	Leave       int    `json:"leave"`                   // Pending leave approvals
+	Timesheets  int    `json:"timesheets"`              // Pending timesheet approvals
+	LastUpdated string `json:"last_updated,omitempty"`  // Timestamp of last update
+}
+
+// ========================================
 // Events Types
 // ========================================
 

@@ -59,14 +59,34 @@ func (s *LeaveBalanceService) InitializeBalance(employeeID, leaveTypeCode string
 
 	policy := policies[0] // Use first policy found
 
+	// Calculate entitlement based on probation period for annual leave
+	entitlement := float64(policy.Entitlement)
+	
+	// For annual leave, check if employee is still in probation
+	if leaveTypeCode == "AL" {
+		employee, err := s.employeeRepo.FindByEmployeeID(employeeID)
+		if err == nil && employee != nil {
+			// Check if employee is still in probation
+			if employee.ProbationPeriodDays != nil && employee.ExpectedConfirmationDate != nil {
+				probationEndDate := employee.ExpectedConfirmationDate
+				currentTime := time.Now()
+				
+				// If still in probation, set entitlement to 0 (annual leave starts after probation)
+				if currentTime.Before(*probationEndDate) {
+					entitlement = 0
+				}
+			}
+		}
+	}
+
 	balance := &models.LeaveBalance{
 		EmployeeID:  employeeID,
 		LeaveTypeCode: leaveTypeCode,
 		Year:        year,
-		Entitlement: float64(policy.Entitlement),
+		Entitlement: entitlement,
 		Used:        0,
 		Pending:     0,
-		Available:  float64(policy.Entitlement),
+		Available:  entitlement,
 		CarriedForward: 0,
 	}
 

@@ -558,7 +558,10 @@ func (s *DashboardService) GetPendingApprovals(tenantID *uint, approvalType stri
 
 	// Get pending leave requests
 	if approvalType == "" || approvalType == "all" || approvalType == "leave" {
-		requests, count, _ := s.dashboardRepo.GetPendingLeaveRequestsList(tenantID, page, pageSize)
+		requests, count, err := s.dashboardRepo.GetPendingLeaveRequestsList(tenantID, page, pageSize)
+		if err != nil {
+			return nil, err
+		}
 		total += count
 
 		for _, r := range requests {
@@ -601,7 +604,10 @@ func (s *DashboardService) GetPendingApprovals(tenantID *uint, approvalType stri
 	}
 
 	// Get counts for summary
-	pendingLeave, _ := s.dashboardRepo.GetPendingLeaveRequests(tenantID)
+	pendingLeave, err := s.dashboardRepo.GetPendingLeaveRequests(tenantID)
+	if err != nil {
+		return nil, err
+	}
 
 	totalPages := int(math.Ceil(float64(total) / float64(pageSize)))
 
@@ -620,6 +626,46 @@ func (s *DashboardService) GetPendingApprovals(tenantID *uint, approvalType stri
 			TotalPages: totalPages,
 		},
 	}, nil
+}
+
+// ========================================
+// Approval Counts for Multiple Roles
+// ========================================
+
+// GetApprovalCounts returns counts of pending approvals for different roles
+func (s *DashboardService) GetApprovalCounts(tenantID *uint, userRole string, userID uint) (*models.ApprovalCountsResponse, error) {
+	counts := &models.ApprovalCountsResponse{
+		Role: userRole,
+	}
+
+	// Get pending HR requests count (Service Requests & Letters)
+	if userRole == "hr" || userRole == "admin" || userRole == "super_admin" {
+		hrRequestsCount, _ := s.dashboardRepo.GetPendingHRRequestsCount(tenantID)
+		counts.HRRequests = int(hrRequestsCount)
+	}
+
+	// Get pending overtime approvals count
+	if userRole == "hr" || userRole == "admin" || userRole == "super_admin" || userRole == "manager" {
+		overtimeCount, _ := s.dashboardRepo.GetPendingOvertimeCount(tenantID)
+		counts.Overtime = int(overtimeCount)
+	}
+
+	// Get pending leave approvals count
+	if userRole == "hr" || userRole == "admin" || userRole == "super_admin" || userRole == "manager" {
+		leaveCount, _ := s.dashboardRepo.GetPendingLeaveRequests(tenantID)
+		counts.Leave = int(leaveCount)
+	}
+
+	// Get pending timesheet approvals count
+	if userRole == "hr" || userRole == "admin" || userRole == "super_admin" || userRole == "manager" {
+		timesheetCount, _ := s.dashboardRepo.GetPendingTimesheetCount(tenantID)
+		counts.Timesheets = int(timesheetCount)
+	}
+
+	// Calculate total pending approvals
+	counts.Total = counts.HRRequests + counts.Overtime + counts.Leave + counts.Timesheets
+
+	return counts, nil
 }
 
 // ========================================

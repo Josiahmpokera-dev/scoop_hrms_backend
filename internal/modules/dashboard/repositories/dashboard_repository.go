@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
+	attendanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/models"
 	employeeModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
 	leaveModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
 	"gorm.io/gorm"
@@ -109,6 +110,55 @@ func (r *DashboardRepository) GetPendingLeaveRequests(tenantID *uint) (int64, er
 	var count int64
 	query := r.db.Model(&leaveModels.LeaveRequest{}).
 		Where("status = ?", leaveModels.LeaveRequestStatusPending)
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetPendingHRRequestsCount returns count of pending HR service requests & letters
+func (r *DashboardRepository) GetPendingHRRequestsCount(tenantID *uint) (int64, error) {
+	var count int64
+	query := r.db.Model(&employeeModels.ServiceRequest{}).
+		Where("type = ?", employeeModels.ServiceRequestTypeHRLetter).
+		Where("status = ?", employeeModels.ServiceRequestStatusSubmitted)
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetPendingOvertimeCount returns count of pending overtime approvals
+func (r *DashboardRepository) GetPendingOvertimeCount(tenantID *uint) (int64, error) {
+	var count int64
+	query := r.db.Model(&attendanceModels.OvertimeRequest{}).
+		Where("status = ?", attendanceModels.OTStatusPending)
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+// GetPendingTimesheetCount returns count of pending timesheet approvals
+func (r *DashboardRepository) GetPendingTimesheetCount(tenantID *uint) (int64, error) {
+	var count int64
+	query := r.db.Model(&attendanceModels.TimesheetWeek{}).
+		Where("status = ?", attendanceModels.TimesheetStatusSubmitted)
 
 	if tenantID != nil {
 		query = query.Where("tenant_id = ?", *tenantID)
