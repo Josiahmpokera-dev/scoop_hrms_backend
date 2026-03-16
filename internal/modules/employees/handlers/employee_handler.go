@@ -411,3 +411,32 @@ func (h *EmployeeHandler) GetDepartmentManager(c *gin.Context) {
 
 	response.Success(c, "Department manager retrieved successfully", manager)
 }
+
+// SendCredentialsEmail handles sending login credentials to employee's personal email
+// @Summary Send credentials email
+// @Description Send login credentials to employee's personal email address
+// @Tags Employees
+// @Accept json
+// @Produce json
+// @Param id path int true "Employee ID"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Failure 404 {object} response.APIResponse
+// @Failure 422 {object} response.APIResponse
+// @Router /api/v1/employees/{id}/send-credentials [post]
+func (h *EmployeeHandler) SendCredentialsEmail(c *gin.Context) {
+	idParam := c.Param("id")
+	id, err := strconv.ParseUint(idParam, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid employee ID", nil)
+		return
+	}
+
+	err = h.employeeService.SendCredentialsEmail(uint(id))
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Credentials email sent successfully to employee's personal email", nil)
+}

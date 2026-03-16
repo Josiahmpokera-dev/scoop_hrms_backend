@@ -362,6 +362,42 @@ func (h *DashboardHandler) GetPendingApprovals(c *gin.Context) {
 	response.Success(c, "Pending approvals retrieved successfully", result)
 }
 
+// GetApprovalCounts returns counts of pending approvals for dashboard badges
+// @Summary Get approval counts
+// @Description Returns counts of pending approvals for dashboard badges (simplified version of pending-approvals)
+// @Tags Dashboard
+// @Produce json
+// @Success 200 {object} response.APIResponse
+// @Router /api/v1/dashboard/approval-counts [get]
+func (h *DashboardHandler) GetApprovalCounts(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+
+	// Get user role from context
+	userRoleInterface, exists := c.Get("user_role")
+	if !exists {
+		response.Unauthorized(c, "User role not found")
+		return
+	}
+	userRole := userRoleInterface.(string)
+
+	// Get user ID from context
+	userIDInterface, exists := c.Get("user_id")
+	if !exists {
+		response.Unauthorized(c, "User ID not found")
+		return
+	}
+	userID := userIDInterface.(uint)
+
+	// Get approval counts
+	counts, err := h.dashboardService.GetApprovalCounts(tenantID, userRole, userID)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve approval counts", err.Error())
+		return
+	}
+
+	response.Success(c, "Approval counts retrieved successfully", counts)
+}
+
 // ────────────────────────── Employee Dashboard ──────────────────────────
 
 // GetEmployeeStatistics returns personal dashboard statistics for the logged-in employee

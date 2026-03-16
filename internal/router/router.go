@@ -137,6 +137,7 @@ func SetupRoutes(r *gin.Engine) {
 			// Admin/HR only dashboard routes
 			dashboard.GET("/events", middleware.HRMiddleware(), dashboardHandler.GetEvents)                      // Birthdays, anniversaries (HR/Admin)
 			dashboard.GET("/pending-approvals", middleware.HRMiddleware(), dashboardHandler.GetPendingApprovals) // Pending approvals (HR/Admin)
+			dashboard.GET("/approval-counts", middleware.HRMiddleware(), dashboardHandler.GetApprovalCounts)     // Approval counts for dashboard badges (HR/Admin)
 
 			// Employee-specific dashboard routes
 			employee := dashboard.Group("/employee")
@@ -296,6 +297,9 @@ func SetupRoutes(r *gin.Engine) {
 			employees.POST("/suspend", employeeHandler.SuspendEmployee)       // Suspend employee
 			employees.POST("/archive", employeeHandler.ArchiveEmployee)       // Archive employee
 			employees.POST("/reactivate", employeeHandler.ReactivateEmployee) // Reactivate employee
+
+			// Email credentials endpoint
+			employees.POST("/:id/send-credentials", employeeHandler.SendCredentialsEmail) // Send credentials to employee's personal email
 
 			// Employee document routes
 			documentHandler := employeeHandlers.NewDocumentHandler()

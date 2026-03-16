@@ -9,57 +9,58 @@ import (
 	"strings"
 	"time"
 
+	departmentRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
 	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
-	departmentRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
 	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
 	positionRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
 	roleRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/email"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
 type OnboardingService struct {
-	draftRepo           *employeeRepos.OnboardingDraftRepository
-	employeeRepo        *employeeRepos.EmployeeRepository
-	basicInfoRepo       *employeeRepos.EmployeeBasicInformationRepository
+	draftRepo             *employeeRepos.OnboardingDraftRepository
+	employeeRepo          *employeeRepos.EmployeeRepository
+	basicInfoRepo         *employeeRepos.EmployeeBasicInformationRepository
 	employmentDetailsRepo *employeeRepos.EmployeeEmploymentDetailsRepository
-	addressRepo         *employeeRepos.EmployeeAddressRepository
-	salaryRepo          *employeeRepos.EmployeeSalaryRepository
-	bankRepo            *employeeRepos.EmployeeBankRepository
-	statutoryRepo       *employeeRepos.EmployeeStatutoryRepository
-	documentRepo        *employeeRepos.EmployeeDocumentRepository
-	contactRepo         *employeeRepos.EmployeeEmergencyContactRepository
-	policyRepo          *employeeRepos.EmployeePolicyRepository
-	assetRepo           *employeeRepos.EmployeeAssetRepository
-	departmentRepo      *departmentRepos.DepartmentRepository
-	positionRepo        *positionRepos.JobPositionRepository
-	locationRepo        *locationRepos.LocationRepository
-	userRepo            *userRepos.UserRepository
-	roleRepo            *roleRepos.RoleRepository
+	addressRepo           *employeeRepos.EmployeeAddressRepository
+	salaryRepo            *employeeRepos.EmployeeSalaryRepository
+	bankRepo              *employeeRepos.EmployeeBankRepository
+	statutoryRepo         *employeeRepos.EmployeeStatutoryRepository
+	documentRepo          *employeeRepos.EmployeeDocumentRepository
+	contactRepo           *employeeRepos.EmployeeEmergencyContactRepository
+	policyRepo            *employeeRepos.EmployeePolicyRepository
+	assetRepo             *employeeRepos.EmployeeAssetRepository
+	departmentRepo        *departmentRepos.DepartmentRepository
+	positionRepo          *positionRepos.JobPositionRepository
+	locationRepo          *locationRepos.LocationRepository
+	userRepo              *userRepos.UserRepository
+	roleRepo              *roleRepos.RoleRepository
 }
 
 func NewOnboardingService() *OnboardingService {
 	return &OnboardingService{
-		draftRepo:            employeeRepos.NewOnboardingDraftRepository(),
-		employeeRepo:         employeeRepos.NewEmployeeRepository(),
-		basicInfoRepo:        employeeRepos.NewEmployeeBasicInformationRepository(),
+		draftRepo:             employeeRepos.NewOnboardingDraftRepository(),
+		employeeRepo:          employeeRepos.NewEmployeeRepository(),
+		basicInfoRepo:         employeeRepos.NewEmployeeBasicInformationRepository(),
 		employmentDetailsRepo: employeeRepos.NewEmployeeEmploymentDetailsRepository(),
-		addressRepo:          employeeRepos.NewEmployeeAddressRepository(),
-		salaryRepo:           employeeRepos.NewEmployeeSalaryRepository(),
-		bankRepo:             employeeRepos.NewEmployeeBankRepository(),
-		statutoryRepo:        employeeRepos.NewEmployeeStatutoryRepository(),
-		documentRepo:         employeeRepos.NewEmployeeDocumentRepository(),
-		contactRepo:          employeeRepos.NewEmployeeEmergencyContactRepository(),
-		policyRepo:           employeeRepos.NewEmployeePolicyRepository(),
-		assetRepo:            employeeRepos.NewEmployeeAssetRepository(),
-		departmentRepo:       departmentRepos.NewDepartmentRepository(),
-		positionRepo:         positionRepos.NewJobPositionRepository(),
-		locationRepo:         locationRepos.NewLocationRepository(),
-		userRepo:             userRepos.NewUserRepository(),
-		roleRepo:             roleRepos.NewRoleRepository(),
+		addressRepo:           employeeRepos.NewEmployeeAddressRepository(),
+		salaryRepo:            employeeRepos.NewEmployeeSalaryRepository(),
+		bankRepo:              employeeRepos.NewEmployeeBankRepository(),
+		statutoryRepo:         employeeRepos.NewEmployeeStatutoryRepository(),
+		documentRepo:          employeeRepos.NewEmployeeDocumentRepository(),
+		contactRepo:           employeeRepos.NewEmployeeEmergencyContactRepository(),
+		policyRepo:            employeeRepos.NewEmployeePolicyRepository(),
+		assetRepo:             employeeRepos.NewEmployeeAssetRepository(),
+		departmentRepo:        departmentRepos.NewDepartmentRepository(),
+		positionRepo:          positionRepos.NewJobPositionRepository(),
+		locationRepo:          locationRepos.NewLocationRepository(),
+		userRepo:              userRepos.NewUserRepository(),
+		roleRepo:              roleRepos.NewRoleRepository(),
 	}
 }
 
@@ -167,7 +168,7 @@ func (s *OnboardingService) SaveStep(draftID uint, step int, data map[string]int
 
 	// Mark step as completed (this updates CompletedSteps)
 	draft.AddCompletedStep(models.OnboardingStep(step))
-	
+
 	// Calculate progress AFTER updating completed steps
 	draft.Progress = draft.CalculateProgress()
 	draft.UpdatedBy = updatedBy
@@ -249,7 +250,7 @@ func (s *OnboardingService) SaveStepByEmployeeID(employeeID string, tenantID *ui
 			}
 		}
 	}
-	
+
 	// Ensure the draft has the employee ID set and normalized (in case it was created without it or with wrong case)
 	normalizedID := strings.ToUpper(strings.TrimSpace(employeeID))
 	if draft.EmployeeID == nil || *draft.EmployeeID == "" || !strings.EqualFold(strings.TrimSpace(*draft.EmployeeID), normalizedID) {
@@ -258,7 +259,7 @@ func (s *OnboardingService) SaveStepByEmployeeID(employeeID string, tenantID *ui
 			return nil, fmt.Errorf("failed to update draft with employee ID: %w", err)
 		}
 	}
-	
+
 	return s.SaveStep(draft.ID, step, data, updatedBy)
 }
 
@@ -270,16 +271,16 @@ func (s *OnboardingService) GetDraft(draftID uint) (*models.GetDraftResponse, er
 	}
 
 	response := &models.GetDraftResponse{
-		DraftID:                    draft.ID,
-		EmployeeID:                 draft.EmployeeID,
-		LinkedUserID:               draft.LinkedUserID,
-		IsExistingUserOnboarding:   draft.LinkedUserID != nil,
-		Progress:                   draft.Progress,
-		CompletedSteps:             draft.GetCompletedStepsList(),
-		IsCompleted:                 draft.IsCompleted,
-		Steps:                      make(map[string]interface{}),
-		CreatedAt:                  draft.CreatedAt,
-		UpdatedAt:                  draft.UpdatedAt,
+		DraftID:                  draft.ID,
+		EmployeeID:               draft.EmployeeID,
+		LinkedUserID:             draft.LinkedUserID,
+		IsExistingUserOnboarding: draft.LinkedUserID != nil,
+		Progress:                 draft.Progress,
+		CompletedSteps:           draft.GetCompletedStepsList(),
+		IsCompleted:              draft.IsCompleted,
+		Steps:                    make(map[string]interface{}),
+		CreatedAt:                draft.CreatedAt,
+		UpdatedAt:                draft.UpdatedAt,
 	}
 	if draft.LinkedUserID != nil {
 		linkedUser, _ := s.userRepo.FindByID(*draft.LinkedUserID)
@@ -295,7 +296,7 @@ func (s *OnboardingService) GetDraft(draftID uint) (*models.GetDraftResponse, er
 	allSteps := []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}
 	finishedSteps := make([]int, 0)
 	unfinishedSteps := make([]int, 0)
-	
+
 	for _, step := range allSteps {
 		if draft.HasStepCompleted(models.OnboardingStep(step)) {
 			finishedSteps = append(finishedSteps, step)
@@ -373,14 +374,14 @@ func (s *OnboardingService) GetCompletedEmployeeOnboarding(employeeID string, te
 	// Tenant ownership check removed (single-tenant)
 
 	response := &models.CompletedEmployeeOnboardingResponse{
-		EmployeeID:      employee.EmployeeID,
-		EmployeeDBID:    employee.ID,
-		Progress:        100.0, // Always 100% for completed employees
-		CompletedSteps:  []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, // All steps completed
-		IsCompleted:     true,
-		Steps:           make(map[string]interface{}),
-		CreatedAt:       employee.CreatedAt,
-		UpdatedAt:       employee.UpdatedAt,
+		EmployeeID:     employee.EmployeeID,
+		EmployeeDBID:   employee.ID,
+		Progress:       100.0,                                // Always 100% for completed employees
+		CompletedSteps: []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, // All steps completed
+		IsCompleted:    true,
+		Steps:          make(map[string]interface{}),
+		CreatedAt:      employee.CreatedAt,
+		UpdatedAt:      employee.UpdatedAt,
 	}
 
 	// Load all step data from employee record and related tables
@@ -394,7 +395,7 @@ func (s *OnboardingService) loadCompletedEmployeeStepData(employee *models.Emplo
 	// Step 1: Personal Info & Addresses
 	basicInfo, _ := s.basicInfoRepo.FindByEmployeeID(employee.ID)
 	addresses, _ := s.addressRepo.FindByEmployeeID(employee.ID)
-	
+
 	step1Response := make(map[string]interface{})
 	if basicInfo != nil {
 		step1Response["photo_url"] = basicInfo.PhotoURL
@@ -427,7 +428,7 @@ func (s *OnboardingService) loadCompletedEmployeeStepData(employee *models.Emplo
 	if len(addresses) > 0 {
 		step1Response["addresses"] = addresses
 	}
-	
+
 	if len(step1Response) > 0 {
 		response.Steps["1"] = step1Response
 	}
@@ -621,7 +622,7 @@ func (s *OnboardingService) CompleteOnboardingByEmployeeID(employeeID string, te
 
 // CompleteOnboardingResponse includes employee and credentials
 type CompleteOnboardingResponse struct {
-	Employee   *models.Employee `json:"employee"`
+	Employee    *models.Employee `json:"employee"`
 	Credentials *UserCredentials `json:"credentials,omitempty"`
 }
 
@@ -667,13 +668,28 @@ func (s *OnboardingService) completeOnboardingForDraft(draft *models.EmployeeOnb
 			isAdminEmployee = false // Default to false, can be enhanced with explicit flag
 		}
 	}
-	
+
 	credentials, err := s.createUserForEmployee(employee, draft, updatedBy, isAdminEmployee)
 	if err != nil {
 		// Log error but don't fail onboarding - user can be created later
 		// return nil, nil, fmt.Errorf("failed to create user account: %w", err)
 		// For now, we'll continue even if user creation fails
 		credentials = nil
+	}
+
+	// Send welcome email with credentials if credentials were created
+	if credentials != nil {
+		// Use employee's personal email for sending credentials (already available in employee object)
+		if employee.PersonalEmail != nil && *employee.PersonalEmail != "" {
+			// Send email with credentials to personal email
+			go s.sendWelcomeEmailWithCredentials(*employee.PersonalEmail, employee, credentials)
+		} else {
+			// Fallback to work email if personal email is not available
+			if employee.WorkEmail != nil && *employee.WorkEmail != "" {
+				// Send email with credentials to work email
+				go s.sendWelcomeEmailWithCredentials(*employee.WorkEmail, employee, credentials)
+			}
+		}
 	}
 
 	// Mark draft as completed
@@ -741,20 +757,20 @@ func (s *OnboardingService) saveStep1PersonalInfo(draft *models.EmployeeOnboardi
 
 	// Create or update basic information
 	basicInfo := &models.EmployeeBasicInformation{
-		DraftID:         &draft.ID,
+		DraftID:          &draft.ID,
 		EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
-		PhotoURL:        req.PhotoURL,
-		FirstName:       req.FirstName,
-		MiddleName:      req.MiddleName,
-		LastName:        req.LastName,
-		DateOfBirth:     req.DateOfBirth,
-		Gender:          req.Gender,
-		MaritalStatus:   req.MaritalStatus,
-		BloodGroup:      req.BloodGroup,
-		Nationality:     req.Nationality,
-		PersonalEmail:   req.PersonalEmail,
-		MobileNumber:    req.MobileNumber,
-		AlternateNumber: req.AlternateNumber,
+		PhotoURL:         req.PhotoURL,
+		FirstName:        req.FirstName,
+		MiddleName:       req.MiddleName,
+		LastName:         req.LastName,
+		DateOfBirth:      req.DateOfBirth,
+		Gender:           req.Gender,
+		MaritalStatus:    req.MaritalStatus,
+		BloodGroup:       req.BloodGroup,
+		Nationality:      req.Nationality,
+		PersonalEmail:    req.PersonalEmail,
+		MobileNumber:     req.MobileNumber,
+		AlternateNumber:  req.AlternateNumber,
 	}
 
 	if existingInfo != nil {
@@ -777,14 +793,14 @@ func (s *OnboardingService) saveStep1PersonalInfo(draft *models.EmployeeOnboardi
 	// Save current address
 	if req.CurrentAddress != nil || req.City != nil {
 		currentAddr := &models.EmployeeAddress{
-			DraftID:         &draft.ID,
+			DraftID:          &draft.ID,
 			EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
-			AddressType:     models.AddressTypeCurrent,
-			AddressLine1:    req.CurrentAddress,
-			City:            req.City,
-			State:           req.State,
-			PostalCode:      req.PostalCode,
-			Country:         req.Country,
+			AddressType:      models.AddressTypeCurrent,
+			AddressLine1:     req.CurrentAddress,
+			City:             req.City,
+			State:            req.State,
+			PostalCode:       req.PostalCode,
+			Country:          req.Country,
 		}
 		if err := s.addressRepo.Create(currentAddr); err != nil {
 			return fmt.Errorf("failed to save current address: %w", err)
@@ -794,14 +810,14 @@ func (s *OnboardingService) saveStep1PersonalInfo(draft *models.EmployeeOnboardi
 	// Save permanent address
 	if req.PermanentAddress != nil {
 		permanentAddr := &models.EmployeeAddress{
-			DraftID:         &draft.ID,
+			DraftID:          &draft.ID,
 			EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
-			AddressType:     models.AddressTypePermanent,
-			AddressLine1:    req.PermanentAddress,
-			City:            req.City,
-			State:           req.State,
-			PostalCode:      req.PostalCode,
-			Country:         req.Country,
+			AddressType:      models.AddressTypePermanent,
+			AddressLine1:     req.PermanentAddress,
+			City:             req.City,
+			State:            req.State,
+			PostalCode:       req.PostalCode,
+			Country:          req.Country,
 		}
 		if err := s.addressRepo.Create(permanentAddr); err != nil {
 			return fmt.Errorf("failed to save permanent address: %w", err)
@@ -926,19 +942,19 @@ func (s *OnboardingService) saveStep2Employment(draft *models.EmployeeOnboarding
 
 	// Create or update employment details
 	employmentDetails := &models.EmployeeEmploymentDetails{
-		DraftID:              &draft.ID,
-		EmployeeIDString:     draft.EmployeeID, // Use draft's employee_id (already set above)
-		OfficialEmail:         req.OfficialEmail,
-		DateOfJoining:         req.DateOfJoining,
-		DepartmentID:         req.DepartmentID,
-		PositionID:           req.PositionID,
-		Grade:                req.Grade,
-		ReportingManagerID:   req.ReportingManagerID,
-		EmploymentType:       req.EmploymentType,
-		LocationID:           req.LocationID,
-		Shift:                req.Shift,
-		WorkPhone:            req.WorkPhone,
-		ProbationPeriodDays:  req.ProbationPeriodDays,
+		DraftID:                  &draft.ID,
+		EmployeeIDString:         draft.EmployeeID, // Use draft's employee_id (already set above)
+		OfficialEmail:            req.OfficialEmail,
+		DateOfJoining:            req.DateOfJoining,
+		DepartmentID:             req.DepartmentID,
+		PositionID:               req.PositionID,
+		Grade:                    req.Grade,
+		ReportingManagerID:       req.ReportingManagerID,
+		EmploymentType:           req.EmploymentType,
+		LocationID:               req.LocationID,
+		Shift:                    req.Shift,
+		WorkPhone:                req.WorkPhone,
+		ProbationPeriodDays:      req.ProbationPeriodDays,
 		ExpectedConfirmationDate: req.ExpectedConfirmationDate,
 	}
 
@@ -985,7 +1001,7 @@ func (s *OnboardingService) saveStep3Salary(draft *models.EmployeeOnboardingDraf
 		OtherAllowances:    req.OtherAllowances,
 		IncomeTax:          req.IncomeTax,
 		ProvidentFund:      req.ProvidentFund,
-		ProfessionalTax:   req.ProfessionalTax,
+		ProfessionalTax:    req.ProfessionalTax,
 		OtherDeductions:    req.OtherDeductions,
 	}
 
@@ -1024,15 +1040,15 @@ func (s *OnboardingService) saveStep4Bank(draft *models.EmployeeOnboardingDraft,
 
 	// Create or update bank account
 	bank := &models.EmployeeBankAccount{
-		DraftID:          &draft.ID,
-		EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
-		BankName:         req.BankName,
+		DraftID:           &draft.ID,
+		EmployeeIDString:  draft.EmployeeID, // Set employee_id_string from draft
+		BankName:          req.BankName,
 		AccountHolderName: req.AccountHolderName,
-		AccountNumber:    req.AccountNumber,
-		AccountType:      req.AccountType,
-		BranchName:       req.BranchName,
-		SWIFTCode:        req.SWIFTCode,
-		IsPrimary:        true,
+		AccountNumber:     req.AccountNumber,
+		AccountType:       req.AccountType,
+		BranchName:        req.BranchName,
+		SWIFTCode:         req.SWIFTCode,
+		IsPrimary:         true,
 	}
 
 	if existingBank != nil {
@@ -1066,16 +1082,16 @@ func (s *OnboardingService) saveStep5Statutory(draft *models.EmployeeOnboardingD
 
 	// Create or update statutory info
 	statutory := &models.EmployeeStatutoryInfo{
-		DraftID:             &draft.ID,
-		EmployeeIDString:    draft.EmployeeID, // Set employee_id_string from draft
-		TINNumber:           req.TINNumber,
-		NSSFNumber:          req.NSSFNumber,
-		NHIFNumber:          req.NHIFNumber,
-		WCFNumber:           req.WCFNumber,
-		SDLNumber:           req.SDLNumber,
-		PassportNumber:      req.PassportNumber,
-		PassportExpiryDate:  req.PassportExpiryDate,
-		WorkPermitNumber:    req.WorkPermitNumber,
+		DraftID:              &draft.ID,
+		EmployeeIDString:     draft.EmployeeID, // Set employee_id_string from draft
+		TINNumber:            req.TINNumber,
+		NSSFNumber:           req.NSSFNumber,
+		NHIFNumber:           req.NHIFNumber,
+		WCFNumber:            req.WCFNumber,
+		SDLNumber:            req.SDLNumber,
+		PassportNumber:       req.PassportNumber,
+		PassportExpiryDate:   req.PassportExpiryDate,
+		WorkPermitNumber:     req.WorkPermitNumber,
 		WorkPermitExpiryDate: req.WorkPermitExpiryDate,
 	}
 
@@ -1108,14 +1124,14 @@ func (s *OnboardingService) saveStep6Documents(draft *models.EmployeeOnboardingD
 	// Create documents
 	for _, docInput := range req.Documents {
 		doc := &models.EmployeeDocument{
-			DraftID:         &draft.ID,
+			DraftID:          &draft.ID,
 			EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
-			DocumentType:    docInput.DocumentType,
-			FileName:        docInput.FileName,
-			FileURL:         docInput.FileURL,
-			FileSize:        docInput.FileSize,
-			MimeType:        docInput.MimeType,
-			Description:     docInput.Description,
+			DocumentType:     docInput.DocumentType,
+			FileName:         docInput.FileName,
+			FileURL:          docInput.FileURL,
+			FileSize:         docInput.FileSize,
+			MimeType:         docInput.MimeType,
+			Description:      docInput.Description,
 		}
 		if err := s.documentRepo.Create(doc); err != nil {
 			return fmt.Errorf("failed to save document: %w", err)
@@ -1151,7 +1167,7 @@ func (s *OnboardingService) saveStep7Assets(draft *models.EmployeeOnboardingDraf
 		}
 
 		asset := &models.EmployeeAsset{
-			DraftID:         &draft.ID,
+			DraftID:          &draft.ID,
 			EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
 		}
 
@@ -1238,15 +1254,15 @@ func (s *OnboardingService) saveStep9EmergencyContacts(draft *models.EmployeeOnb
 	// Create emergency contacts
 	for _, contactInput := range req.Contacts {
 		contact := &models.EmployeeEmergencyContact{
-			DraftID:         &draft.ID,
+			DraftID:          &draft.ID,
 			EmployeeIDString: draft.EmployeeID, // Set employee_id_string from draft
-			ContactName:     contactInput.ContactName,
-			Relationship:    contactInput.Relationship,
-			PhoneNumber:     contactInput.PhoneNumber,
-			AlternatePhone:  contactInput.AlternatePhone,
-			Email:           contactInput.Email,
-			Address:         contactInput.Address,
-			IsPrimary:       contactInput.IsPrimary,
+			ContactName:      contactInput.ContactName,
+			Relationship:     contactInput.Relationship,
+			PhoneNumber:      contactInput.PhoneNumber,
+			AlternatePhone:   contactInput.AlternatePhone,
+			Email:            contactInput.Email,
+			Address:          contactInput.Address,
+			IsPrimary:        contactInput.IsPrimary,
 		}
 		if err := s.contactRepo.Create(contact); err != nil {
 			return fmt.Errorf("failed to save emergency contact: %w", err)
@@ -1280,7 +1296,7 @@ func (s *OnboardingService) loadStepData(draft *models.EmployeeOnboardingDraft, 
 	// Step 1: Personal Info & Addresses
 	basicInfo, _ := s.basicInfoRepo.FindByDraftID(draft.ID)
 	addresses, _ := s.addressRepo.FindByDraftID(draft.ID)
-	
+
 	step1Response := make(map[string]interface{})
 	if basicInfo != nil {
 		// Convert basic info to map for response
@@ -1300,7 +1316,7 @@ func (s *OnboardingService) loadStepData(draft *models.EmployeeOnboardingDraft, 
 	if len(addresses) > 0 {
 		step1Response["addresses"] = addresses
 	}
-	
+
 	if len(step1Response) > 0 {
 		response.Steps["1"] = step1Response
 	}
@@ -1322,12 +1338,12 @@ func (s *OnboardingService) loadStepData(draft *models.EmployeeOnboardingDraft, 
 		step2Response["work_phone"] = employmentDetails.WorkPhone
 		step2Response["probation_period_days"] = employmentDetails.ProbationPeriodDays
 		step2Response["expected_confirmation_date"] = employmentDetails.ExpectedConfirmationDate
-		
+
 		// Also include employee_id from draft if set
 		if draft.EmployeeID != nil {
 			step2Response["employee_id"] = *draft.EmployeeID
 		}
-		
+
 		response.Steps["2"] = step2Response
 	} else if draft.EmployeeID != nil {
 		// Fallback: if no employment details but employee_id is set
@@ -1463,36 +1479,36 @@ func (s *OnboardingService) createEmployeeFromDraft(draft *models.EmployeeOnboar
 
 	// Build employee from table data
 	employee := &models.Employee{
-		EmployeeID:         employeeID,
-		FirstName:          basicInfo.FirstName,
-		MiddleName:         basicInfo.MiddleName,
-		LastName:           basicInfo.LastName,
-		DateOfBirth:        basicInfo.DateOfBirth,
-		Gender:             basicInfo.Gender,
-		MaritalStatus:      basicInfo.MaritalStatus,
-		BloodGroup:         basicInfo.BloodGroup,
-		Nationality:        basicInfo.Nationality,
-		PhotoURL:           basicInfo.PhotoURL,
-		PersonalEmail:      basicInfo.PersonalEmail,
-		WorkEmail:          employmentDetails.OfficialEmail,
-		PhoneNumber:        basicInfo.MobileNumber,
-		AlternatePhone:     basicInfo.AlternateNumber,
-		DepartmentID:       employmentDetails.DepartmentID,
-		PositionID:         employmentDetails.PositionID,
-		LocationID:         employmentDetails.LocationID,
-		HireDate:           employmentDetails.DateOfJoining,
-		EmploymentType:     employmentDetails.EmploymentType,
-		ReportsToID:        employmentDetails.ReportingManagerID,
-		Grade:              employmentDetails.Grade,
-		Shift:              employmentDetails.Shift,
-		WorkPhone:          employmentDetails.WorkPhone,
-		ProbationPeriodDays: employmentDetails.ProbationPeriodDays,
+		EmployeeID:               employeeID,
+		FirstName:                basicInfo.FirstName,
+		MiddleName:               basicInfo.MiddleName,
+		LastName:                 basicInfo.LastName,
+		DateOfBirth:              basicInfo.DateOfBirth,
+		Gender:                   basicInfo.Gender,
+		MaritalStatus:            basicInfo.MaritalStatus,
+		BloodGroup:               basicInfo.BloodGroup,
+		Nationality:              basicInfo.Nationality,
+		PhotoURL:                 basicInfo.PhotoURL,
+		PersonalEmail:            basicInfo.PersonalEmail,
+		WorkEmail:                employmentDetails.OfficialEmail,
+		PhoneNumber:              basicInfo.MobileNumber,
+		AlternatePhone:           basicInfo.AlternateNumber,
+		DepartmentID:             employmentDetails.DepartmentID,
+		PositionID:               employmentDetails.PositionID,
+		LocationID:               employmentDetails.LocationID,
+		HireDate:                 employmentDetails.DateOfJoining,
+		EmploymentType:           employmentDetails.EmploymentType,
+		ReportsToID:              employmentDetails.ReportingManagerID,
+		Grade:                    employmentDetails.Grade,
+		Shift:                    employmentDetails.Shift,
+		WorkPhone:                employmentDetails.WorkPhone,
+		ProbationPeriodDays:      employmentDetails.ProbationPeriodDays,
 		ExpectedConfirmationDate: employmentDetails.ExpectedConfirmationDate,
-		OrganizationID:     organizationID,
-		OrganizationUnitID: organizationUnitID,
-		Status:             models.StatusActive,
-		IsActive:           true,
-		Notes:              "",
+		OrganizationID:           organizationID,
+		OrganizationUnitID:       organizationUnitID,
+		Status:                   models.StatusActive,
+		IsActive:                 true,
+		Notes:                    "",
 	}
 
 	// Set notes from step 10
@@ -1567,13 +1583,13 @@ func (s *OnboardingService) generateEmployeeID() string {
 		// Use last 6 digits of timestamp + microsecond component
 		idNum := (timestamp % 1000000) + int64(i)
 		employeeID := fmt.Sprintf("EMP%06d", idNum)
-		
+
 		// Check if this ID already exists
 		if !s.employeeRepo.ExistsByEmployeeID(employeeID) {
 			return employeeID
 		}
 	}
-	
+
 	// Fallback: use timestamp with nanoseconds if all attempts fail
 	return fmt.Sprintf("EMP%06d", time.Now().UnixNano()%1000000)
 }
@@ -1718,7 +1734,7 @@ func (s *OnboardingService) createUserForEmployee(employee *models.Employee, dra
 			_ = err
 		}
 	}
-	
+
 	// If user is admin, also try to assign "system_admin" or "admin" role from roles table
 	// This allows admin employees to have both admin (UserRole enum) and system_admin (roles table) roles
 	if userRole == userModels.RoleAdmin {
@@ -1740,4 +1756,93 @@ func (s *OnboardingService) createUserForEmployee(employee *models.Employee, dra
 		Password: plainPassword,
 		Username: username,
 	}, nil
+}
+
+// sendWelcomeEmailWithCredentials sends a welcome email with login credentials to the employee
+func (s *OnboardingService) sendWelcomeEmailWithCredentials(recipientEmail string, employee *models.Employee, credentials *UserCredentials) {
+	// Create email service instance
+	emailService := email.NewEmailService()
+
+	// Build email subject and body
+	subject := fmt.Sprintf("Welcome to ScoopWorks - Your Login Credentials")
+
+	body := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Welcome to ScoopWorks</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 5px; }
+        .content { background-color: #fff; padding: 30px; border-radius: 5px; margin-top: 20px; border: 1px solid #e9ecef; }
+        .credentials { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .credential-item { margin: 10px 0; }
+        .label { font-weight: bold; color: #495057; }
+        .value { background-color: #fff; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 3px; font-family: monospace; }
+        .footer { margin-top: 30px; text-align: center; color: #6c757d; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Welcome to ScoopWorks!</h1>
+        </div>
+        
+        <div class="content">
+            <h2>Hello %s %s,</h2>
+            
+            <p>Your employee onboarding has been successfully completed. Below are your login credentials for the ScoopWorks HR Management System:</p>
+            
+            <div class="credentials">
+                <div class="credential-item">
+                    <span class="label">Employee ID:</span>
+                    <div class="value">%s</div>
+                </div>
+                <div class="credential-item">
+                    <span class="label">Login URL:</span>
+                    <div class="value">https://hrms.scoopworks.com</div>
+                </div>
+                <div class="credential-item">
+                    <span class="label">Username/Email:</span>
+                    <div class="value">%s</div>
+                </div>
+                <div class="credential-item">
+                    <span class="label">Password:</span>
+                    <div class="value">%s</div>
+                </div>
+            </div>
+            
+            <p><strong>Important Security Notes:</strong></p>
+            <ul>
+                <li>This is a temporary password - please change it after your first login</li>
+                <li>Never share your credentials with anyone</li>
+                <li>If you did not request this account, please contact HR immediately</li>
+            </ul>
+            
+            <p>We recommend logging in as soon as possible to familiarize yourself with the system and update your password.</p>
+            
+            <p>Best regards,<br>
+            <strong>ScoopWorks HR Team</strong></p>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>
+`,
+		employee.FirstName,
+		employee.LastName,
+		employee.EmployeeID,
+		credentials.Email,
+		credentials.Password)
+
+	// Send email
+	err := emailService.SendEmail(recipientEmail, subject, body)
+	if err != nil {
+		fmt.Printf("Failed to send welcome email to %s: %v\n", recipientEmail, err)
+	}
 }

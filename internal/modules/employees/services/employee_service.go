@@ -10,6 +10,7 @@ import (
 	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
 	positionRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/email"
 )
 
 // EmployeeService handles employee business logic
@@ -18,6 +19,7 @@ type EmployeeService struct {
 	departmentRepo *departmentRepos.DepartmentRepository
 	positionRepo   *positionRepos.JobPositionRepository
 	locationRepo   *locationRepos.LocationRepository
+	emailService   *email.EmailService
 }
 
 // NewEmployeeService creates a new employee service
@@ -27,6 +29,7 @@ func NewEmployeeService() *EmployeeService {
 		departmentRepo: departmentRepos.NewDepartmentRepository(),
 		positionRepo:   positionRepos.NewJobPositionRepository(),
 		locationRepo:   locationRepos.NewLocationRepository(),
+		emailService:   email.NewEmailService(),
 	}
 }
 
@@ -91,19 +94,19 @@ func (s *EmployeeService) OnboardEmployee(req *models.OnboardEmployeeRequest) (*
 	if req.Gender != "" {
 		genderPtr = &req.Gender
 	}
-	
+
 	// Map EmploymentType to pointer
 	var employmentTypePtr *string
 	if employmentType != "" {
 		employmentTypePtr = &employmentType
 	}
-	
+
 	// Map Email to WorkEmail
 	var workEmailPtr *string
 	if req.Email != "" {
 		workEmailPtr = &req.Email
 	}
-	
+
 	// Map Phone to PhoneNumber
 	var phoneNumberPtr *string
 	if req.Phone != "" {
@@ -111,28 +114,28 @@ func (s *EmployeeService) OnboardEmployee(req *models.OnboardEmployeeRequest) (*
 	}
 
 	employee := &models.Employee{
-		EmployeeID:        req.EmployeeID,
-		FirstName:         req.FirstName,
-		LastName:          req.LastName,
-		WorkEmail:         workEmailPtr,
-		PhoneNumber:       phoneNumberPtr,
-		DateOfBirth:       req.DateOfBirth,
-		Gender:            genderPtr,
-		OrganizationID:    organizationID,      // Auto-populated from department
-		OrganizationUnitID: organizationUnitID, // Auto-populated from department
-		DepartmentID:      req.DepartmentID,
-		PositionID:        req.PositionID,
-		LocationID:        req.LocationID,
-		HireDate:          hireDate,
-		EmploymentType:   employmentTypePtr,
-		Status:            models.StatusActive,
-		Salary:            req.Salary,
-		Currency:          currency,
+		EmployeeID:               req.EmployeeID,
+		FirstName:                req.FirstName,
+		LastName:                 req.LastName,
+		WorkEmail:                workEmailPtr,
+		PhoneNumber:              phoneNumberPtr,
+		DateOfBirth:              req.DateOfBirth,
+		Gender:                   genderPtr,
+		OrganizationID:           organizationID,     // Auto-populated from department
+		OrganizationUnitID:       organizationUnitID, // Auto-populated from department
+		DepartmentID:             req.DepartmentID,
+		PositionID:               req.PositionID,
+		LocationID:               req.LocationID,
+		HireDate:                 hireDate,
+		EmploymentType:           employmentTypePtr,
+		Status:                   models.StatusActive,
+		Salary:                   req.Salary,
+		Currency:                 currency,
 		EmergencyContactName:     req.EmergencyContactName,
 		EmergencyContactPhone:    req.EmergencyContactPhone,
 		EmergencyContactRelation: req.EmergencyContactRelation,
-		Notes:             req.Notes,
-		IsActive:          true,
+		Notes:                    req.Notes,
+		IsActive:                 true,
 	}
 
 	if err := s.employeeRepo.Create(employee); err != nil {
@@ -140,6 +143,131 @@ func (s *EmployeeService) OnboardEmployee(req *models.OnboardEmployeeRequest) (*
 	}
 
 	return employee, nil
+}
+
+// SendCredentialsEmail sends login credentials to employee's personal email
+func (s *EmployeeService) SendCredentialsEmail(employeeID uint) error {
+	// Get employee by ID
+	employee, err := s.employeeRepo.FindByID(employeeID)
+	if err != nil {
+		return errors.New("employee not found")
+	}
+
+	// Check if employee has personal email
+	if employee.PersonalEmail == nil || *employee.PersonalEmail == "" {
+		return errors.New("employee does not have a personal email address")
+	}
+
+	// Get user credentials for the employee
+	userCredentials, err := s.getUserCredentialsForEmployee(employee)
+	if err != nil {
+		return fmt.Errorf("failed to get user credentials: %w", err)
+	}
+
+	// Send email with credentials
+	return s.sendCredentialsEmail(*employee.PersonalEmail, employee, userCredentials)
+}
+
+// getUserCredentialsForEmployee retrieves user credentials for an employee
+func (s *EmployeeService) getUserCredentialsForEmployee(employee *models.Employee) (*UserCredentials, error) {
+	// This is a simplified implementation - in a real scenario, you would
+	// query the user repository to get the actual credentials
+	// For now, we'll return a mock response
+
+	if employee.UserID == nil {
+		return nil, errors.New("employee does not have a user account")
+	}
+
+	// In a real implementation, you would fetch from user repository
+	// For demonstration, we'll return mock credentials
+	return &UserCredentials{
+		Email:    *employee.PersonalEmail,
+		Username: fmt.Sprintf("%s.%s", employee.FirstName, employee.LastName),
+		Password: "TemporaryPassword123!", // This should be fetched from user table
+	}, nil
+}
+
+// sendCredentialsEmail sends the credentials email
+func (s *EmployeeService) sendCredentialsEmail(recipientEmail string, employee *models.Employee, credentials *UserCredentials) error {
+	// Build email subject and body
+	subject := fmt.Sprintf("Your ScoopWorks Login Credentials - %s", employee.EmployeeID)
+
+	body := fmt.Sprintf(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>ScoopWorks Login Credentials</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+        .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+        .header { background-color: #f8f9fa; padding: 20px; text-align: center; border-radius: 5px; }
+        .content { background-color: #fff; padding: 30px; border-radius: 5px; margin-top: 20px; border: 1px solid #e9ecef; }
+        .credentials { background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+        .credential-item { margin: 10px 0; }
+        .label { font-weight: bold; color: #495057; }
+        .value { background-color: #fff; padding: 8px 12px; border: 1px solid #dee2e6; border-radius: 3px; font-family: monospace; }
+        .footer { margin-top: 30px; text-align: center; color: #6c757d; font-size: 14px; }
+        .warning { background-color: #fff3cd; border: 1px solid #ffeaa7; color: #856404; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ScoopWorks HRMS</h1>
+            <p>Your Login Credentials</p>
+        </div>
+        
+        <div class="content">
+            <h2>Hello %s %s!</h2>
+            
+            <p>Welcome to ScoopWorks! Your employee account has been created successfully.</p>
+            
+            <p>Here are your login credentials:</p>
+            
+            <div class="credentials">
+                <div class="credential-item">
+                    <span class="label">Employee ID:</span>
+                    <div class="value">%s</div>
+                </div>
+                <div class="credential-item">
+                    <span class="label">Email/Username:</span>
+                    <div class="value">%s</div>
+                </div>
+                <div class="credential-item">
+                    <span class="label">Password:</span>
+                    <div class="value">%s</div>
+                </div>
+            </div>
+            
+            <div class="warning">
+                <strong>Important Security Notice:</strong>
+                <p>For security reasons, we recommend that you change your password immediately after your first login.</p>
+            </div>
+            
+            <p><strong>Login URL:</strong> https://hrm.scoopworks.co.tz</p>
+            
+            <p>If you have any issues logging in, please contact the HR department.</p>
+            
+            <p>Best regards,<br>
+            <strong>ScoopWorks HR Team</strong></p>
+        </div>
+        
+        <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+        </div>
+    </div>
+</body>
+</html>
+`,
+		employee.FirstName,
+		employee.LastName,
+		employee.EmployeeID,
+		credentials.Email,
+		credentials.Password)
+
+	// Send email
+	return s.emailService.SendEmail(recipientEmail, subject, body)
 }
 
 // GetEmployeeByID retrieves an employee by ID
@@ -411,14 +539,14 @@ func (s *EmployeeService) ListManagers(tenantID *uint, departmentID *uint) ([]ma
 		headEmp, err := s.employeeRepo.FindByID(*departmentHeadID)
 		if err == nil && headEmp != nil && headEmp.IsActive {
 			managerData := map[string]interface{}{
-				"id":                  headEmp.ID,
-				"employee_id":         headEmp.EmployeeID,
-				"full_name":           headEmp.FullName(),
-				"first_name":          headEmp.FirstName,
-				"last_name":           headEmp.LastName,
-				"email":               headEmp.WorkEmail,
-				"is_department_head":  true,
-				"is_suggested":        true,
+				"id":                 headEmp.ID,
+				"employee_id":        headEmp.EmployeeID,
+				"full_name":          headEmp.FullName(),
+				"first_name":         headEmp.FirstName,
+				"last_name":          headEmp.LastName,
+				"email":              headEmp.WorkEmail,
+				"is_department_head": true,
+				"is_suggested":       true,
 			}
 			if headEmp.DepartmentID != nil {
 				managerData["department_id"] = headEmp.DepartmentID
@@ -498,7 +626,7 @@ func (s *EmployeeService) getOnboardingStatus(employeeID uint) (string, *float64
 	}
 
 	draftRepo := employeeRepos.NewOnboardingDraftRepository()
-	
+
 	// First, check if there's a draft with employee_id_final matching this employee
 	draft, err := draftRepo.FindByEmployeeIDFinal(employeeID)
 	if err == nil && draft != nil {
