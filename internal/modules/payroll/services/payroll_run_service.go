@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	attendanceRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/repositories"
 	"gorm.io/gorm"
@@ -17,7 +18,9 @@ type PayrollRunService struct {
 	payslipRepo         *repositories.PayslipRepository
 	loanRepo            *repositories.LoanRepository
 	salaryStructureRepo *repositories.SalaryStructureRepository
-	taxCalculator       *TaxCalculator
+	taxCalculator       *TaxCalculatorV2
+	overtimeRepo        *attendanceRepos.OvertimeRepository
+	timesheetRepo       *attendanceRepos.TimesheetRepository
 }
 
 // NewPayrollRunService creates a new service instance
@@ -28,7 +31,9 @@ func NewPayrollRunService() *PayrollRunService {
 		payslipRepo:         repositories.NewPayslipRepository(),
 		loanRepo:            repositories.NewLoanRepository(),
 		salaryStructureRepo: repositories.NewSalaryStructureRepository(),
-		taxCalculator:       NewTaxCalculator(),
+		taxCalculator:       NewTaxCalculatorV2(),
+		overtimeRepo:        attendanceRepos.NewOvertimeRepository(),
+		timesheetRepo:       attendanceRepos.NewTimesheetRepository(),
 	}
 }
 
@@ -162,33 +167,61 @@ func (s *PayrollRunService) AdvanceStep(runID uint, tenantID *uint, userID uint,
 		return errors.New("payroll run is locked")
 	}
 
+	now := time.Now()
+
 	switch run.Status {
 	case models.PayrollRunStatusDraft:
-		run.Status = models.PayrollRunStatusInReview
+		// Move to HR Review
+		run.Status = models.PayrollRunStatusPendingHR
 		run.CurrentStep = 1
-	case models.PayrollRunStatusInReview:
-		run.Status = models.PayrollRunStatusApproved
+		// Set HR review deadline (3 business days from now)
+		hrDeadline := now.AddDate(0, 0, 3)
+		run.HRReviewDeadline = &hrDeadline
+
+	case models.PayrollRunStatusHRReviewed:
+		// Move to Finance Review
+		run.Status = models.PayrollRunStatusPendingFinance
 		run.CurrentStep = 2
+		// Set Finance review deadline (2 business days from now)
+		financeDeadline := now.AddDate(0, 0, 2)
+		run.FinanceReviewDeadline = &financeDeadline
+
+	case models.PayrollRunStatusFinanceReviewed:
+		// Move to Management Approval
+		run.Status = models.PayrollRunStatusPendingManagement
+		run.CurrentStep = 3
+
+	case models.PayrollRunStatusPendingManagement:
+		// Final Management Approval
+		if !run.ManagementApproved {
+			return errors.New("management approval required before finalization")
+		}
+		run.Status = models.PayrollRunStatusApproved
+		run.CurrentStep = 4
 		run.ApprovedByID = &userID
 		run.ApprovedByName = &userName
-		now := time.Now()
 		run.ApprovedAt = &now
+
 	case models.PayrollRunStatusApproved:
+		// Finalize for payment
 		run.Status = models.PayrollRunStatusFinalized
-		run.CurrentStep = 3
+		run.CurrentStep = 5
 		run.FinalizedByID = &userID
 		run.FinalizedByName = &userName
-		now := time.Now()
 		run.FinalizedAt = &now
 		run.IsLocked = true
+
 	case models.PayrollRunStatusFinalized:
+		// Mark as disbursed
 		run.Status = models.PayrollRunStatusDisbursed
-		run.CurrentStep = 4
-		now := time.Now()
+		run.CurrentStep = 6
 		run.DisbursementDate = &now
+
 	case models.PayrollRunStatusDisbursed:
+		// Close the payroll run
 		run.Status = models.PayrollRunStatusClosed
-		run.CurrentStep = 5
+		run.CurrentStep = 7
+
 	default:
 		return errors.New("cannot advance from current status")
 	}
@@ -204,12 +237,24 @@ func (s *PayrollRunService) RevertStep(runID uint, tenantID *uint) error {
 	}
 
 	switch run.Status {
-	case models.PayrollRunStatusInReview:
+	case models.PayrollRunStatusPendingHR:
 		run.Status = models.PayrollRunStatusDraft
 		run.CurrentStep = 0
-	case models.PayrollRunStatusApproved:
-		run.Status = models.PayrollRunStatusInReview
+	case models.PayrollRunStatusHRReviewed:
+		run.Status = models.PayrollRunStatusPendingHR
 		run.CurrentStep = 1
+	case models.PayrollRunStatusPendingFinance:
+		run.Status = models.PayrollRunStatusHRReviewed
+		run.CurrentStep = 2
+	case models.PayrollRunStatusFinanceReviewed:
+		run.Status = models.PayrollRunStatusPendingFinance
+		run.CurrentStep = 3
+	case models.PayrollRunStatusPendingManagement:
+		run.Status = models.PayrollRunStatusFinanceReviewed
+		run.CurrentStep = 4
+	case models.PayrollRunStatusApproved:
+		run.Status = models.PayrollRunStatusPendingManagement
+		run.CurrentStep = 5
 		run.ApprovedByID = nil
 		run.ApprovedByName = nil
 		run.ApprovedAt = nil
@@ -245,7 +290,125 @@ func (s *PayrollRunService) RunPreCheck(runID uint, tenantID *uint) (*models.Pre
 	var criticalIssues int
 	var highIssues int
 
-	// Check 1: Verify salary structures/grades exist
+	// Get employees in the run for detailed validation
+	employees, _, err := s.empRepo.GetByRunID(runID, "", "", nil, 1, 10000)
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve employees: %w", err)
+	}
+
+	// Check 1: Employee Master Data Validation (New hires, terminations, salary changes)
+	var newEmployeesWithoutSetup []models.PreCheckEmployee
+
+	for _, emp := range employees {
+		// Check for new employees without complete setup
+		if emp.EmployeeID > 0 {
+			// This would need to be enhanced with actual employee repository calls
+			// For now, we'll check basic salary validation
+			if emp.BasicSalary <= 0 && emp.GrossSalary <= 0 {
+				newEmployeesWithoutSetup = append(newEmployeesWithoutSetup, models.PreCheckEmployee{
+					ID:         emp.EmployeeCode,
+					Name:       emp.EmployeeName,
+					Department: emp.Department,
+				})
+			}
+		}
+	}
+
+	if len(newEmployeesWithoutSetup) > 0 {
+		var employeeIDs []string
+		for _, emp := range newEmployeesWithoutSetup {
+			employeeIDs = append(employeeIDs, emp.ID)
+		}
+		actionRequired := "Complete employee setup including salary structure assignment."
+		resolutionURL := "/employees"
+		result.Issues = append(result.Issues, models.PreCheckIssue{
+			ID:             "new_employees_incomplete_setup",
+			Type:           "employee_master_data",
+			Category:       "employee",
+			Count:          len(newEmployeesWithoutSetup),
+			Severity:       "High",
+			EmployeeIDs:    employeeIDs,
+			Employees:      newEmployeesWithoutSetup,
+			Description:    fmt.Sprintf("%d new employee(s) have incomplete setup.", len(newEmployeesWithoutSetup)),
+			ActionRequired: &actionRequired,
+			ResolutionURL:  &resolutionURL,
+		})
+		highIssues += len(newEmployeesWithoutSetup)
+	}
+
+	// Check 2: Attendance & Inputs Validation
+	var employeesWithoutApprovedTimesheet []models.PreCheckEmployee
+	var employeesWithPendingOvertime []models.PreCheckEmployee
+
+	for _, emp := range employees {
+		// Check approved timesheet for the pay period
+		weeks, _, err := s.timesheetRepo.ListWeeksByEmployee(emp.EmployeeID, "approved", run.PayMonth, run.PayYear, 1, 100)
+		if err != nil || len(weeks) == 0 {
+			employeesWithoutApprovedTimesheet = append(employeesWithoutApprovedTimesheet, models.PreCheckEmployee{
+				ID:         emp.EmployeeCode,
+				Name:       emp.EmployeeName,
+				Department: emp.Department,
+			})
+		}
+
+		// Check for pending overtime approvals
+		overtimeRequests, _ := s.overtimeRepo.GetByEmployeeID(emp.EmployeeID, run.PayMonth, run.PayYear)
+		for _, ot := range overtimeRequests {
+			if ot.Status == "pending" {
+				employeesWithPendingOvertime = append(employeesWithPendingOvertime, models.PreCheckEmployee{
+					ID:         emp.EmployeeCode,
+					Name:       emp.EmployeeName,
+					Department: emp.Department,
+				})
+				break
+			}
+		}
+	}
+
+	if len(employeesWithoutApprovedTimesheet) > 0 {
+		var employeeIDs []string
+		for _, emp := range employeesWithoutApprovedTimesheet {
+			employeeIDs = append(employeeIDs, emp.ID)
+		}
+		actionRequired := "Ensure all employees have approved timesheets for the pay period."
+		resolutionURL := "/attendance/timesheets"
+		result.Issues = append(result.Issues, models.PreCheckIssue{
+			ID:             "missing_approved_timesheets",
+			Type:           "attendance_validation",
+			Category:       "attendance",
+			Count:          len(employeesWithoutApprovedTimesheet),
+			Severity:       "High",
+			EmployeeIDs:    employeeIDs,
+			Employees:      employeesWithoutApprovedTimesheet,
+			Description:    fmt.Sprintf("%d employee(s) missing approved timesheets for pay period.", len(employeesWithoutApprovedTimesheet)),
+			ActionRequired: &actionRequired,
+			ResolutionURL:  &resolutionURL,
+		})
+		highIssues += len(employeesWithoutApprovedTimesheet)
+	}
+
+	if len(employeesWithPendingOvertime) > 0 {
+		var employeeIDs []string
+		for _, emp := range employeesWithPendingOvertime {
+			employeeIDs = append(employeeIDs, emp.ID)
+		}
+		actionRequired := "Review and approve pending overtime requests."
+		resolutionURL := "/attendance/overtime"
+		result.Issues = append(result.Issues, models.PreCheckIssue{
+			ID:             "pending_overtime_approvals",
+			Type:           "overtime_validation",
+			Category:       "overtime",
+			Count:          len(employeesWithPendingOvertime),
+			Severity:       "Medium",
+			EmployeeIDs:    employeeIDs,
+			Employees:      employeesWithPendingOvertime,
+			Description:    fmt.Sprintf("%d employee(s) have pending overtime approvals.", len(employeesWithPendingOvertime)),
+			ActionRequired: &actionRequired,
+			ResolutionURL:  &resolutionURL,
+		})
+	}
+
+	// Check 3: Verify salary structures/grades exist
 	salaryStructureCount, err := s.salaryStructureRepo.CountActiveSalaryStructures(tenantID)
 	if err != nil || salaryStructureCount == 0 {
 		actionRequired := "Navigate to Payroll > Salary Structures and create at least one salary grade/structure before running payroll."
@@ -286,9 +449,22 @@ func (s *PayrollRunService) RunPreCheck(runID uint, tenantID *uint) (*models.Pre
 	}
 
 	// Check 3: Verify employees in the payroll run have salary data
-	employees, _, err := s.empRepo.GetByRunID(runID, "", "", nil, 1, 10000)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve employees: %w", err)
+	if len(employees) == 0 {
+		actionRequired := "Add employees to this payroll run before proceeding."
+		resolutionURL := fmt.Sprintf("/payroll/runs/%d/employees", runID)
+		result.Issues = append(result.Issues, models.PreCheckIssue{
+			ID:             "no_employees",
+			Type:           "missing_data",
+			Category:       "employee",
+			Count:          1,
+			Severity:       "High",
+			EmployeeIDs:    []string{},
+			Employees:      []models.PreCheckEmployee{},
+			Description:    "No employees are assigned to this payroll run.",
+			ActionRequired: &actionRequired,
+			ResolutionURL:  &resolutionURL,
+		})
+		criticalIssues++
 	}
 
 	if len(employees) == 0 {
@@ -437,8 +613,10 @@ func (s *PayrollRunService) CalculatePayroll(runID uint, tenantID *uint, taxYear
 		return err
 	}
 
-	if run.Status != models.PayrollRunStatusDraft && run.Status != models.PayrollRunStatusInReview {
-		return errors.New("can only calculate payroll for Draft or In Review runs")
+	if run.Status != models.PayrollRunStatusDraft && run.Status != models.PayrollRunStatusPendingHR &&
+		run.Status != models.PayrollRunStatusHRReviewed && run.Status != models.PayrollRunStatusPendingFinance &&
+		run.Status != models.PayrollRunStatusFinanceReviewed && run.Status != models.PayrollRunStatusPendingManagement {
+		return errors.New("can only calculate payroll for Draft or review stages")
 	}
 
 	// Run pre-checks before calculating payroll
@@ -474,8 +652,32 @@ func (s *PayrollRunService) CalculatePayroll(runID uint, tenantID *uint, taxYear
 	for i := range employees {
 		emp := &employees[i]
 
+		// Attendance check
+		weeks, _, err := s.timesheetRepo.ListWeeksByEmployee(emp.EmployeeID, "approved", run.PayMonth, run.PayYear, 1, 100)
+		if err != nil || len(weeks) == 0 {
+			// Skip this employee if attendance is not approved
+			continue
+		}
+
+		// Get overtime for this employee
+		overtimeRequests, _ := s.overtimeRepo.GetByEmployeeID(emp.EmployeeID, run.PayMonth, run.PayYear)
+		var overtimePayout float64
+		for _, ot := range overtimeRequests {
+			if ot.Status == "approved" && ot.CompensationType == "payout" && ot.PayoutAmount != nil {
+				overtimePayout += *ot.PayoutAmount
+			}
+		}
+
+		// Add overtime to gross salary
+		emp.GrossSalary += overtimePayout
+
 		// Calculate taxes
-		taxResult := s.taxCalculator.CalculateAllDeductions(emp.GrossSalary, taxYear, tenantID)
+		taxResult, err := s.taxCalculator.CalculateAllDeductions(emp.GrossSalary, taxYear, tenantID)
+		if err != nil {
+			// Log error but continue with employee
+			fmt.Printf("Warning: Failed to calculate deductions for employee %d: %v\n", emp.EmployeeID, err)
+			continue
+		}
 
 		// Get loan deductions for this employee
 		pendingRepayments, _ := s.loanRepo.GetPendingRepayments(emp.EmployeeID, time.Date(run.PayYear, time.Month(run.PayMonth), 28, 0, 0, 0, 0, time.UTC))
@@ -545,7 +747,12 @@ func (s *PayrollRunService) GeneratePayslips(runID uint, tenantID *uint, taxYear
 
 	for _, emp := range employees {
 		// Calculate taxes
-		taxResult := s.taxCalculator.CalculateAllDeductions(emp.GrossSalary, taxYear, tenantID)
+		taxResult, err := s.taxCalculator.CalculateAllDeductions(emp.GrossSalary, taxYear, tenantID)
+		if err != nil {
+			// Log error but continue with employee
+			fmt.Printf("Warning: Failed to calculate deductions for employee %d: %v\n", emp.EmployeeID, err)
+			continue
+		}
 
 		// Get YTD totals
 		ytdGross, ytdTax, ytdNSSF, ytdNHIF, ytdNet, _ := s.payslipRepo.GetYTDTotals(emp.EmployeeID, run.PayYear, run.PayMonth-1)
@@ -648,4 +855,130 @@ func (s *PayrollRunService) GetPayrollRunSummary(runID uint, tenantID *uint) (ma
 	}
 
 	return summary, nil
+}
+
+// SubmitForHRReview submits payroll run for HR review
+func (s *PayrollRunService) SubmitForHRReview(runID uint, tenantID *uint, userID uint, userName string) error {
+	run, err := s.repo.GetByID(runID, tenantID)
+	if err != nil {
+		return err
+	}
+
+	if run.Status != models.PayrollRunStatusDraft {
+		return errors.New("can only submit draft payroll runs for HR review")
+	}
+
+	// Run pre-checks before submission
+	preCheckResult, err := s.RunPreCheck(runID, tenantID)
+	if err != nil {
+		return fmt.Errorf("pre-check failed: %w", err)
+	}
+
+	if !preCheckResult.CanProceed {
+		return errors.New("cannot submit for HR review: " + preCheckResult.Summary)
+	}
+
+	run.Status = models.PayrollRunStatusPendingHR
+	run.CurrentStep = 1
+	now := time.Now()
+	hrDeadline := now.AddDate(0, 0, 3)
+	run.HRReviewDeadline = &hrDeadline
+
+	return s.repo.Update(run)
+}
+
+// HRReview performs HR review of payroll run
+func (s *PayrollRunService) HRReview(runID uint, tenantID *uint, userID uint, userName string, status models.WorkflowReviewStatus, comments string) error {
+	run, err := s.repo.GetByID(runID, tenantID)
+	if err != nil {
+		return err
+	}
+
+	if run.Status != models.PayrollRunStatusPendingHR {
+		return errors.New("payroll run is not pending HR review")
+	}
+
+	run.HRReviewStatus = status
+	run.HRReviewedByID = &userID
+	run.HRReviewedByName = &userName
+	now := time.Now()
+	run.HRReviewedAt = &now
+	run.HRReviewComments = comments
+
+	switch status {
+	case models.WorkflowReviewStatusApproved:
+		run.Status = models.PayrollRunStatusHRReviewed
+		run.CurrentStep = 2
+	case models.WorkflowReviewStatusRejected:
+		run.Status = models.PayrollRunStatusDraft
+		run.CurrentStep = 0
+	case models.WorkflowReviewStatusNeedsCorrection:
+		run.Status = models.PayrollRunStatusDraft
+		run.CurrentStep = 0
+	}
+
+	return s.repo.Update(run)
+}
+
+// FinanceReview performs Finance review of payroll run
+func (s *PayrollRunService) FinanceReview(runID uint, tenantID *uint, userID uint, userName string, status models.WorkflowReviewStatus, comments string, budgetVerified bool) error {
+	run, err := s.repo.GetByID(runID, tenantID)
+	if err != nil {
+		return err
+	}
+
+	if run.Status != models.PayrollRunStatusPendingFinance {
+		return errors.New("payroll run is not pending finance review")
+	}
+
+	run.FinanceReviewStatus = status
+	run.FinanceReviewedByID = &userID
+	run.FinanceReviewedByName = &userName
+	now := time.Now()
+	run.FinanceReviewedAt = &now
+	run.FinanceReviewComments = comments
+	run.BudgetVerified = budgetVerified
+
+	switch status {
+	case models.WorkflowReviewStatusApproved:
+		run.Status = models.PayrollRunStatusFinanceReviewed
+		run.CurrentStep = 3
+	case models.WorkflowReviewStatusRejected:
+		run.Status = models.PayrollRunStatusHRReviewed
+		run.CurrentStep = 2
+	case models.WorkflowReviewStatusNeedsCorrection:
+		run.Status = models.PayrollRunStatusHRReviewed
+		run.CurrentStep = 2
+	}
+
+	return s.repo.Update(run)
+}
+
+// ManagementApproval performs final management approval
+func (s *PayrollRunService) ManagementApproval(runID uint, tenantID *uint, userID uint, userName string, approved bool, comments string) error {
+	run, err := s.repo.GetByID(runID, tenantID)
+	if err != nil {
+		return err
+	}
+
+	if run.Status != models.PayrollRunStatusPendingManagement {
+		return errors.New("payroll run is not pending management approval")
+	}
+
+	run.ManagementApproved = approved
+	run.ManagementApprovedByID = &userID
+	run.ManagementApprovedByName = &userName
+	now := time.Now()
+	run.ManagementApprovedAt = &now
+	run.ManagementApprovalComments = comments
+
+	if approved {
+		run.Status = models.PayrollRunStatusApproved
+		run.CurrentStep = 4
+	} else {
+		run.Status = models.PayrollRunStatusFinanceReviewed
+		run.CurrentStep = 3
+	}
+
+	return s.repo.Update(run)
 }

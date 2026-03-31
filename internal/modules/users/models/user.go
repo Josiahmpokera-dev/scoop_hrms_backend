@@ -36,7 +36,8 @@ type User struct {
 	LastName         string         `json:"last_name" gorm:"not null;size:100"`
 	PhoneNumber      *string        `json:"phone_number,omitempty" gorm:"size:50"`
 	Role             UserRole       `json:"role" gorm:"column:user_type;type:varchar(20);default:'user';not null"` // Maps to user_type column (legacy support)
-	Status           string         `json:"status" gorm:"type:varchar(20);default:'active';not null"`              // active, suspended, blocked
+	TenantID         *uint          `json:"tenant_id,omitempty" gorm:"index"`
+	Status           string         `json:"status" gorm:"type:varchar(20);default:'active';not null"` // active, suspended, blocked
 	EmailVerified    bool           `json:"email_verified" gorm:"default:false"`
 	IsActive         bool           `json:"is_active" gorm:"default:true"`
 	LastLogin        *time.Time     `json:"last_login,omitempty" gorm:"column:last_login_at"`

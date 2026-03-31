@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/services"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/xuri/excelize/v2"
 )
@@ -28,7 +29,7 @@ func NewReportsHandler() *ReportsHandler {
 
 // GetPayrollReport retrieves payroll report data
 func (h *ReportsHandler) GetPayrollReport(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	payMonth, _ := strconv.Atoi(c.Query("month"))
 	payYear, _ := strconv.Atoi(c.Query("year"))
 
@@ -57,7 +58,7 @@ func (h *ReportsHandler) GetPayrollReport(c *gin.Context) {
 
 // GetDepartmentCostReport retrieves payroll cost by department
 func (h *ReportsHandler) GetDepartmentCostReport(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	payMonth, _ := strconv.Atoi(c.Query("month"))
 	payYear, _ := strconv.Atoi(c.Query("year"))
 
@@ -120,7 +121,7 @@ func (h *ReportsHandler) GetDepartmentCostReport(c *gin.Context) {
 
 // ExportPayrollReport exports payroll report to Excel
 func (h *ReportsHandler) ExportPayrollReport(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	payMonth, _ := strconv.Atoi(c.Query("month"))
 	payYear, _ := strconv.Atoi(c.Query("year"))
 	format := c.DefaultQuery("format", "xlsx")
@@ -205,7 +206,7 @@ func (h *ReportsHandler) ExportPayrollReport(c *gin.Context) {
 
 // GetPayrollKPIs retrieves payroll KPIs
 func (h *ReportsHandler) GetPayrollKPIs(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	payYear, _ := strconv.Atoi(c.DefaultQuery("year", strconv.Itoa(time.Now().Year())))
 
 	// Get all runs for the year
@@ -258,7 +259,7 @@ func (h *ReportsHandler) GetPayrollKPIs(c *gin.Context) {
 
 // GetBankFileReport generates bank file report for disbursement
 func (h *ReportsHandler) GetBankFileReport(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	runID, err := strconv.ParseUint(c.Param("runId"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid run id"})

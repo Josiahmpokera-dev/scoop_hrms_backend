@@ -61,14 +61,14 @@ func (s *OrgChartService) GetOrganizationChart(tenantID *uint) (*models.OrgChart
 		var totalPositions int64
 		var rootPositionsCount int64
 		var activeRootPositionsCount int64
-		
+
 		baseQuery := s.db.Table("job_positions").Where("deleted_at IS NULL")
 		if tenantID != nil {
 			baseQuery = baseQuery.Where("tenant_id = ?", *tenantID)
 		}
-		
+
 		baseQuery.Count(&totalPositions)
-		
+
 		rootQuery := s.db.Table("job_positions").
 			Where("reports_to_position_id IS NULL").
 			Where("deleted_at IS NULL")
@@ -76,7 +76,7 @@ func (s *OrgChartService) GetOrganizationChart(tenantID *uint) (*models.OrgChart
 			rootQuery = rootQuery.Where("tenant_id = ?", *tenantID)
 		}
 		rootQuery.Count(&rootPositionsCount)
-		
+
 		activeRootQuery := s.db.Table("job_positions").
 			Where("reports_to_position_id IS NULL").
 			Where("is_active = ?", true).
@@ -85,16 +85,16 @@ func (s *OrgChartService) GetOrganizationChart(tenantID *uint) (*models.OrgChart
 			activeRootQuery = activeRootQuery.Where("tenant_id = ?", *tenantID)
 		}
 		activeRootQuery.Count(&activeRootPositionsCount)
-		
-		errorMsg := fmt.Sprintf("no root positions found. Diagnostic: total positions=%d, root positions (any status)=%d, active root positions=%d", 
+
+		errorMsg := fmt.Sprintf("no root positions found. Diagnostic: total positions=%d, root positions (any status)=%d, active root positions=%d",
 			totalPositions, rootPositionsCount, activeRootPositionsCount)
-		
+
 		if tenantID != nil {
 			errorMsg += fmt.Sprintf(", tenant_id=%d", *tenantID)
 		} else {
 			errorMsg += ", tenant_id=null (checking all tenants)"
 		}
-		
+
 		if rootPositionsCount > 0 && activeRootPositionsCount == 0 {
 			errorMsg += ". Found root positions but they are inactive. Set is_active=true to make them available."
 		} else if totalPositions > 0 && rootPositionsCount == 0 {
@@ -102,7 +102,7 @@ func (s *OrgChartService) GetOrganizationChart(tenantID *uint) (*models.OrgChart
 		} else if totalPositions == 0 {
 			errorMsg += ". No positions found in database. Create at least one position first."
 		}
-		
+
 		return nil, fmt.Errorf(errorMsg)
 	}
 
@@ -130,14 +130,14 @@ func (s *OrgChartService) buildNode(positionID uint, managerEmpID *string, level
 	// Find employee(s) in this position (there might be multiple, but we'll take the first active one)
 	var employees []struct {
 		ID          uint
-		EmployeeID string
-		FirstName  string
-		LastName   string
-		WorkEmail  *string
+		EmployeeID  string
+		FirstName   string
+		LastName    string
+		WorkEmail   *string
 		PhoneNumber *string
-		PhotoURL   *string
-		Status     string
-		IsActive   bool
+		PhotoURL    *string
+		Status      string
+		IsActive    bool
 	}
 
 	empQuery := s.db.Table("employees").
@@ -155,14 +155,14 @@ func (s *OrgChartService) buildNode(positionID uint, managerEmpID *string, level
 		// If error finding employees, continue with vacant position
 		employees = []struct {
 			ID          uint
-			EmployeeID string
-			FirstName  string
-			LastName   string
-			WorkEmail  *string
+			EmployeeID  string
+			FirstName   string
+			LastName    string
+			WorkEmail   *string
 			PhoneNumber *string
-			PhotoURL   *string
-			Status     string
-			IsActive   bool
+			PhotoURL    *string
+			Status      string
+			IsActive    bool
 		}{}
 	}
 
@@ -259,18 +259,18 @@ func (s *OrgChartService) buildNode(positionID uint, managerEmpID *string, level
 		TenantID            *uint
 		DeletedAt           *string
 	}
-	
+
 	// Query all positions reporting to this position (for diagnostic purposes)
 	allChildQuery := s.db.Table("job_positions").
 		Select("id, code, title, reports_to_position_id, is_active, tenant_id, deleted_at").
 		Where("reports_to_position_id = ?", positionID)
-	
+
 	if tenantID != nil {
 		allChildQuery = allChildQuery.Where("tenant_id = ?", *tenantID)
 	}
-	
+
 	allChildQuery.Find(&allChildPositions)
-	
+
 	// Now query only active, non-deleted child positions
 	childQuery := s.db.Table("job_positions").
 		Select("id, code, title, department_id, reports_to_position_id, is_active, tenant_id").
@@ -294,7 +294,7 @@ func (s *OrgChartService) buildNode(positionID uint, managerEmpID *string, level
 		// Return node with empty subordinates (this is expected behavior)
 		return node, nil
 	}
-	
+
 	// If no child positions at all, this is a leaf node (normal)
 	if len(childPositions) == 0 {
 		return node, nil
@@ -306,7 +306,7 @@ func (s *OrgChartService) buildNode(positionID uint, managerEmpID *string, level
 		// If current node has an employee, use that employee's ID
 		// Otherwise, pass nil (vacant position)
 		childManagerEmpID := node.EmpID
-		
+
 		// Recursively build the child node (this will include its own subordinates)
 		// This recursive call will:
 		// 1. Find the child position details
@@ -335,7 +335,7 @@ func (s *OrgChartService) buildNode(positionID uint, managerEmpID *string, level
 			node.Subordinates = append(node.Subordinates, errorNode)
 			continue
 		}
-		
+
 		// Append the child node (which already contains its own subordinates from the recursive call)
 		// This builds the complete nested hierarchy - the childNode.Subordinates array
 		// will contain all grandchildren, great-grandchildren, etc.

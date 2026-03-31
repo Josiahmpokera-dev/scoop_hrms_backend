@@ -7,6 +7,7 @@ import (
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/services"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -17,6 +18,7 @@ type PayrollHandler struct {
 	payslipService    *services.PayslipService
 	loanService       *services.LoanService
 	complianceService *services.ComplianceService
+	prePayrollService *services.PrePayrollService
 }
 
 // NewPayrollHandler creates a new PayrollHandler instance
@@ -27,61 +29,15 @@ func NewPayrollHandler() *PayrollHandler {
 		payslipService:    services.NewPayslipService(),
 		loanService:       services.NewLoanService(),
 		complianceService: services.NewComplianceService(),
+		prePayrollService: services.NewPrePayrollService(),
 	}
-}
-
-// Helper functions for extracting request data
-func getTenantID(c *gin.Context) *uint {
-	if tenantID, exists := c.Get("tenant_id"); exists {
-		if tid, ok := tenantID.(uint); ok {
-			return &tid
-		}
-	}
-	return nil
-}
-
-func getUserID(c *gin.Context) uint {
-	if userID, exists := c.Get("user_id"); exists {
-		if uid, ok := userID.(uint); ok {
-			return uid
-		}
-	}
-	return 0
-}
-
-func getUserName(c *gin.Context) string {
-	if userName, exists := c.Get("user_name"); exists {
-		if name, ok := userName.(string); ok {
-			return name
-		}
-	}
-	return ""
-}
-
-func getPage(c *gin.Context) int {
-	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	if page < 1 {
-		page = 1
-	}
-	return page
-}
-
-func getPageSize(c *gin.Context) int {
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("pageSize", "20"))
-	if pageSize < 1 {
-		pageSize = 20
-	}
-	if pageSize > 100 {
-		pageSize = 100
-	}
-	return pageSize
 }
 
 // ============ Dashboard Handlers ============
 
 // GetDashboard returns payroll dashboard metrics
 func (h *PayrollHandler) GetDashboard(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 
 	dashboard, err := h.runService.GetDashboard(tenantID)
 	if err != nil {
@@ -95,16 +51,41 @@ func (h *PayrollHandler) GetDashboard(c *gin.Context) {
 	})
 }
 
+func (h *PayrollHandler) ListEmployeesWithSalaryInfo(c *gin.Context) {
+	tenantID := utils.GetTenantID(c)
+	status := c.Query("status")
+	page := utils.GetPage(c)
+
+	pageSize := utils.GetPageSize(c)
+	if ps := c.Query("page_size"); ps != "" {
+		if v, err := strconv.Atoi(ps); err == nil && v > 0 {
+			pageSize = v
+		}
+	}
+
+	employees, meta, err := h.prePayrollService.GetEmployeesWithSalaryInfo(tenantID, status, page, pageSize)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    employees,
+		"meta":    meta,
+	})
+}
+
 // ============ Payroll Run Handlers ============
 
 // ListPayrollRuns lists all payroll runs
 func (h *PayrollHandler) ListPayrollRuns(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	status := c.Query("status")
 	payYear, _ := strconv.Atoi(c.Query("year"))
 	payMonth, _ := strconv.Atoi(c.Query("month"))
-	page := getPage(c)
-	pageSize := getPageSize(c)
+	page := utils.GetPage(c)
+	pageSize := utils.GetPageSize(c)
 
 	runs, total, err := h.runService.ListPayrollRuns(tenantID, status, payYear, payMonth, page, pageSize)
 	if err != nil {
@@ -132,7 +113,7 @@ func (h *PayrollHandler) GetPayrollRun(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	run, err := h.runService.GetPayrollRun(uint(id), tenantID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "payroll run not found"})
@@ -148,10 +129,10 @@ func (h *PayrollHandler) GetPayrollRun(c *gin.Context) {
 // CreatePayrollRun creates a new payroll run
 func (h *PayrollHandler) CreatePayrollRun(c *gin.Context) {
 	var req struct {
-		PayMonth     int                  `json:"payMonth" binding:"required"`
-		PayYear      int                  `json:"payYear" binding:"required"`
-		PayFrequency models.PayFrequency  `json:"payFrequency"`
-		RunName      string               `json:"runName"`
+		PayMonth     int                 `json:"payMonth" binding:"required"`
+		PayYear      int                 `json:"payYear" binding:"required"`
+		PayFrequency models.PayFrequency `json:"payFrequency"`
+		RunName      string              `json:"runName"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -159,8 +140,8 @@ func (h *PayrollHandler) CreatePayrollRun(c *gin.Context) {
 		return
 	}
 
-	userID := getUserID(c)
-	userName := getUserName(c)
+	userID := utils.GetUserID(c)
+	userName := utils.GetUserName(c)
 
 	run := &models.PayrollRun{
 		PayMonth:      req.PayMonth,
@@ -195,7 +176,7 @@ func (h *PayrollHandler) UpdatePayrollRun(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	run, err := h.runService.GetPayrollRun(uint(id), tenantID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "payroll run not found"})
@@ -203,8 +184,8 @@ func (h *PayrollHandler) UpdatePayrollRun(c *gin.Context) {
 	}
 
 	var req struct {
-		RunName      string     `json:"runName"`
-		CutoffDate   *time.Time `json:"cutoffDate"`
+		RunName    string     `json:"runName"`
+		CutoffDate *time.Time `json:"cutoffDate"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -239,7 +220,7 @@ func (h *PayrollHandler) DeletePayrollRun(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	if err := h.runService.DeletePayrollRun(uint(id), tenantID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -253,15 +234,21 @@ func (h *PayrollHandler) DeletePayrollRun(c *gin.Context) {
 
 // GetCurrentPayrollRun retrieves the current active payroll run
 func (h *PayrollHandler) GetCurrentPayrollRun(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	run, err := h.runService.GetCurrentPayrollRun(tenantID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "no active payroll run"})
+		c.JSON(http.StatusNotFound, gin.H{
+			"success": false,
+			"message": "No active payroll run found",
+			"error":   "no_active_payroll_run",
+			"data":    nil,
+		})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"success": true,
+		"message": "Current payroll run retrieved successfully",
 		"data":    run,
 	})
 }
@@ -274,7 +261,7 @@ func (h *PayrollHandler) GetPayrollRunSummary(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	summary, err := h.runService.GetPayrollRunSummary(uint(id), tenantID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -295,9 +282,9 @@ func (h *PayrollHandler) AdvancePayrollStep(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
-	userID := getUserID(c)
-	userName := getUserName(c)
+	tenantID := utils.GetTenantID(c)
+	userID := utils.GetUserID(c)
+	userName := utils.GetUserName(c)
 
 	if err := h.runService.AdvanceStep(uint(id), tenantID, userID, userName); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -322,7 +309,7 @@ func (h *PayrollHandler) RevertPayrollStep(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	if err := h.runService.RevertStep(uint(id), tenantID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -345,7 +332,7 @@ func (h *PayrollHandler) RunPreCheck(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	result, err := h.runService.RunPreCheck(uint(id), tenantID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -366,7 +353,7 @@ func (h *PayrollHandler) CalculatePayroll(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	taxYear := time.Now().Year()
 
 	if err := h.runService.CalculatePayroll(uint(id), tenantID, taxYear); err != nil {
@@ -391,7 +378,7 @@ func (h *PayrollHandler) GeneratePayslips(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	taxYear := time.Now().Year()
 
 	if err := h.runService.GeneratePayslips(uint(id), tenantID, taxYear); err != nil {
@@ -415,8 +402,8 @@ func (h *PayrollHandler) GetPayrollEmployees(c *gin.Context) {
 
 	search := c.Query("search")
 	departmentID := c.Query("departmentId")
-	page := getPage(c)
-	pageSize := getPageSize(c)
+	page := utils.GetPage(c)
+	pageSize := utils.GetPageSize(c)
 
 	var hasChanges *bool
 	if hc := c.Query("hasChanges"); hc != "" {
@@ -438,5 +425,177 @@ func (h *PayrollHandler) GetPayrollEmployees(c *gin.Context) {
 			"page":     page,
 			"pageSize": pageSize,
 		},
+	})
+}
+
+// ============ New Workflow Handlers ============
+
+// SubmitForHRReview submits payroll run for HR review
+func (h *PayrollHandler) SubmitForHRReview(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	tenantID := utils.GetTenantID(c)
+	userID := utils.GetUserID(c)
+	userName := utils.GetUserName(c)
+
+	if err := h.runService.SubmitForHRReview(uint(id), tenantID, userID, userName); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	run, _ := h.runService.GetPayrollRun(uint(id), tenantID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Payroll run submitted for HR review",
+		"data":    run,
+	})
+}
+
+// HRReview handles HR review of payroll run
+func (h *PayrollHandler) HRReview(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var req struct {
+		Status   string `json:"status" binding:"required"`
+		Comments string `json:"comments"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate status
+	validStatuses := []string{"Approved", "Rejected", "Needs Correction"}
+	isValid := false
+	for _, valid := range validStatuses {
+		if req.Status == valid {
+			isValid = true
+			break
+		}
+	}
+	if !isValid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status. Must be: Approved, Rejected, or Needs Correction"})
+		return
+	}
+
+	tenantID := utils.GetTenantID(c)
+	userID := utils.GetUserID(c)
+	userName := utils.GetUserName(c)
+
+	status := models.WorkflowReviewStatus(req.Status)
+	if err := h.runService.HRReview(uint(id), tenantID, userID, userName, status, req.Comments); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	run, _ := h.runService.GetPayrollRun(uint(id), tenantID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "HR review completed",
+		"data":    run,
+	})
+}
+
+// FinanceReview handles Finance review of payroll run
+func (h *PayrollHandler) FinanceReview(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var req struct {
+		Status         string `json:"status" binding:"required"`
+		Comments       string `json:"comments"`
+		BudgetVerified bool   `json:"budgetVerified"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate status
+	validStatuses := []string{"Approved", "Rejected", "Needs Correction"}
+	isValid := false
+	for _, valid := range validStatuses {
+		if req.Status == valid {
+			isValid = true
+			break
+		}
+	}
+	if !isValid {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid status. Must be: Approved, Rejected, or Needs Correction"})
+		return
+	}
+
+	tenantID := utils.GetTenantID(c)
+	userID := utils.GetUserID(c)
+	userName := utils.GetUserName(c)
+
+	status := models.WorkflowReviewStatus(req.Status)
+	if err := h.runService.FinanceReview(uint(id), tenantID, userID, userName, status, req.Comments, req.BudgetVerified); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	run, _ := h.runService.GetPayrollRun(uint(id), tenantID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": "Finance review completed",
+		"data":    run,
+	})
+}
+
+// ManagementApproval handles final management approval
+func (h *PayrollHandler) ManagementApproval(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var req struct {
+		Approved bool   `json:"approved" binding:"required"`
+		Comments string `json:"comments"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	tenantID := utils.GetTenantID(c)
+	userID := utils.GetUserID(c)
+	userName := utils.GetUserName(c)
+
+	if err := h.runService.ManagementApproval(uint(id), tenantID, userID, userName, req.Approved, req.Comments); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	run, _ := h.runService.GetPayrollRun(uint(id), tenantID)
+
+	message := "Management approval completed"
+	if !req.Approved {
+		message = "Management approval rejected"
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"message": message,
+		"data":    run,
 	})
 }

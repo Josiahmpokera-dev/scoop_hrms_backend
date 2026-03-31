@@ -2,7 +2,69 @@
 
 Complete API documentation covering **Payroll Dashboard**, **Payroll Runs**, **Salary Structures**, **Payslips**, **Loans & Advances**, **Compliance**, and **Employee Self-Service** payroll features.
 
-**Base URL:** `/api/v1`
+
+
+## Payroll Workflow Overview
+
+The payroll system implements a comprehensive 7-phase workflow to ensure accuracy, compliance, and proper approval processes:
+
+### 🔷 Phase 1: Employee Master Data & Inputs Collection
+- **HR Responsibility**: Maintain employee records, salary changes, terminations, bank details, tax setup
+- **System Validation**: New employee setup, salary structure assignment, bank account verification
+- **Inputs**: Attendance (timesheets), leave records, overtime approvals, bonuses/commissions
+
+### 🔷 Phase 2: Payroll Run Creation & Pre-Validation
+- **Pre-check Validation**: Comprehensive validation of all inputs and master data
+- **System Checks**: Approved timesheets, pending overtime, salary structures, compliance
+- **Output**: Draft payroll register with identified issues
+
+### 🔷 Phase 3: HR Review & Validation
+- **HR Review**: Validate attendance corrections, missing employees, salary changes, exceptions
+- **Approval Process**: HR can approve, reject, or request corrections
+- **Validation Focus**: Employee-level accuracy, policy compliance, exception handling
+
+### 🔷 Phase 4: Finance Review & Approval
+- **Finance Validation**: Budget availability, cost center allocation, tax correctness, statutory compliance
+- **Budget Verification**: Ensure sufficient funds and proper accounting allocation
+- **Approval Process**: Finance can approve, reject, or request corrections
+
+### 🔷 Phase 5: Management Final Approval
+- **Management Sign-off**: Final approval by HR Manager, Finance Manager, or CEO (based on amount)
+- **Authorization**: Multi-level approval based on payroll amount and company policy
+- **Final Lock**: Payroll becomes locked and ready for processing
+
+### 🔷 Phase 6: Payment Execution
+- **Bank File Generation**: Create payment files (CSV/ISO20022 format)
+- **Payment Processing**: Upload to bank systems and execute payments
+- **Status Tracking**: Monitor payment status and handle failures
+
+### 🔷 Phase 7: Post-Payroll Processing
+- **Accounting Entries**: Automatic GL posting for salary expenses, tax liabilities, pension contributions
+- **Payslip Distribution**: Generate and distribute payslips to employees
+- **Compliance Reporting**: Generate statutory reports for tax authorities, pension funds
+- **Audit Trail**: Complete audit trail of all approvals and changes
+
+---
+
+## Workflow Status Transitions
+
+```
+Draft → Pending HR Review → HR Reviewed → Pending Finance Review → Finance Reviewed → Pending Management Approval → Approved → Finalized → Disbursed → Closed
+```
+
+**Status Descriptions:**
+- `Draft`: Initial creation, editable
+- `Pending HR Review`: Submitted for HR validation
+- `HR Reviewed`: HR approved, ready for Finance
+- `Pending Finance Review`: Submitted for Finance validation
+- `Finance Reviewed`: Finance approved, ready for Management
+- `Pending Management Approval`: Awaiting final management sign-off
+- `Approved`: Management approved, locked for payment
+- `Finalized`: Ready for bank file generation
+- `Disbursed`: Payments processed
+- `Closed`: Complete, archived
+
+---
 
 ---
 
@@ -22,9 +84,13 @@ Complete API documentation covering **Payroll Dashboard**, **Payroll Runs**, **S
 9. [Get Payroll Employees](#9-get-payroll-employees)
 10. [Run Pre-Check](#10-run-pre-check)
 11. [Calculate Payroll](#11-calculate-payroll)
-12. [Advance Payroll Step](#12-advance-payroll-step)
-13. [Revert Payroll Step](#13-revert-payroll-step)
-14. [Generate Payslips](#14-generate-payslips)
+12. [Submit for HR Review](#12-submit-for-hr-review)
+13. [HR Review](#13-hr-review)
+14. [Finance Review](#14-finance-review)
+15. [Management Approval](#15-management-approval)
+16. [Advance Payroll Step](#16-advance-payroll-step)
+17. [Revert Payroll Step](#17-revert-payroll-step)
+18. [Generate Payslips](#18-generate-payslips)
 
 ### Part C — Salary Structures & Components
 15. [List Salary Structures](#15-list-salary-structures)
@@ -519,6 +585,8 @@ POST /api/v1/payroll/runs/:id/pre-check
 
 Calculate payroll for a specific run.
 
+**Note:** This process now includes an attendance check. Employees without approved timesheets for the pay period will be skipped. Approved overtime earnings are automatically included in the gross salary calculation.
+
 ```
 POST /api/v1/payroll/runs/:id/calculate
 ```
@@ -546,7 +614,174 @@ POST /api/v1/payroll/runs/:id/calculate
 
 ---
 
-## 12. Advance Payroll Step
+## 12. Submit for HR Review
+
+Submit payroll run for HR review. This triggers the formal approval workflow.
+
+**Note:** Pre-check validation is performed before submission. All critical issues must be resolved.
+
+```
+POST /api/v1/payroll/runs/:id/submit-hr-review
+```
+
+**Path Parameters:**
+- `id` - Payroll run ID
+
+**Auth:** HR/Admin only
+
+### Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Payroll run submitted for HR review",
+  "data": {
+    "id": 2,
+    "status": "Pending HR Review",
+    "currentStep": 1,
+    "hrReviewDeadline": "2025-03-22T10:00:00Z"
+  }
+}
+```
+
+---
+
+## 13. HR Review
+
+Perform HR review of payroll run. HR validates attendance, salary changes, and exception cases.
+
+```
+POST /api/v1/payroll/runs/:id/hr-review
+```
+
+**Path Parameters:**
+- `id` - Payroll run ID
+
+**Auth:** HR/Admin only
+
+**Request Body:**
+```json
+{
+  "status": "Approved",
+  "comments": "All attendance records verified. Salary changes approved."
+}
+```
+
+**Status Options:**
+- `Approved` - Payroll approved by HR, moves to Finance review
+- `Rejected` - Payroll rejected, returns to Draft status
+- `Needs Correction` - Issues identified, returns to Draft with comments
+
+### Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "HR review completed",
+  "data": {
+    "id": 2,
+    "status": "HR Reviewed",
+    "currentStep": 2,
+    "hrReviewStatus": "Approved",
+    "hrReviewedBy": "Jane Smith",
+    "hrReviewedAt": "2025-03-20T14:30:00Z",
+    "hrReviewComments": "All attendance records verified. Salary changes approved."
+  }
+}
+```
+
+---
+
+## 14. Finance Review
+
+Perform Finance review of payroll run. Finance validates budget availability, cost allocation, and statutory compliance.
+
+```
+POST /api/v1/payroll/runs/:id/finance-review
+```
+
+**Path Parameters:**
+- `id` - Payroll run ID
+
+**Auth:** Finance/Admin only
+
+**Request Body:**
+```json
+{
+  "status": "Approved",
+  "comments": "Budget verified. Tax calculations correct.",
+  "budgetVerified": true
+}
+```
+
+**Status Options:**
+- `Approved` - Payroll approved by Finance, moves to Management approval
+- `Rejected` - Payroll rejected, returns to HR Reviewed status
+- `Needs Correction` - Issues identified, returns to HR Reviewed status
+
+### Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Finance review completed",
+  "data": {
+    "id": 2,
+    "status": "Finance Reviewed",
+    "currentStep": 3,
+    "financeReviewStatus": "Approved",
+    "financeReviewedBy": "John Finance",
+    "financeReviewedAt": "2025-03-21T09:15:00Z",
+    "financeReviewComments": "Budget verified. Tax calculations correct.",
+    "budgetVerified": true
+  }
+}
+```
+
+---
+
+## 15. Management Approval
+
+Final management approval for payroll run. Management provides final sign-off before payment processing.
+
+```
+POST /api/v1/payroll/runs/:id/management-approval
+```
+
+**Path Parameters:**
+- `id` - Payroll run ID
+
+**Auth:** Management/Admin only
+
+**Request Body:**
+```json
+{
+  "approved": true,
+  "comments": "Approved for payment processing."
+}
+```
+
+### Response — `200 OK`
+
+```json
+{
+  "success": true,
+  "message": "Management approval completed",
+  "data": {
+    "id": 2,
+    "status": "Pending Management Approval",
+    "currentStep": 4,
+    "managementApproved": true,
+    "managementApprovedBy": "CEO Name",
+    "managementApprovedAt": "2025-03-21T16:45:00Z",
+    "managementApprovalComments": "Approved for payment processing."
+  }
+}
+```
+
+---
+
+## 16. Advance Payroll Step
 
 Advance payroll run to the next step.
 
@@ -890,7 +1125,14 @@ GET /api/v1/payroll/runs/:id/employees
 
 ## 10. Run Pre-Check
 
-Run pre-check validation for a payroll run.
+Run comprehensive pre-check validation for a payroll run. This validates employee master data, attendance records, overtime approvals, salary structures, and compliance requirements.
+
+**Note:** This check includes:
+- Employee master data validation (new hires, terminations, salary changes)
+- Attendance validation (approved timesheets for pay period)
+- Overtime approval validation
+- Salary structure and grade validation
+- Basic salary configuration validation
 
 ```
 POST /api/v1/payroll/runs/:id/pre-check
@@ -907,28 +1149,65 @@ POST /api/v1/payroll/runs/:id/pre-check
   "data": {
     "total_employees": 145,
     "valid_employees": 142,
-    "employees_with_issues": 3,
+    "errors": 3,
     "issues": [
       {
-        "employee_id": "EMP023",
-        "name": "Jane Smith",
-        "issue": "Missing bank account details",
-        "severity": "high"
+        "id": "new_employees_incomplete_setup",
+        "type": "employee_master_data",
+        "category": "employee",
+        "count": 2,
+        "severity": "High",
+        "employeeIds": ["EMP023", "EMP024"],
+        "employees": [
+          {
+            "id": "EMP023",
+            "name": "John Newhire",
+            "department": "Engineering"
+          }
+        ],
+        "description": "2 new employee(s) have incomplete setup.",
+        "actionRequired": "Complete employee setup including salary structure assignment.",
+        "resolutionUrl": "/employees"
       },
       {
-        "employee_id": "EMP045",
-        "name": "Mike Johnson",
-        "issue": "Salary structure not configured",
-        "severity": "high"
+        "id": "missing_approved_timesheets",
+        "type": "attendance_validation",
+        "category": "attendance",
+        "count": 1,
+        "severity": "High",
+        "employeeIds": ["EMP045"],
+        "employees": [
+          {
+            "id": "EMP045",
+            "name": "Jane Timesheet",
+            "department": "Sales"
+          }
+        ],
+        "description": "1 employee(s) missing approved timesheets for pay period.",
+        "actionRequired": "Ensure all employees have approved timesheets for the pay period.",
+        "resolutionUrl": "/attendance/timesheets"
       },
       {
-        "employee_id": "EMP067",
-        "name": "Sarah Wilson",
-        "issue": "Incomplete statutory information",
-        "severity": "medium"
+        "id": "pending_overtime_approvals",
+        "type": "overtime_validation",
+        "category": "overtime",
+        "count": 3,
+        "severity": "Medium",
+        "employeeIds": ["EMP067", "EMP068", "EMP069"],
+        "employees": [
+          {
+            "id": "EMP067",
+            "name": "Bob Overtime",
+            "department": "Operations"
+          }
+        ],
+        "description": "3 employee(s) have pending overtime approvals.",
+        "actionRequired": "Review and approve pending overtime requests.",
+        "resolutionUrl": "/attendance/overtime"
       }
     ],
-    "can_proceed": false
+    "canProceed": false,
+    "summary": "Payroll cannot proceed. 3 employee(s) do not have salary information."
   }
 }
 ```

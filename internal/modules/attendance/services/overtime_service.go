@@ -13,15 +13,17 @@ import (
 
 // OvertimeService handles overtime business logic
 type OvertimeService struct {
-	overtimeRepo *repositories.OvertimeRepository
-	employeeRepo *employeeRepos.EmployeeRepository
+	overtimeRepo       *repositories.OvertimeRepository
+	employeeRepo       *employeeRepos.EmployeeRepository
+	employeeSalaryRepo *employeeRepos.EmployeeSalaryRepository
 }
 
 // NewOvertimeService creates a new overtime service
 func NewOvertimeService() *OvertimeService {
 	return &OvertimeService{
-		overtimeRepo: repositories.NewOvertimeRepository(),
-		employeeRepo: employeeRepos.NewEmployeeRepository(),
+		overtimeRepo:       repositories.NewOvertimeRepository(),
+		employeeRepo:       employeeRepos.NewEmployeeRepository(),
+		employeeSalaryRepo: employeeRepos.NewEmployeeSalaryRepository(),
 	}
 }
 

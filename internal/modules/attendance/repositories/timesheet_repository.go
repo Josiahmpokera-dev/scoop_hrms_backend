@@ -59,7 +59,7 @@ func (r *TimesheetRepository) UpdateWeek(week *models.TimesheetWeek) error {
 }
 
 // ListWeeksByEmployee returns all timesheet weeks for an employee with pagination
-func (r *TimesheetRepository) ListWeeksByEmployee(employeeID uint, status string, page, pageSize int) ([]models.TimesheetWeek, int64, error) {
+func (r *TimesheetRepository) ListWeeksByEmployee(employeeID uint, status string, month, year, page, pageSize int) ([]models.TimesheetWeek, int64, error) {
 	var weeks []models.TimesheetWeek
 	var total int64
 
@@ -69,6 +69,12 @@ func (r *TimesheetRepository) ListWeeksByEmployee(employeeID uint, status string
 	}
 	if status != "" {
 		query = query.Where("status = ?", status)
+	}
+
+	if month > 0 && year > 0 {
+		startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+		endDate := startDate.AddDate(0, 1, 0)
+		query = query.Where("week_start >= ? AND week_start < ?", startDate, endDate)
 	}
 
 	if err := query.Count(&total).Error; err != nil {

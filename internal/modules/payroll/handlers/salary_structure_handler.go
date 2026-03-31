@@ -6,6 +6,7 @@ import (
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/services"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -25,12 +26,12 @@ func NewSalaryStructureHandler() *SalaryStructureHandler {
 
 // ListSalaryStructures lists salary structure templates
 func (h *SalaryStructureHandler) ListSalaryStructures(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	grade := c.Query("grade")
 	location := c.Query("location")
 	country := c.DefaultQuery("country", "Tanzania")
-	page := getPage(c)
-	pageSize := getPageSize(c)
+	page := utils.GetPage(c)
+	pageSize := utils.GetPageSize(c)
 
 	var isActive *bool
 	if active := c.Query("isActive"); active != "" {
@@ -63,7 +64,7 @@ func (h *SalaryStructureHandler) GetSalaryStructure(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	structure, err := h.service.GetSalaryStructure(uint(id), tenantID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "salary structure not found"})
@@ -96,7 +97,7 @@ func (h *SalaryStructureHandler) CreateSalaryStructure(c *gin.Context) {
 		return
 	}
 
-	userID := getUserID(c)
+	userID := utils.GetUserID(c)
 
 	structure := &models.SalaryStructure{
 		TemplateName:    req.TemplateName,
@@ -137,7 +138,7 @@ func (h *SalaryStructureHandler) UpdateSalaryStructure(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	structure, err := h.service.GetSalaryStructure(uint(id), tenantID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "salary structure not found"})
@@ -189,7 +190,7 @@ func (h *SalaryStructureHandler) UpdateSalaryStructure(c *gin.Context) {
 		structure.IsActive = *req.IsActive
 	}
 
-	userID := getUserID(c)
+	userID := utils.GetUserID(c)
 	structure.UpdatedByID = &userID
 
 	if err := h.service.UpdateSalaryStructure(structure); err != nil {
@@ -212,7 +213,7 @@ func (h *SalaryStructureHandler) DeleteSalaryStructure(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	if err := h.service.DeleteSalaryStructure(uint(id), tenantID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
@@ -235,7 +236,7 @@ func (h *SalaryStructureHandler) SimulateSalary(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	result := h.service.SimulateSalary(req.CTC, tenantID)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -248,11 +249,11 @@ func (h *SalaryStructureHandler) SimulateSalary(c *gin.Context) {
 
 // ListSalaryComponents lists salary components
 func (h *SalaryStructureHandler) ListSalaryComponents(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	componentType := c.Query("type")
 	country := c.DefaultQuery("country", "Tanzania")
-	page := getPage(c)
-	pageSize := getPageSize(c)
+	page := utils.GetPage(c)
+	pageSize := utils.GetPageSize(c)
 
 	var isActive, isStatutory *bool
 	if active := c.Query("isActive"); active != "" {
@@ -289,7 +290,7 @@ func (h *SalaryStructureHandler) GetSalaryComponent(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	component, err := h.service.GetSalaryComponent(uint(id), tenantID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "salary component not found"})
@@ -305,20 +306,20 @@ func (h *SalaryStructureHandler) GetSalaryComponent(c *gin.Context) {
 // CreateSalaryComponent creates a new salary component
 func (h *SalaryStructureHandler) CreateSalaryComponent(c *gin.Context) {
 	var req struct {
-		ComponentName     string                   `json:"componentName" binding:"required"`
-		ComponentCode     string                   `json:"componentCode" binding:"required"`
-		ComponentType     models.ComponentType     `json:"componentType" binding:"required"`
-		CalculationType   models.CalculationType   `json:"calculationType" binding:"required"`
-		DefaultAmount     *float64                 `json:"defaultAmount"`
-		DefaultPercentage *float64                 `json:"defaultPercentage"`
-		Formula           *string                  `json:"formula"`
-		IsTaxable         bool                     `json:"isTaxable"`
-		IsStatutory       bool                     `json:"isStatutory"`
-		IsRecurring       bool                     `json:"isRecurring"`
-		ApplicableFor     string                   `json:"applicableFor"`
-		DisplayInPayslip  bool                     `json:"displayInPayslip"`
-		Country           string                   `json:"country"`
-		SortOrder         int                      `json:"sortOrder"`
+		ComponentName     string                 `json:"componentName" binding:"required"`
+		ComponentCode     string                 `json:"componentCode" binding:"required"`
+		ComponentType     models.ComponentType   `json:"componentType" binding:"required"`
+		CalculationType   models.CalculationType `json:"calculationType" binding:"required"`
+		DefaultAmount     *float64               `json:"defaultAmount"`
+		DefaultPercentage *float64               `json:"defaultPercentage"`
+		Formula           *string                `json:"formula"`
+		IsTaxable         bool                   `json:"isTaxable"`
+		IsStatutory       bool                   `json:"isStatutory"`
+		IsRecurring       bool                   `json:"isRecurring"`
+		ApplicableFor     string                 `json:"applicableFor"`
+		DisplayInPayslip  bool                   `json:"displayInPayslip"`
+		Country           string                 `json:"country"`
+		SortOrder         int                    `json:"sortOrder"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -371,7 +372,7 @@ func (h *SalaryStructureHandler) UpdateSalaryComponent(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	component, err := h.service.GetSalaryComponent(uint(id), tenantID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "salary component not found"})
@@ -435,7 +436,7 @@ func (h *SalaryStructureHandler) DeleteSalaryComponent(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	if err := h.service.DeleteSalaryComponent(uint(id), tenantID); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return

@@ -10,12 +10,26 @@ import (
 type PayrollRunStatus string
 
 const (
-	PayrollRunStatusDraft     PayrollRunStatus = "Draft"
-	PayrollRunStatusInReview  PayrollRunStatus = "In Review"
-	PayrollRunStatusApproved  PayrollRunStatus = "Approved"
-	PayrollRunStatusFinalized PayrollRunStatus = "Finalized"
-	PayrollRunStatusDisbursed PayrollRunStatus = "Disbursed"
-	PayrollRunStatusClosed    PayrollRunStatus = "Closed"
+	PayrollRunStatusDraft             PayrollRunStatus = "Draft"
+	PayrollRunStatusPendingHR         PayrollRunStatus = "Pending HR Review"
+	PayrollRunStatusHRReviewed        PayrollRunStatus = "HR Reviewed"
+	PayrollRunStatusPendingFinance    PayrollRunStatus = "Pending Finance Review"
+	PayrollRunStatusFinanceReviewed   PayrollRunStatus = "Finance Reviewed"
+	PayrollRunStatusPendingManagement PayrollRunStatus = "Pending Management Approval"
+	PayrollRunStatusApproved          PayrollRunStatus = "Approved"
+	PayrollRunStatusFinalized         PayrollRunStatus = "Finalized"
+	PayrollRunStatusDisbursed         PayrollRunStatus = "Disbursed"
+	PayrollRunStatusClosed            PayrollRunStatus = "Closed"
+)
+
+// WorkflowReviewStatus represents the status of workflow reviews
+type WorkflowReviewStatus string
+
+const (
+	WorkflowReviewStatusPending         WorkflowReviewStatus = "Pending"
+	WorkflowReviewStatusApproved        WorkflowReviewStatus = "Approved"
+	WorkflowReviewStatusRejected        WorkflowReviewStatus = "Rejected"
+	WorkflowReviewStatusNeedsCorrection WorkflowReviewStatus = "Needs Correction"
 )
 
 // PayFrequency represents pay frequency
@@ -29,19 +43,19 @@ const (
 
 // PayrollRun represents a payroll processing run
 type PayrollRun struct {
-	ID                        uint             `json:"id" gorm:"primaryKey"`
-	RunName                   string           `json:"runName" gorm:"not null;size:255"`
-	PayPeriod                 string           `json:"payPeriod" gorm:"size:100"` // e.g., "01 Nov - 30 Nov 2024"
-	PayMonth                  int              `json:"payMonth" gorm:"not null"`  // 1-12
-	PayYear                   int              `json:"payYear" gorm:"not null"`
-	PayFrequency              PayFrequency     `json:"payFrequency" gorm:"type:varchar(20);default:'Monthly'"`
-	Status                    PayrollRunStatus `json:"status" gorm:"type:varchar(30);default:'Draft'"`
-	CurrentStep               int              `json:"currentStep" gorm:"default:0"` // 0-5
-	TotalEmployees            int              `json:"totalEmployees" gorm:"default:0"`
-	TotalGross                float64          `json:"totalGross" gorm:"type:decimal(15,2);default:0"`
-	TotalDeductions           float64          `json:"totalDeductions" gorm:"type:decimal(15,2);default:0"`
-	TotalNet                  float64          `json:"totalNet" gorm:"type:decimal(15,2);default:0"`
-	TotalEmployerContributions float64         `json:"totalEmployerContributions" gorm:"type:decimal(15,2);default:0"`
+	ID                         uint             `json:"id" gorm:"primaryKey"`
+	RunName                    string           `json:"runName" gorm:"not null;size:255"`
+	PayPeriod                  string           `json:"payPeriod" gorm:"size:100"` // e.g., "01 Nov - 30 Nov 2024"
+	PayMonth                   int              `json:"payMonth" gorm:"not null"`  // 1-12
+	PayYear                    int              `json:"payYear" gorm:"not null"`
+	PayFrequency               PayFrequency     `json:"payFrequency" gorm:"type:varchar(20);default:'Monthly'"`
+	Status                     PayrollRunStatus `json:"status" gorm:"type:varchar(30);default:'Draft'"`
+	CurrentStep                int              `json:"currentStep" gorm:"default:0"` // 0-5
+	TotalEmployees             int              `json:"totalEmployees" gorm:"default:0"`
+	TotalGross                 float64          `json:"totalGross" gorm:"type:decimal(15,2);default:0"`
+	TotalDeductions            float64          `json:"totalDeductions" gorm:"type:decimal(15,2);default:0"`
+	TotalNet                   float64          `json:"totalNet" gorm:"type:decimal(15,2);default:0"`
+	TotalEmployerContributions float64          `json:"totalEmployerContributions" gorm:"type:decimal(15,2);default:0"`
 	// Breakdown
 	TotalBasic          float64 `json:"totalBasic" gorm:"type:decimal(15,2);default:0"`
 	TotalAllowances     float64 `json:"totalAllowances" gorm:"type:decimal(15,2);default:0"`
@@ -53,19 +67,39 @@ type PayrollRun struct {
 	TotalNHIFEmployer   float64 `json:"totalNhifEmployer" gorm:"type:decimal(15,2);default:0"`
 	TotalSDL            float64 `json:"totalSdl" gorm:"type:decimal(15,2);default:0"`
 	TotalWCF            float64 `json:"totalWcf" gorm:"type:decimal(15,2);default:0"`
+	// Workflow Tracking
+	HRReviewStatus             WorkflowReviewStatus `json:"hrReviewStatus" gorm:"type:varchar(30);default:'Pending'"`
+	HRReviewedByID             *uint                `json:"hrReviewedById,omitempty"`
+	HRReviewedByName           *string              `json:"hrReviewedBy,omitempty" gorm:"size:255"`
+	HRReviewedAt               *time.Time           `json:"hrReviewedAt,omitempty"`
+	HRReviewComments           string               `json:"hrReviewComments" gorm:"type:text"`
+	FinanceReviewStatus        WorkflowReviewStatus `json:"financeReviewStatus" gorm:"type:varchar(30);default:'Pending'"`
+	FinanceReviewedByID        *uint                `json:"financeReviewedById,omitempty"`
+	FinanceReviewedByName      *string              `json:"financeReviewedBy,omitempty" gorm:"size:255"`
+	FinanceReviewedAt          *time.Time           `json:"financeReviewedAt,omitempty"`
+	FinanceReviewComments      string               `json:"financeReviewComments" gorm:"type:text"`
+	ManagementApproved         bool                 `json:"managementApproved" gorm:"default:false"`
+	ManagementApprovedByID     *uint                `json:"managementApprovedById,omitempty"`
+	ManagementApprovedByName   *string              `json:"managementApprovedBy,omitempty" gorm:"size:255"`
+	ManagementApprovedAt       *time.Time           `json:"managementApprovedAt,omitempty"`
+	ManagementApprovalComments string               `json:"managementApprovalComments" gorm:"type:text"`
+	BudgetVerified             bool                 `json:"budgetVerified" gorm:"default:false"`
+	ComplianceVerified         bool                 `json:"complianceVerified" gorm:"default:false"`
 	// Dates
-	CutoffDate        *time.Time `json:"cutoffDate,omitempty"`
-	DisbursementDate  *time.Time `json:"disbursementDate,omitempty"`
+	CutoffDate            *time.Time `json:"cutoffDate,omitempty"`
+	DisbursementDate      *time.Time `json:"disbursementDate,omitempty"`
+	HRReviewDeadline      *time.Time `json:"hrReviewDeadline,omitempty"`
+	FinanceReviewDeadline *time.Time `json:"financeReviewDeadline,omitempty"`
 	// Audit
-	CreatedByID   *uint      `json:"createdById,omitempty" gorm:"index"`
-	CreatedByName string     `json:"createdBy" gorm:"size:255"`
-	ApprovedByID  *uint      `json:"approvedById,omitempty"`
-	ApprovedByName *string   `json:"approvedBy,omitempty" gorm:"size:255"`
-	ApprovedAt    *time.Time `json:"approvedAt,omitempty"`
-	FinalizedByID *uint      `json:"finalizedById,omitempty"`
-	FinalizedByName *string  `json:"finalizedBy,omitempty" gorm:"size:255"`
-	FinalizedAt   *time.Time `json:"finalizedAt,omitempty"`
-	IsLocked      bool       `json:"isLocked" gorm:"default:false"`
+	CreatedByID     *uint      `json:"createdById,omitempty" gorm:"index"`
+	CreatedByName   string     `json:"createdBy" gorm:"size:255"`
+	ApprovedByID    *uint      `json:"approvedById,omitempty"`
+	ApprovedByName  *string    `json:"approvedBy,omitempty" gorm:"size:255"`
+	ApprovedAt      *time.Time `json:"approvedAt,omitempty"`
+	FinalizedByID   *uint      `json:"finalizedById,omitempty"`
+	FinalizedByName *string    `json:"finalizedBy,omitempty" gorm:"size:255"`
+	FinalizedAt     *time.Time `json:"finalizedAt,omitempty"`
+	IsLocked        bool       `json:"isLocked" gorm:"default:false"`
 	// Timestamps
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
@@ -109,16 +143,16 @@ func (PayrollRunEmployee) TableName() string {
 
 // PreCheckIssue represents a validation issue during pre-check
 type PreCheckIssue struct {
-	ID             string   `json:"id"`
-	Type           string   `json:"type"`
-	Category       string   `json:"category"` // attendance, leave, overtime, employee, proration
-	Count          int      `json:"count"`
-	Severity       string   `json:"severity"` // High, Medium, Low, Info
-	EmployeeIDs    []string `json:"employeeIds"`
+	ID             string             `json:"id"`
+	Type           string             `json:"type"`
+	Category       string             `json:"category"` // attendance, leave, overtime, employee, proration
+	Count          int                `json:"count"`
+	Severity       string             `json:"severity"` // High, Medium, Low, Info
+	EmployeeIDs    []string           `json:"employeeIds"`
 	Employees      []PreCheckEmployee `json:"employees,omitempty"`
-	Description    string   `json:"description"`
-	ActionRequired *string  `json:"actionRequired,omitempty"`
-	ResolutionURL  *string  `json:"resolutionUrl,omitempty"`
+	Description    string             `json:"description"`
+	ActionRequired *string            `json:"actionRequired,omitempty"`
+	ResolutionURL  *string            `json:"resolutionUrl,omitempty"`
 }
 
 // PreCheckEmployee represents employee info in a pre-check issue

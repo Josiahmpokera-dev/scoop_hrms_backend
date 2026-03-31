@@ -22,7 +22,7 @@ The `TenantID *uint` field was removed from **all** model structs across the app
 | Helpdesk | `Ticket`, `Comment`, `Attachment`, `TicketCategory`, `RoutingRule`, `KnowledgeBaseArticle`, `KBArticleFeedback` |
 | Assets | `Asset`, `AssetRequest`, `AssetIssue` |
 | Shifts | `Shift`, `RosterAssignment`, `SwapRequest`, `RosterChangeRequest` |
-| Biometric | `BioTimeTransaction`, `BioTimeConfig` |
+| Biometric | `BioTimeTransaction`, `BioTimeConfig` | 
 | Dashboard | `Announcement` |
 | Audit | `AuditLog` |
 
@@ -30,11 +30,11 @@ The `TenantID *uint` field was removed from **all** model structs across the app
 
 ### 2. Middleware
 
-| File | Change |
+| File | Change | 
 |------|--------|
 | `internal/middleware/tenant.go` | Stripped down to a stub. `GetTenantID()` always returns `nil`. `TenantMiddleware()` and `RequireTenantMiddleware()` removed. |
-| `internal/middleware/auth.go` | Removed code that set `tenant_id` in context from the user record. |
-| `internal/middleware/audit.go` | Removed code that read `tenant_id` from context for audit logging. |
+| `internal/middleware/auth.go` | Removed code that set `tenant_id` in context from the user record. | 
+| `internal/middleware/audit.go` | Removed code that read `tenant_id` from context for audit logging. | 
 
 ### 3. Auth / Onboarding
 

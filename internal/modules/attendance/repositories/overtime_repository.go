@@ -225,6 +225,16 @@ func (r *OvertimeRepository) GetEmployeeOTHoursInWeek(employeeID uint, weekStart
 	return total, err
 }
 
+// GetByEmployeeID returns all OT requests for an employee in a given month and year
+func (r *OvertimeRepository) GetByEmployeeID(employeeID uint, month int, year int) ([]models.OvertimeRequest, error) {
+	var requests []models.OvertimeRequest
+	startDate := time.Date(year, time.Month(month), 1, 0, 0, 0, 0, time.UTC)
+	endDate := startDate.AddDate(0, 1, -1)
+
+	err := r.db.Where("employee_id = ? AND date >= ? AND date <= ?", employeeID, startDate, endDate).Find(&requests).Error
+	return requests, err
+}
+
 // --- OvertimeApproval ---
 
 // CreateApproval creates a new OT approval record

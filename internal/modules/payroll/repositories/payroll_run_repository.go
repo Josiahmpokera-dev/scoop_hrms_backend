@@ -79,10 +79,17 @@ func (r *PayrollRunRepository) List(tenantID *uint, status string, payYear, payM
 	return runs, total, nil
 }
 
-// GetCurrentRun retrieves the current active payroll run (Draft or In Review)
+// GetCurrentRun retrieves the current active payroll run (Draft or in review stages)
 func (r *PayrollRunRepository) GetCurrentRun(tenantID *uint) (*models.PayrollRun, error) {
 	var run models.PayrollRun
-	query := r.db.Where("status IN ?", []string{string(models.PayrollRunStatusDraft), string(models.PayrollRunStatusInReview)})
+	query := r.db.Where("status IN ?", []string{
+		string(models.PayrollRunStatusDraft),
+		string(models.PayrollRunStatusPendingHR),
+		string(models.PayrollRunStatusHRReviewed),
+		string(models.PayrollRunStatusPendingFinance),
+		string(models.PayrollRunStatusFinanceReviewed),
+		string(models.PayrollRunStatusPendingManagement),
+	})
 	if tenantID != nil {
 		query = query.Where("tenant_id = ?", *tenantID)
 	}

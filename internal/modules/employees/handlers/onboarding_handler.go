@@ -254,6 +254,88 @@ func (h *OnboardingHandler) SaveStepByEmployeeID(c *gin.Context) {
 	response.Success(c, "Step saved successfully", draft)
 }
 
+func (h *OnboardingHandler) UpdateStep(c *gin.Context) {
+	draftIDStr := c.Param("draft_id")
+	draftID, err := strconv.ParseUint(draftIDStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid draft ID", nil)
+		return
+	}
+
+	stepStr := c.Param("step")
+	step, err := strconv.Atoi(stepStr)
+	if err != nil || step < 1 || step > 10 {
+		response.BadRequest(c, "Invalid step number. Must be between 1 and 10", nil)
+		return
+	}
+
+	var req models.SaveDraftRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	if req.Step != step {
+		response.BadRequest(c, "Step number in URL must match step in request body", nil)
+		return
+	}
+
+	user, _ := c.Get("user")
+	var updatedBy *uint
+	if userObj, ok := user.(*userModels.User); ok {
+		updatedBy = &userObj.ID
+	}
+
+	draft, err := h.onboardingService.SaveStep(uint(draftID), step, req.Data, updatedBy)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Step updated successfully", draft)
+}
+
+func (h *OnboardingHandler) UpdateStepByEmployeeID(c *gin.Context) {
+	employeeID := c.Param("employee_id")
+	if employeeID == "" {
+		response.BadRequest(c, "Employee ID is required", nil)
+		return
+	}
+
+	stepStr := c.Param("step")
+	step, err := strconv.Atoi(stepStr)
+	if err != nil || step < 1 || step > 10 {
+		response.BadRequest(c, "Invalid step number. Must be between 1 and 10", nil)
+		return
+	}
+
+	var req models.SaveDraftRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	if req.Step != step {
+		response.BadRequest(c, "Step number in URL must match step in request body", nil)
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+	user, _ := c.Get("user")
+	var updatedBy *uint
+	if userObj, ok := user.(*userModels.User); ok {
+		updatedBy = &userObj.ID
+	}
+
+	draft, err := h.onboardingService.SaveStepByEmployeeID(employeeID, tenantID, step, req.Data, updatedBy)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Step updated successfully", draft)
+}
+
 // GetDraft retrieves a draft with all step data and progress (by draft_id - legacy support)
 // @Summary Get onboarding draft by draft ID
 // @Description Get draft with all step data and completion progress using draft ID

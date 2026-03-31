@@ -7,6 +7,7 @@ import (
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/services"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -24,11 +25,11 @@ func NewLoanHandler() *LoanHandler {
 
 // ListLoans lists loans with filters
 func (h *LoanHandler) ListLoans(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	status := c.Query("status")
 	loanType := c.Query("type")
-	page := getPage(c)
-	pageSize := getPageSize(c)
+	page := utils.GetPage(c)
+	pageSize := utils.GetPageSize(c)
 
 	var employeeID *uint
 	if empID := c.Query("employeeId"); empID != "" {
@@ -62,7 +63,7 @@ func (h *LoanHandler) GetLoan(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	loanData, err := h.service.GetLoanWithRepayments(uint(id), tenantID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "loan not found"})
@@ -78,17 +79,17 @@ func (h *LoanHandler) GetLoan(c *gin.Context) {
 // CreateLoan creates a new loan application
 func (h *LoanHandler) CreateLoan(c *gin.Context) {
 	var req struct {
-		EmployeeID   uint             `json:"employeeId" binding:"required"`
-		EmployeeCode string           `json:"empId"`
-		EmployeeName string           `json:"employeeName"`
-		Department   string           `json:"department"`
-		DepartmentID *uint            `json:"departmentId"`
-		Designation  *string          `json:"designation"`
-		LoanType     models.LoanType  `json:"loanType" binding:"required"`
-		Amount       float64          `json:"amount" binding:"required"`
-		InterestRate float64          `json:"interestRate"`
-		Tenure       int              `json:"tenure" binding:"required"`
-		Purpose      *string          `json:"purpose"`
+		EmployeeID   uint            `json:"employeeId" binding:"required"`
+		EmployeeCode string          `json:"empId"`
+		EmployeeName string          `json:"employeeName"`
+		Department   string          `json:"department"`
+		DepartmentID *uint           `json:"departmentId"`
+		Designation  *string         `json:"designation"`
+		LoanType     models.LoanType `json:"loanType" binding:"required"`
+		Amount       float64         `json:"amount" binding:"required"`
+		InterestRate float64         `json:"interestRate"`
+		Tenure       int             `json:"tenure" binding:"required"`
+		Purpose      *string         `json:"purpose"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -140,9 +141,9 @@ func (h *LoanHandler) ApproveLoan(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
-	approverID := getUserID(c)
-	approverName := getUserName(c)
+	tenantID := utils.GetTenantID(c)
+	approverID := utils.GetUserID(c)
+	approverName := utils.GetUserName(c)
 
 	if err := h.service.ApproveLoan(uint(id), tenantID, approverID, approverName, req.DisbursementDate, req.Remarks); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -175,9 +176,9 @@ func (h *LoanHandler) RejectLoan(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
-	rejecterID := getUserID(c)
-	rejecterName := getUserName(c)
+	tenantID := utils.GetTenantID(c)
+	rejecterID := utils.GetUserID(c)
+	rejecterName := utils.GetUserName(c)
 
 	if err := h.service.RejectLoan(uint(id), tenantID, rejecterID, rejecterName, req.Reason); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -219,9 +220,9 @@ func (h *LoanHandler) RecordRepayment(c *gin.Context) {
 	}
 
 	var req struct {
-		Installment int      `json:"installment" binding:"required"`
-		PaidAmount  float64  `json:"paidAmount" binding:"required"`
-		PayslipID   *uint    `json:"payslipId"`
+		Installment int     `json:"installment" binding:"required"`
+		PaidAmount  float64 `json:"paidAmount" binding:"required"`
+		PayslipID   *uint   `json:"payslipId"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -242,7 +243,7 @@ func (h *LoanHandler) RecordRepayment(c *gin.Context) {
 
 // GetLoanSummary retrieves loan summary
 func (h *LoanHandler) GetLoanSummary(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 
 	var employeeID *uint
 	if empID := c.Query("employeeId"); empID != "" {
@@ -297,11 +298,11 @@ func (h *LoanHandler) CalculateEMI(c *gin.Context) {
 
 // GetMyLoans retrieves current user's loans
 func (h *LoanHandler) GetMyLoans(c *gin.Context) {
-	employeeID := getUserID(c)
-	tenantID := getTenantID(c)
+	employeeID := utils.GetUserID(c)
+	tenantID := utils.GetTenantID(c)
 	status := c.Query("status")
-	page := getPage(c)
-	pageSize := getPageSize(c)
+	page := utils.GetPage(c)
+	pageSize := utils.GetPageSize(c)
 
 	empID := employeeID
 	loans, total, err := h.service.ListLoans(tenantID, &empID, status, "", page, pageSize)
@@ -323,13 +324,13 @@ func (h *LoanHandler) GetMyLoans(c *gin.Context) {
 
 // ApplyForLoan allows employee to apply for a loan
 func (h *LoanHandler) ApplyForLoan(c *gin.Context) {
-	employeeID := getUserID(c)
+	employeeID := utils.GetUserID(c)
 
 	var req struct {
-		LoanType     models.LoanType `json:"loanType" binding:"required"`
-		Amount       float64         `json:"amount" binding:"required"`
-		Tenure       int             `json:"tenure" binding:"required"`
-		Purpose      *string         `json:"purpose"`
+		LoanType models.LoanType `json:"loanType" binding:"required"`
+		Amount   float64         `json:"amount" binding:"required"`
+		Tenure   int             `json:"tenure" binding:"required"`
+		Purpose  *string         `json:"purpose"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

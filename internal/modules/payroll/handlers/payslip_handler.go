@@ -5,6 +5,7 @@ import (
 	"strconv"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/services"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -22,12 +23,12 @@ func NewPayslipHandler() *PayslipHandler {
 
 // ListPayslips lists payslips with filters
 func (h *PayslipHandler) ListPayslips(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	payMonth, _ := strconv.Atoi(c.Query("month"))
 	payYear, _ := strconv.Atoi(c.Query("year"))
 	status := c.Query("status")
-	page := getPage(c)
-	pageSize := getPageSize(c)
+	page := utils.GetPage(c)
+	pageSize := utils.GetPageSize(c)
 
 	var employeeID, departmentID *uint
 	if empID := c.Query("employeeId"); empID != "" {
@@ -66,7 +67,7 @@ func (h *PayslipHandler) GetPayslip(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	payslipData, err := h.service.GetPayslipWithItems(uint(id), tenantID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "payslip not found"})
@@ -81,7 +82,7 @@ func (h *PayslipHandler) GetPayslip(c *gin.Context) {
 
 // GetPayslipSummary retrieves payslip summary for a period
 func (h *PayslipHandler) GetPayslipSummary(c *gin.Context) {
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	payMonth, _ := strconv.Atoi(c.Query("month"))
 	payYear, _ := strconv.Atoi(c.Query("year"))
 
@@ -113,7 +114,7 @@ func (h *PayslipHandler) DownloadPayslip(c *gin.Context) {
 	}
 
 	format := c.DefaultQuery("format", "pdf")
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 
 	switch format {
 	case "pdf":
@@ -139,6 +140,44 @@ func (h *PayslipHandler) DownloadPayslip(c *gin.Context) {
 	}
 }
 
+// GetEmployeeSalaryStructures handles the request to get the salary structure for all employees
+func (h *PayslipHandler) GetEmployeeSalaryStructures(c *gin.Context) {
+	tenantID := utils.GetTenantID(c)
+	structures, err := h.service.GetEmployeeSalaryStructures(tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    structures,
+		"message": "Employee salary structures retrieved successfully",
+	})
+}
+
+// GetEmployeeSalaryStructure handles the request to get the salary structure for a single employee
+func (h *PayslipHandler) GetEmployeeSalaryStructure(c *gin.Context) {
+	employeeID, err := strconv.ParseUint(c.Param("employeeId"), 10, 32)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid employee id"})
+		return
+	}
+
+	tenantID := utils.GetTenantID(c)
+	structure, err := h.service.GetEmployeeSalaryStructure(uint(employeeID), tenantID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    structure,
+		"message": "Employee salary structure retrieved successfully",
+	})
+}
+
 // BulkDownloadPayslips downloads multiple payslips as ZIP
 func (h *PayslipHandler) BulkDownloadPayslips(c *gin.Context) {
 	var req struct {
@@ -150,7 +189,7 @@ func (h *PayslipHandler) BulkDownloadPayslips(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	data, filename, err := h.service.BulkDownloadPayslips(req.PayslipIDs, tenantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -169,7 +208,7 @@ func (h *PayslipHandler) SendPayslipEmail(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	if err := h.service.SendPayslipEmail(uint(id), tenantID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -189,7 +228,7 @@ func (h *PayslipHandler) BulkEmailPayslips(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	result, err := h.service.BulkEmailPayslips(uint(runID), tenantID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -210,7 +249,7 @@ func (h *PayslipHandler) ReleasePayslips(c *gin.Context) {
 		return
 	}
 
-	tenantID := getTenantID(c)
+	tenantID := utils.GetTenantID(c)
 	if err := h.service.ReleasePayslips(uint(runID), tenantID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -227,10 +266,10 @@ func (h *PayslipHandler) ReleasePayslips(c *gin.Context) {
 // GetMyPayslips retrieves current user's payslips
 func (h *PayslipHandler) GetMyPayslips(c *gin.Context) {
 	// Get employee ID from authenticated user
-	employeeID := getUserID(c) // Assuming user ID maps to employee ID
-	tenantID := getTenantID(c)
-	page := getPage(c)
-	pageSize := getPageSize(c)
+	employeeID := utils.GetUserID(c) // Assuming user ID maps to employee ID
+	tenantID := utils.GetTenantID(c)
+	page := utils.GetPage(c)
+	pageSize := utils.GetPageSize(c)
 
 	payslips, total, err := h.service.GetEmployeePayslipHistory(employeeID, tenantID, page, pageSize)
 	if err != nil {
@@ -251,8 +290,8 @@ func (h *PayslipHandler) GetMyPayslips(c *gin.Context) {
 
 // GetMyLatestPayslip retrieves current user's latest payslip
 func (h *PayslipHandler) GetMyLatestPayslip(c *gin.Context) {
-	employeeID := getUserID(c)
-	tenantID := getTenantID(c)
+	employeeID := utils.GetUserID(c)
+	tenantID := utils.GetTenantID(c)
 
 	payslips, _, err := h.service.GetEmployeePayslipHistory(employeeID, tenantID, 1, 1)
 	if err != nil || len(payslips) == 0 {
@@ -274,8 +313,8 @@ func (h *PayslipHandler) GetMyLatestPayslip(c *gin.Context) {
 
 // GetMySalarySlipSummary retrieves current user's salary summary
 func (h *PayslipHandler) GetMySalarySlipSummary(c *gin.Context) {
-	employeeID := getUserID(c)
-	tenantID := getTenantID(c)
+	employeeID := utils.GetUserID(c)
+	tenantID := utils.GetTenantID(c)
 	payMonth, _ := strconv.Atoi(c.Query("month"))
 	payYear, _ := strconv.Atoi(c.Query("year"))
 
@@ -300,8 +339,8 @@ func (h *PayslipHandler) DownloadMyPayslip(c *gin.Context) {
 		return
 	}
 
-	employeeID := getUserID(c)
-	tenantID := getTenantID(c)
+	employeeID := utils.GetUserID(c)
+	tenantID := utils.GetTenantID(c)
 	format := c.DefaultQuery("format", "pdf")
 
 	// Verify the payslip belongs to this employee

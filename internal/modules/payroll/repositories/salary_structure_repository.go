@@ -213,6 +213,18 @@ func (r *SalaryStructureRepository) GetAllActiveStructures(tenantID *uint) ([]mo
 	return structures, nil
 }
 
+func (r *SalaryStructureRepository) GetByJobPositionID(tenantID *uint, jobPositionID uint) (*models.SalaryStructure, error) {
+	var structure models.SalaryStructure
+	query := r.db.Where("is_active = ?", true).Where("job_position_id = ?", jobPositionID)
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	if err := query.First(&structure).Error; err != nil {
+		return nil, err
+	}
+	return &structure, nil
+}
+
 // GetDistinctGrades returns all unique grades from active salary structures
 func (r *SalaryStructureRepository) GetDistinctGrades(tenantID *uint) ([]string, error) {
 	var grades []string

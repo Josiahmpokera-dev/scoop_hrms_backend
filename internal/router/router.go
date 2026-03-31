@@ -334,12 +334,14 @@ func SetupRoutes(r *gin.Engine) {
 				// Draft ID-based routes (legacy support)
 				onboarding.GET("/draft/:draft_id", onboardingHandler.GetDraft)             // Get draft with progress
 				onboarding.POST("/draft/:draft_id/step/:step", onboardingHandler.SaveStep) // Save step data
+				onboarding.PUT("/draft/:draft_id/step/:step", onboardingHandler.UpdateStep)
 
 				// Employee ID-based routes (primary - recommended) - must come after specific routes
 				onboarding.GET("/:employee_id", onboardingHandler.GetDraftByEmployeeID)                             // Get draft by employee ID
 				onboarding.POST("/:employee_id/step/:step", onboardingHandler.SaveStepByEmployeeID)                 // Save step by employee ID (JSON)
 				onboarding.POST("/:employee_id/step/:step/upload", onboardingHandler.SaveStepByEmployeeIDWithFiles) // Save step with file uploads (multipart/form-data)
 				onboarding.POST("/:employee_id/complete", onboardingHandler.CompleteOnboardingByEmployeeID)         // Complete by employee ID
+				onboarding.PUT("/:employee_id/step/:step", onboardingHandler.UpdateStepByEmployeeID)
 			}
 
 			// Post-onboarding task routes
@@ -762,6 +764,12 @@ func SetupRoutes(r *gin.Engine) {
 			payrollDashboard.GET("", payrollHandler.GetDashboard)
 		}
 
+		payrollEmployees := v1.Group("/payroll/employees")
+		payrollEmployees.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			payrollEmployees.GET("/salary-info", payrollHandler.ListEmployeesWithSalaryInfo)
+		}
+
 		// Payroll Runs (HR/Admin)
 		payrollRuns := v1.Group("/payroll/runs")
 		payrollRuns.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
@@ -779,6 +787,34 @@ func SetupRoutes(r *gin.Engine) {
 			payrollRuns.POST("/:id/advance", payrollHandler.AdvancePayrollStep)
 			payrollRuns.POST("/:id/revert", payrollHandler.RevertPayrollStep)
 			payrollRuns.POST("/:id/generate-payslips", payrollHandler.GeneratePayslips)
+
+			// New Workflow Endpoints
+			payrollRuns.POST("/:id/submit-hr-review", payrollHandler.SubmitForHRReview)
+			payrollRuns.POST("/:id/hr-review", payrollHandler.HRReview)
+			payrollRuns.POST("/:id/finance-review", payrollHandler.FinanceReview)
+			payrollRuns.POST("/:id/management-approval", payrollHandler.ManagementApproval)
+		}
+
+		// Payroll Configuration (System-level auth for read-only access)
+		payrollConfigHandler := payrollHandlers.NewPayrollConfigHandler()
+		payrollConfig := v1.Group("/payroll/config")
+		payrollConfig.Use(middleware.AuthMiddleware()) // Base auth required
+		{
+			// Read-only endpoints
+			payrollConfig.GET("", payrollConfigHandler.GetAllConfigurations)
+			payrollConfig.GET("/:key", payrollConfigHandler.GetConfiguration)
+			payrollConfig.GET("/paye/calculate", payrollConfigHandler.CalculatePAYE)
+			payrollConfig.GET("/nssf/calculate", payrollConfigHandler.CalculateNSSF)
+			payrollConfig.GET("/ctc/calculate", payrollConfigHandler.CalculateCTC)
+			payrollConfig.GET("/paye/bands", payrollConfigHandler.GetPAYEBands)
+			payrollConfig.GET("/nssf/rates", payrollConfigHandler.GetNSSFRates)
+			payrollConfig.GET("/employer-contributions", payrollConfigHandler.GetEmployerContributions)
+			payrollConfig.GET("/formulas", payrollConfigHandler.GetFormulaConfigurations)
+
+			// Block modification endpoints
+			payrollConfig.POST("", payrollConfigHandler.CreateConfiguration)
+			payrollConfig.PUT("/:key", payrollConfigHandler.UpdateConfiguration)
+			payrollConfig.DELETE("/:key", payrollConfigHandler.DeleteConfiguration)
 		}
 
 		// Salary Structures (HR/Admin)
@@ -787,6 +823,8 @@ func SetupRoutes(r *gin.Engine) {
 		{
 			salaryStructures.GET("", salaryStructureHandler.ListSalaryStructures)
 			salaryStructures.POST("", salaryStructureHandler.CreateSalaryStructure)
+			salaryStructures.GET("/employees", payslipHandler.GetEmployeeSalaryStructures)
+			salaryStructures.GET("/employees/:employeeId", payslipHandler.GetEmployeeSalaryStructure)
 			salaryStructures.GET("/:id", salaryStructureHandler.GetSalaryStructure)
 			salaryStructures.PUT("/:id", salaryStructureHandler.UpdateSalaryStructure)
 			salaryStructures.DELETE("/:id", salaryStructureHandler.DeleteSalaryStructure)

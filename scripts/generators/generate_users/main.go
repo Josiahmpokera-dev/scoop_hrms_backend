@@ -10,20 +10,17 @@ import (
 )
 
 func main() {
-	// Load configuration
 	cfg, err := config.LoadConfig()
 	if err != nil {
 		panic(fmt.Sprintf("Failed to load config: %v", err))
 	}
 
-	// Connect to database
 	dsn := cfg.Database.GetDSN()
 	db, err := gorm.Open(postgres.Open(dsn))
 	if err != nil {
 		panic(fmt.Sprintf("Failed to connect to database: %v", err))
 	}
 
-	// Create generator
 	g := gen.NewGenerator(gen.Config{
 		OutPath:       "internal/modules/users/repositories/query",
 		Mode:          gen.WithDefaultQuery | gen.WithQueryInterface,
@@ -31,13 +28,9 @@ func main() {
 	})
 
 	g.UseDB(db)
-
-	// Generate ONLY users table
 	g.ApplyBasic(
 		g.GenerateModel("users"),
 	)
-
-	// Execute generation
 	g.Execute()
 
 	fmt.Println("✅ Successfully generated models for 'users' table")

@@ -391,7 +391,7 @@ func (s *TimesheetService) GetMyTimesheets(user *userModels.User, status string,
 	if err != nil || employee == nil {
 		return nil, 0, errors.New("employee record not found for this user")
 	}
-	return s.timesheetRepo.ListWeeksByEmployee(employee.ID, status, page, pageSize)
+	return s.timesheetRepo.ListWeeksByEmployee(employee.ID, status, 0, 0, page, pageSize)
 }
 
 // GetTimesheetByID returns a timesheet by ID (owner or admin/HR)
@@ -545,18 +545,18 @@ func (s *TimesheetService) GetEmployeeStats(user *userModels.User, startDateStr,
 	}
 
 	return map[string]interface{}{
-		"employee_id":      employee.EmployeeID,
-		"employee_name":    employee.FirstName + " " + employee.LastName,
-		"period":           map[string]string{"start": startDateStr, "end": endDateStr},
-		"total_hours":      totalHours,
-		"billable_hours":   billableHours,
-		"non_billable_hours": totalHours - billableHours,
-		"utilization_rate": math.Round(utilizationRate*100) / 100,
+		"employee_id":          employee.EmployeeID,
+		"employee_name":        employee.FirstName + " " + employee.LastName,
+		"period":               map[string]string{"start": startDateStr, "end": endDateStr},
+		"total_hours":          totalHours,
+		"billable_hours":       billableHours,
+		"non_billable_hours":   totalHours - billableHours,
+		"utilization_rate":     math.Round(utilizationRate*100) / 100,
 		"project_distribution": projectStats,
 	}, nil
 }
 
 // GetAllTimesheets returns all timesheets (admin/HR) with pagination
 func (s *TimesheetService) GetAllTimesheets(status string, page, pageSize int) ([]models.TimesheetWeek, int64, error) {
-	return s.timesheetRepo.ListWeeksByEmployee(0, status, page, pageSize)
+	return s.timesheetRepo.ListWeeksByEmployee(0, status, 0, 0, page, pageSize)
 }

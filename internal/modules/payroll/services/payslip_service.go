@@ -7,8 +7,12 @@ import (
 	"strconv"
 	"time"
 
+	deptRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
+	empModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
+	empRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/repositories"
+	posRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
 	"github.com/xuri/excelize/v2"
 )
 
@@ -16,6 +20,10 @@ import (
 type PayslipService struct {
 	repo          *repositories.PayslipRepository
 	taxCalculator *TaxCalculator
+	empRepo       *empRepos.EmployeeRepository
+	empSalaryRepo *empRepos.EmployeeSalaryRepository
+	deptRepo      *deptRepos.DepartmentRepository
+	posRepo       *posRepos.JobPositionRepository
 }
 
 // NewPayslipService creates a new service instance
@@ -23,6 +31,10 @@ func NewPayslipService() *PayslipService {
 	return &PayslipService{
 		repo:          repositories.NewPayslipRepository(),
 		taxCalculator: NewTaxCalculator(),
+		empRepo:       empRepos.NewEmployeeRepository(),
+		empSalaryRepo: empRepos.NewEmployeeSalaryRepository(),
+		deptRepo:      deptRepos.NewDepartmentRepository(),
+		posRepo:       posRepos.NewJobPositionRepository(),
 	}
 }
 
@@ -71,24 +83,24 @@ func (s *PayslipService) GetPayslipWithItems(id uint, tenantID *uint) (map[strin
 	}
 
 	return map[string]interface{}{
-		"id":            payslip.ID,
-		"employeeId":    payslip.EmployeeID,
-		"empId":         payslip.EmployeeCode,
-		"employeeName":  payslip.EmployeeName,
-		"employeePhoto": payslip.EmployeePhoto,
-		"department":    payslip.Department,
-		"designation":   payslip.Designation,
-		"dateOfJoining": payslip.DateOfJoining,
-		"payPeriod":     payslip.PayPeriod,
-		"payMonth":      payslip.PayMonth,
-		"payYear":       payslip.PayYear,
-		"bankName":      payslip.BankName,
-		"bankAccount":   payslip.BankAccount,
-		"tinNumber":     payslip.TINNumber,
-		"nssfNumber":    payslip.NSSFNumber,
-		"nhifNumber":    payslip.NHIFNumber,
-		"earnings":      earnings,
-		"deductions":    deductions,
+		"id":                    payslip.ID,
+		"employeeId":            payslip.EmployeeID,
+		"empId":                 payslip.EmployeeCode,
+		"employeeName":          payslip.EmployeeName,
+		"employeePhoto":         payslip.EmployeePhoto,
+		"department":            payslip.Department,
+		"designation":           payslip.Designation,
+		"dateOfJoining":         payslip.DateOfJoining,
+		"payPeriod":             payslip.PayPeriod,
+		"payMonth":              payslip.PayMonth,
+		"payYear":               payslip.PayYear,
+		"bankName":              payslip.BankName,
+		"bankAccount":           payslip.BankAccount,
+		"tinNumber":             payslip.TINNumber,
+		"nssfNumber":            payslip.NSSFNumber,
+		"nhifNumber":            payslip.NHIFNumber,
+		"earnings":              earnings,
+		"deductions":            deductions,
 		"employerContributions": employerContributions,
 		"summary": map[string]interface{}{
 			"grossSalary":     payslip.GrossSalary,
@@ -316,6 +328,179 @@ func (s *PayslipService) GetPayslipSummaryByRun(runID uint, tenantID *uint) (map
 		"totalGross":      totalGross,
 		"totalDeductions": totalDeductions,
 		"totalNet":        totalNet,
+	}, nil
+}
+
+// GetEmployeeSalaryStructures retrieves the salary structures for all employees
+func (s *PayslipService) GetEmployeeSalaryStructures(tenantID *uint) ([]map[string]interface{}, error) {
+	employees, _, err := s.empRepo.List(1000, 0) // Fetch up to 1000 employees
+	if err != nil {
+		return nil, err
+	}
+
+	var results []map[string]interface{}
+	taxYear := time.Now().Year()
+
+	for _, emp := range employees {
+		// Only include active employees
+		if emp.Status != empModels.StatusActive {
+			continue
+		}
+
+		// Fetch salary components
+		salary, _ := s.empSalaryRepo.FindByEmployeeID(emp.ID)
+
+		var basicSalary, housingAllowance, transportAllowance, otherAllowances float64
+
+		if salary != nil {
+			if salary.BasicSalary != nil {
+				basicSalary = *salary.BasicSalary
+			}
+			if salary.HouseRentAllowance != nil {
+				housingAllowance = *salary.HouseRentAllowance
+			}
+			if salary.TransportAllowance != nil {
+				transportAllowance = *salary.TransportAllowance
+			}
+			if salary.OtherAllowances != nil {
+				otherAllowances = *salary.OtherAllowances
+			}
+			if salary.SpecialAllowance != nil {
+				otherAllowances += *salary.SpecialAllowance
+			}
+		} else if emp.Salary != nil {
+			// Fallback to employee base salary if no component record found
+			basicSalary = *emp.Salary
+		}
+
+		// Skip employees with no salary info
+		if basicSalary <= 0 {
+			continue
+		}
+
+		grossSalary := basicSalary + housingAllowance + transportAllowance + otherAllowances
+
+		// Calculate statutory deductions
+		taxResult := s.taxCalculator.CalculateAllDeductions(grossSalary, taxYear, tenantID)
+
+		// Get department name
+		departmentName := "Unassigned"
+		if emp.DepartmentID != nil {
+			dept, err := s.deptRepo.FindByID(*emp.DepartmentID)
+			if err == nil && dept != nil {
+				departmentName = dept.Name
+			}
+		}
+
+		// Get designation
+		designation := "Staff"
+		if emp.PositionID != nil {
+			pos, err := s.posRepo.FindByID(*emp.PositionID)
+			if err == nil && pos != nil {
+				designation = pos.Title
+			}
+		}
+
+		results = append(results, map[string]interface{}{
+			"employeeId":      emp.ID,
+			"employeeName":    emp.FullName(),
+			"department":      departmentName,
+			"designation":     designation,
+			"grossSalary":     grossSalary,
+			"totalDeductions": taxResult.TotalEmployeeDeductions,
+			"netPay":          taxResult.NetPay,
+			"earnings": []map[string]interface{}{
+				{"name": "Basic Pay", "amount": basicSalary},
+				{"name": "Housing Allowance", "amount": housingAllowance},
+				{"name": "Transport Allowance", "amount": transportAllowance},
+				{"name": "Other Allowances", "amount": otherAllowances},
+			},
+			"deductions": []map[string]interface{}{
+				{"name": "PAYE Tax", "amount": taxResult.PAYE},
+				{"name": "NSSF (10%)", "amount": taxResult.NSSFEmployee},
+				{"name": "NHIF", "amount": taxResult.NHIFEmployee},
+			},
+		})
+	}
+
+	return results, nil
+}
+
+// GetEmployeeSalaryStructure retrieves the salary structure for a single employee
+func (s *PayslipService) GetEmployeeSalaryStructure(employeeID uint, tenantID *uint) (map[string]interface{}, error) {
+	emp, err := s.empRepo.FindByID(employeeID)
+	if err != nil {
+		return nil, errors.New("employee not found")
+	}
+
+	// Fetch salary components
+	salary, _ := s.empSalaryRepo.FindByEmployeeID(emp.ID)
+
+	var basicSalary, housingAllowance, transportAllowance, otherAllowances float64
+
+	if salary != nil {
+		if salary.BasicSalary != nil {
+			basicSalary = *salary.BasicSalary
+		}
+		if salary.HouseRentAllowance != nil {
+			housingAllowance = *salary.HouseRentAllowance
+		}
+		if salary.TransportAllowance != nil {
+			transportAllowance = *salary.TransportAllowance
+		}
+		if salary.OtherAllowances != nil {
+			otherAllowances = *salary.OtherAllowances
+		}
+		if salary.SpecialAllowance != nil {
+			otherAllowances += *salary.SpecialAllowance
+		}
+	} else if emp.Salary != nil {
+		basicSalary = *emp.Salary
+	}
+
+	grossSalary := basicSalary + housingAllowance + transportAllowance + otherAllowances
+	taxYear := time.Now().Year()
+
+	// Calculate statutory deductions
+	taxResult := s.taxCalculator.CalculateAllDeductions(grossSalary, taxYear, tenantID)
+
+	// Get department name
+	departmentName := "Unassigned"
+	if emp.DepartmentID != nil {
+		dept, err := s.deptRepo.FindByID(*emp.DepartmentID)
+		if err == nil && dept != nil {
+			departmentName = dept.Name
+		}
+	}
+
+	// Get designation
+	designation := "Staff"
+	if emp.PositionID != nil {
+		pos, err := s.posRepo.FindByID(*emp.PositionID)
+		if err == nil && pos != nil {
+			designation = pos.Title
+		}
+	}
+
+	return map[string]interface{}{
+		"employeeId":      emp.ID,
+		"employeeName":    emp.FullName(),
+		"department":      departmentName,
+		"designation":     designation,
+		"grossSalary":     grossSalary,
+		"totalDeductions": taxResult.TotalEmployeeDeductions,
+		"netPay":          taxResult.NetPay,
+		"earnings": []map[string]interface{}{
+			{"name": "Basic Pay", "amount": basicSalary},
+			{"name": "Housing Allowance", "amount": housingAllowance},
+			{"name": "Transport Allowance", "amount": transportAllowance},
+			{"name": "Other Allowances", "amount": otherAllowances},
+		},
+		"deductions": []map[string]interface{}{
+			{"name": "PAYE Tax", "amount": taxResult.PAYE},
+			{"name": "NSSF (10%)", "amount": taxResult.NSSFEmployee},
+			{"name": "NHIF", "amount": taxResult.NHIFEmployee},
+		},
 	}, nil
 }
 
