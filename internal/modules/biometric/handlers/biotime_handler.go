@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -12,6 +13,30 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-gonic/gin"
 )
+
+type DailyAttendanceSummary struct {
+	EmpCode       string  `json:"emp_code"`
+	FirstName     string  `json:"first_name"`
+	LastName      *string `json:"last_name,omitempty"`
+	Department    string  `json:"department"`
+	Position      *string `json:"position,omitempty"`
+	Date          string  `json:"date"`
+	CheckIn       string  `json:"checkin"`
+	CheckOut      string  `json:"checkout"`
+	WorkingHours  float64 `json:"working_hours"`
+	Transactions  int     `json:"transactions"`
+	TerminalSN    string  `json:"terminal_sn"`
+	TerminalAlias *string `json:"terminal_alias,omitempty"`
+}
+
+type DailyTransactionsResponse struct {
+	Count    int                      `json:"count"`
+	Next     *string                  `json:"next"`
+	Previous *string                  `json:"previous"`
+	Message  string                   `json:"msg"`
+	Code     int                      `json:"code"`
+	Data     []DailyAttendanceSummary `json:"data"`
+}
 
 // BioTimeHandler handles BioTime API HTTP requests
 type BioTimeHandler struct {
@@ -70,7 +95,7 @@ func (h *BioTimeHandler) GetToken(c *gin.Context) {
 
 	response.Success(c, "Token retrieved successfully", map[string]interface{}{
 		"token": token,
-		"note": "Token is automatically managed and cached. You don't need to store this manually.",
+		"note":  "Token is automatically managed and cached. You don't need to store this manually.",
 	})
 }
 
@@ -188,7 +213,7 @@ func (h *BioTimeHandler) GetTransactions(c *gin.Context) {
 			for i, txn := range transactionsResp.Data {
 				transactions[i] = txn
 			}
-			
+
 			// Publish to queue (if RabbitMQ is enabled)
 			if err := service.QueueTransactions(tenantID, transactions); err != nil {
 				// Log error but don't fail the request
@@ -197,7 +222,136 @@ func (h *BioTimeHandler) GetTransactions(c *gin.Context) {
 		}
 	}()
 
+	if strings.EqualFold(c.Query("view"), "daily") {
+		daily := buildDailyAttendanceSummaries(transactionsResp)
+		dailyResp := &DailyTransactionsResponse{
+			Count:    len(daily),
+			Next:     nil,
+			Previous: nil,
+			Message:  "Success",
+			Code:     0,
+			Data:     daily,
+		}
+		response.Success(c, "Transactions retrieved successfully", dailyResp)
+		return
+	}
+
 	response.Success(c, "Transactions retrieved successfully", transactionsResp)
+}
+
+func buildDailyAttendanceSummaries(transactionsResp *services.TransactionsResponse) []DailyAttendanceSummary {
+	if transactionsResp == nil || len(transactionsResp.Data) == 0 {
+		return []DailyAttendanceSummary{}
+	}
+
+	type agg struct {
+		first         services.Transaction
+		date          string
+		checkInTime   *time.Time
+		checkOutTime  *time.Time
+		checkInRaw    string
+		checkOutRaw   string
+		transactions  int
+		terminalSN    string
+		terminalAlias *string
+	}
+
+	byKey := map[string]*agg{}
+
+	for _, txn := range transactionsResp.Data {
+		t, err := parseBioTimePunchTime(txn.PunchTime)
+		dateStr := ""
+		if err == nil {
+			dateStr = t.Format("2006-01-02")
+		} else if len(txn.PunchTime) >= 10 {
+			dateStr = txn.PunchTime[:10]
+		}
+
+		key := txn.EmpCode + "|" + dateStr
+		existing, ok := byKey[key]
+		if !ok {
+			existing = &agg{
+				first:         txn,
+				date:          dateStr,
+				transactions:  0,
+				terminalSN:    txn.TerminalSN,
+				terminalAlias: txn.TerminalAlias,
+			}
+			byKey[key] = existing
+		}
+
+		existing.transactions++
+
+		if err != nil {
+			continue
+		}
+
+		if existing.checkInTime == nil || t.Before(*existing.checkInTime) {
+			existing.checkInTime = &t
+			existing.checkInRaw = t.Format("2006-01-02 15:04:05")
+		}
+		if existing.checkOutTime == nil || t.After(*existing.checkOutTime) {
+			existing.checkOutTime = &t
+			existing.checkOutRaw = t.Format("2006-01-02 15:04:05")
+		}
+	}
+
+	out := make([]DailyAttendanceSummary, 0, len(byKey))
+	for _, a := range byKey {
+		checkIn := a.checkInRaw
+		checkOut := a.checkOutRaw
+		workingHours := 0.0
+
+		if a.checkInTime != nil && a.checkOutTime != nil && a.checkOutTime.After(*a.checkInTime) {
+			workingHours = a.checkOutTime.Sub(*a.checkInTime).Hours()
+		}
+
+		out = append(out, DailyAttendanceSummary{
+			EmpCode:       a.first.EmpCode,
+			FirstName:     a.first.FirstName,
+			LastName:      a.first.LastName,
+			Department:    a.first.Department,
+			Position:      a.first.Position,
+			Date:          a.date,
+			CheckIn:       checkIn,
+			CheckOut:      checkOut,
+			WorkingHours:  roundTo2DP(workingHours),
+			Transactions:  a.transactions,
+			TerminalSN:    a.terminalSN,
+			TerminalAlias: a.terminalAlias,
+		})
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Date != out[j].Date {
+			return out[i].Date > out[j].Date
+		}
+		return out[i].CheckIn > out[j].CheckIn
+	})
+
+	return out
+}
+
+func parseBioTimePunchTime(timeStr string) (time.Time, error) {
+	layouts := []string{
+		"2006-01-02 15:04:05",
+		"2006-01-02T15:04:05Z",
+		"2006-01-02T15:04:05",
+		"2006-01-02 15:04:05.000000",
+		time.RFC3339,
+		time.RFC3339Nano,
+	}
+
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, timeStr); err == nil {
+			return t, nil
+		}
+	}
+	return time.Time{}, fmt.Errorf("unable to parse time: %s", timeStr)
+}
+
+func roundTo2DP(v float64) float64 {
+	return float64(int(v*100+0.5)) / 100
 }
 
 // GetTransaction handles fetching a single transaction by ID from BioTime API
@@ -250,7 +404,7 @@ func (h *BioTimeHandler) RefreshToken(c *gin.Context) {
 
 	response.Success(c, "Token refreshed successfully", map[string]interface{}{
 		"token": token,
-		"note": "New token has been stored in database and will be used for future requests.",
+		"note":  "New token has been stored in database and will be used for future requests.",
 	})
 }
 
@@ -404,7 +558,7 @@ func (h *BioTimeHandler) GetDailyAttendance(c *gin.Context) {
 	}
 
 	response.Success(c, "Daily attendance retrieved successfully", map[string]interface{}{
-		"data":       attendance,
+		"data": attendance,
 		"pagination": map[string]interface{}{
 			"page":        params.Page,
 			"page_size":   params.PageSize,
@@ -501,7 +655,7 @@ func (h *BioTimeHandler) GetExceptional(c *gin.Context) {
 	}
 
 	response.Success(c, "Late arrivals retrieved successfully", map[string]interface{}{
-		"data":       lateArrivals,
+		"data": lateArrivals,
 		"pagination": map[string]interface{}{
 			"page":        params.Page,
 			"page_size":   params.PageSize,

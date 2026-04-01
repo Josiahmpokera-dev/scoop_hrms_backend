@@ -1,6 +1,7 @@
-package main
-
 //go:build ignore
+// +build ignore
+
+package main
 
 import (
 	"fmt"
@@ -164,4 +165,3 @@ func verifyPAYEConfigs(db *gorm.DB) error {
 	fmt.Println("   ✓ All required PAYE configs present")
 	return nil
 }
-
