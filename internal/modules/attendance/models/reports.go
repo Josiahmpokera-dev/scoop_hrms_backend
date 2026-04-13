@@ -2,16 +2,16 @@ package models
 
 // AttendanceSummaryResponse represents the KPI summary
 type AttendanceSummaryResponse struct {
-	PresentRate         float64            `json:"presentRate"`
-	AbsentRate          float64            `json:"absentRate"`
-	LateRate            float64            `json:"lateRate"`
-	AverageWorkingHours float64            `json:"averageWorkingHours"`
-	OvertimeHours       float64            `json:"overtimeHours"`
-	ExceptionRate       float64            `json:"exceptionRate"`
-	OnTimeRate          float64            `json:"onTimeRate"`
-	ShiftAdherence      float64            `json:"shiftAdherence"`
-	TotalEmployees      int64              `json:"totalEmployees"`
-	Trends              AttendanceTrends   `json:"trends"`
+	PresentRate         float64          `json:"presentRate"`
+	AbsentRate          float64          `json:"absentRate"`
+	LateRate            float64          `json:"lateRate"`
+	AverageWorkingHours float64          `json:"averageWorkingHours"`
+	OvertimeHours       float64          `json:"overtimeHours"`
+	ExceptionRate       float64          `json:"exceptionRate"`
+	OnTimeRate          float64          `json:"onTimeRate"`
+	ShiftAdherence      float64          `json:"shiftAdherence"`
+	TotalEmployees      int64            `json:"totalEmployees"`
+	Trends              AttendanceTrends `json:"trends"`
 }
 
 type AttendanceTrends struct {
@@ -22,13 +22,13 @@ type AttendanceTrends struct {
 
 // AttendanceTrendResponse represents daily/weekly trends
 type AttendanceTrendResponse struct {
-	Date           string  `json:"date"`
-	Day            string  `json:"day"`
-	Present        int64   `json:"present"`
-	Absent         int64   `json:"absent"`
-	Late           int64   `json:"late"`
-	OnLeave        int64   `json:"onLeave"`
-	TotalScheduled int64   `json:"totalScheduled"`
+	Date           string `json:"date"`
+	Day            string `json:"day"`
+	Present        int64  `json:"present"`
+	Absent         int64  `json:"absent"`
+	Late           int64  `json:"late"`
+	OnLeave        int64  `json:"onLeave"`
+	TotalScheduled int64  `json:"totalScheduled"`
 }
 
 // DepartmentAttendanceResponse represents department-wise stats
@@ -83,4 +83,43 @@ type ExportReportRequest struct {
 type ExportReportResponse struct {
 	DownloadURL string `json:"downloadUrl"`
 	JobID       string `json:"jobId,omitempty"`
+	ExpiresAt   string `json:"expiresAt,omitempty"`
+}
+
+type AttendanceOverviewPeriod struct {
+	StartDate     string `json:"start_date"`
+	EndDate       string `json:"end_date"`
+	View          string `json:"view"`
+	LateThreshold string `json:"late_threshold"`
+}
+
+type AttendanceOverviewFilters struct {
+	DepartmentID *uint   `json:"department_id"`
+	LocationID   *uint   `json:"location_id"`
+	EmpCode      *string `json:"emp_code"`
+}
+
+type AttendanceOverviewTotals struct {
+	TotalEmployees int64 `json:"total_employees"`
+	Present        int64 `json:"present"`
+	Absent         int64 `json:"absent"`
+	OnLeave        int64 `json:"on_leave"`
+	Late           int64 `json:"late"`
+	Exceptions     int64 `json:"exceptions"`
+}
+
+type AttendanceOverviewUnits struct {
+	Late       string `json:"late"`
+	Exceptions string `json:"exceptions"`
+}
+
+type AttendanceOverviewMeta struct {
+	Units AttendanceOverviewUnits `json:"units"`
+}
+
+type AttendanceOverviewData struct {
+	Period  AttendanceOverviewPeriod  `json:"period"`
+	Filters AttendanceOverviewFilters `json:"filters"`
+	Totals  AttendanceOverviewTotals  `json:"totals"`
+	Meta    AttendanceOverviewMeta    `json:"meta"`
 }

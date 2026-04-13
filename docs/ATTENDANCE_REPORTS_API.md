@@ -3,7 +3,7 @@
 This document outlines the API endpoints required to power the **Attendance Reports & Analytics** page. These endpoints enable fetching key performance indicators (KPIs), trend analysis, department-wise breakdowns, and compliance alerts.
 
 ## Base URL
-`http://localhost:3000/api/v1`
+`http://localhost:8080/api/v1`
 
 ## Authentication
 All endpoints require a valid Bearer token in the Authorization header.
@@ -129,9 +129,8 @@ Provides a breakdown of attendance statistics aggregated by department.
       "present": 45,
       "absent": 2,
       "late": 3,
-      "onLeave": 0,
-      "totalEmployees": 50,
-      "attendancePercentage": 90.0
+      "total": 50,
+      "presentRate": 90.0
     },
     {
       "departmentId": "dept_002",
@@ -139,9 +138,8 @@ Provides a breakdown of attendance statistics aggregated by department.
       "present": 28,
       "absent": 1,
       "late": 1,
-      "onLeave": 0,
-      "totalEmployees": 30,
-      "attendancePercentage": 93.3
+      "total": 30,
+      "presentRate": 93.3
     }
   ]
 }
@@ -171,23 +169,25 @@ Fetches a list of attendance compliance issues, such as exceeding working hours,
   "data": [
     {
       "id": "viol_123",
-      "type": "Weekly Hours Exceeded",
       "employeeId": "emp_456",
       "employeeName": "John Doe",
       "department": "Engineering",
+      "violationType": "Weekly Hours Exceeded",
+      "violationDate": "2026-03-15",
       "details": "Worked 52 hours in week 42 (Limit: 45h)",
       "severity": "High",
-      "date": "2024-03-15"
+      "status": "Open"
     },
     {
       "id": "viol_124",
-      "type": "No Rest Day",
       "employeeId": "emp_789",
       "employeeName": "Ashley Martinez",
       "department": "Sales",
+      "violationType": "No Rest Day",
+      "violationDate": "2026-03-14",
       "details": "Worked 7 consecutive days without a break",
       "severity": "Critical",
-      "date": "2024-03-14"
+      "status": "Open"
     }
   ]
 }
@@ -200,7 +200,7 @@ Fetches a list of attendance compliance issues, such as exceeding working hours,
 Detailed breakdown of overtime hours and costs.
 
 ### Endpoint
-`GET /attendance/reports/overtime`
+`GET /attendance/reports/overtime-analysis`
 
 ### Query Parameters
 | Parameter | Type | Required | Description |
@@ -214,15 +214,16 @@ Detailed breakdown of overtime hours and costs.
   "success": true,
   "data": {
     "totalOvertimeHours": 145.5,
-    "averageOvertimePerEmployee": 2.9,
-    "estimatedCost": 4200000, // Currency value (e.g., TZS)
-    "currency": "TZS",
-    "topContributors": [
+    "overtimeCost": 4200000,
+    "employeesWithOvertime": 12,
+    "topOvertimeDepartments": [
       {
-        "employeeId": "emp_001",
-        "name": "John Smith",
-        "hours": 12.5
+        "departmentName": "Engineering",
+        "hours": 65.5
       }
+    ],
+    "overtimeTrends": [
+      { "date": "2026-03-01", "hours": 10 }
     ]
   }
 }
@@ -240,11 +241,11 @@ Triggers the generation of a downloadable report file (PDF, CSV, Excel).
 ### Request Body
 ```json
 {
-  "reportType": "daily_attendance", // Options: daily_attendance, monthly_summary, late_trends, overtime, compliance
+  "reportType": "daily", // Supported: daily (alias: daily_attendance)
   "startDate": "2024-03-01",
   "endDate": "2024-03-31",
-  "departmentId": "dept_001", // Optional
-  "format": "pdf" // Options: pdf, csv, xlsx
+  "departmentId": "12", // Optional (numeric department id as string)
+  "format": "csv" // Options: csv, xlsx
 }
 ```
 
@@ -254,8 +255,9 @@ Triggers the generation of a downloadable report file (PDF, CSV, Excel).
   "success": true,
   "message": "Report generation started",
   "data": {
-    "downloadUrl": "https://api.scoophrms.com/downloads/reports/attendance_20240301.pdf",
-    "jobId": "job_998877" // If async processing is needed
+    "downloadUrl": "http://localhost:8080/storage/reports/attendance_daily_2024-03-01_1711773180.csv",
+    "jobId": "job_998877",
+    "expiresAt": "2026-04-10T10:15:00.000Z"
   }
 }
 ```

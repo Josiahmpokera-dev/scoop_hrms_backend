@@ -992,6 +992,12 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceReports.GET("/employee-utilization", attendanceReportsHandler.GetEmployeeUtilizationReport) // Employee utilization
 		}
 
+		attendanceOverview := v1.Group("/attendance")
+		attendanceOverview.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
+		{
+			attendanceOverview.GET("/overview", attendanceReportsHandler.GetOverview)
+		}
+
 		// ============ Attendance Module: Manual Punches ============
 		manualPunches := v1.Group("/attendance/manual-punches")
 		manualPunches.Use(middleware.AuthMiddleware())

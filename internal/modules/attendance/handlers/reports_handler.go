@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
@@ -34,7 +36,14 @@ func (h *AttendanceReportsHandler) GetSummary(c *gin.Context) {
 	deptIDStr := c.Query("departmentId")
 
 	if startDate == "" || endDate == "" {
-		response.BadRequest(c, "startDate and endDate are required", nil)
+		errs := map[string]string{}
+		if startDate == "" {
+			errs["startDate"] = "required"
+		}
+		if endDate == "" {
+			errs["endDate"] = "required"
+		}
+		response.BadRequest(c, "Invalid date range", errs)
 		return
 	}
 
@@ -65,7 +74,14 @@ func (h *AttendanceReportsHandler) GetTrends(c *gin.Context) {
 	interval := c.DefaultQuery("interval", "daily")
 
 	if startDate == "" || endDate == "" {
-		response.BadRequest(c, "startDate and endDate are required", nil)
+		errs := map[string]string{}
+		if startDate == "" {
+			errs["startDate"] = "required"
+		}
+		if endDate == "" {
+			errs["endDate"] = "required"
+		}
+		response.BadRequest(c, "Invalid date range", errs)
 		return
 	}
 
@@ -94,7 +110,7 @@ func (h *AttendanceReportsHandler) GetDepartmentStats(c *gin.Context) {
 	// orgIDStr := c.Query("organizationId") // Not used in repo yet, but can be added
 
 	if date == "" {
-		response.BadRequest(c, "date is required", nil)
+		response.BadRequest(c, "Invalid date range", map[string]string{"date": "required"})
 		return
 	}
 
@@ -104,7 +120,26 @@ func (h *AttendanceReportsHandler) GetDepartmentStats(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, "Department statistics retrieved successfully", stats)
+	data := make([]map[string]interface{}, 0, len(stats))
+	for _, s := range stats {
+		total := s.TotalEmployees
+		presentRate := 0.0
+		if total > 0 {
+			presentRate = (float64(s.Present) / float64(total)) * 100
+		}
+
+		data = append(data, map[string]interface{}{
+			"departmentId":   s.DepartmentID,
+			"departmentName": s.DepartmentName,
+			"present":        s.Present,
+			"absent":         s.Absent,
+			"late":           s.Late,
+			"total":          total,
+			"presentRate":    presentRate,
+		})
+	}
+
+	response.Success(c, "Department attendance retrieved successfully", data)
 }
 
 // GetComplianceViolations returns compliance issues
@@ -116,7 +151,14 @@ func (h *AttendanceReportsHandler) GetComplianceViolations(c *gin.Context) {
 	severity := c.Query("severity")
 
 	if startDate == "" || endDate == "" {
-		response.BadRequest(c, "startDate and endDate are required", nil)
+		errs := map[string]string{}
+		if startDate == "" {
+			errs["startDate"] = "required"
+		}
+		if endDate == "" {
+			errs["endDate"] = "required"
+		}
+		response.BadRequest(c, "Invalid date range", errs)
 		return
 	}
 
@@ -135,7 +177,22 @@ func (h *AttendanceReportsHandler) GetComplianceViolations(c *gin.Context) {
 		return
 	}
 
-	response.Success(c, "Compliance violations retrieved successfully", violations)
+	data := make([]map[string]interface{}, 0, len(violations))
+	for _, v := range violations {
+		data = append(data, map[string]interface{}{
+			"id":            v.ID,
+			"employeeId":    v.EmployeeID,
+			"employeeName":  v.EmployeeName,
+			"department":    v.Department,
+			"violationType": v.Type,
+			"violationDate": v.Date,
+			"severity":      v.Severity,
+			"details":       v.Details,
+			"status":        "Open",
+		})
+	}
+
+	response.Success(c, "Compliance violations retrieved successfully", data)
 }
 
 // GetOvertimeAnalysis returns overtime analysis
@@ -145,11 +202,18 @@ func (h *AttendanceReportsHandler) GetOvertimeAnalysis(c *gin.Context) {
 	endDate := c.Query("endDate")
 
 	if startDate == "" || endDate == "" {
-		response.BadRequest(c, "startDate and endDate are required", nil)
+		errs := map[string]string{}
+		if startDate == "" {
+			errs["startDate"] = "required"
+		}
+		if endDate == "" {
+			errs["endDate"] = "required"
+		}
+		response.BadRequest(c, "Invalid date range", errs)
 		return
 	}
 
-	analysis, err := h.service.GetOvertimeAnalysis(startDate, endDate)
+	analysis, err := h.service.GetOvertimeAnalysisUI(startDate, endDate)
 	if err != nil {
 		response.InternalServerError(c, "Failed to fetch overtime analysis", err)
 		return
@@ -169,11 +233,129 @@ func (h *AttendanceReportsHandler) ExportReport(c *gin.Context) {
 
 	result, err := h.service.ExportReport(req)
 	if err != nil {
+		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "unsupported") {
+			response.ValidationError(c, "Validation failed", map[string]string{"export": err.Error()})
+			return
+		}
 		response.InternalServerError(c, "Failed to initiate report export", err)
 		return
 	}
 
-	response.Success(c, "Report export initiated successfully", result)
+	if result != nil && strings.HasPrefix(result.DownloadURL, "/storage/") {
+		proto := c.GetHeader("X-Forwarded-Proto")
+		if proto == "" {
+			if c.Request.TLS != nil {
+				proto = "https"
+			} else {
+				proto = "http"
+			}
+		}
+		host := c.GetHeader("X-Forwarded-Host")
+		if host == "" {
+			host = c.Request.Host
+		}
+		result.DownloadURL = proto + "://" + host + result.DownloadURL
+	}
+
+	response.Success(c, "Report generation started", result)
+}
+
+func (h *AttendanceReportsHandler) GetOverview(c *gin.Context) {
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+	view := c.Query("view")
+
+	if startDate == "" || endDate == "" {
+		errs := map[string]string{}
+		if startDate == "" {
+			errs["start_date"] = "required"
+		}
+		if endDate == "" {
+			errs["end_date"] = "required"
+		}
+		response.BadRequest(c, "Invalid date range", errs)
+		return
+	}
+
+	startTime, err := parseOverviewDateTime(startDate, true)
+	if err != nil {
+		response.BadRequest(c, "Invalid date range", map[string]string{"start_date": err.Error()})
+		return
+	}
+
+	endTime, err := parseOverviewDateTime(endDate, false)
+	if err != nil {
+		response.BadRequest(c, "Invalid date range", map[string]string{"end_date": err.Error()})
+		return
+	}
+
+	if startTime.After(endTime) {
+		response.BadRequest(c, "Invalid date range", map[string]string{"start_date": "must be before end_date"})
+		return
+	}
+
+	lateThreshold := c.DefaultQuery("late_threshold", "09:20:00")
+	if _, err := time.Parse("15:04:05", lateThreshold); err != nil {
+		response.ValidationError(c, "Validation failed", map[string]string{"late_threshold": "invalid format HH:mm:ss"})
+		return
+	}
+
+	var deptID *uint
+	if deptIDStr := c.Query("department_id"); deptIDStr != "" {
+		id, err := strconv.ParseUint(deptIDStr, 10, 32)
+		if err != nil {
+			response.BadRequest(c, "Invalid department_id", nil)
+			return
+		}
+		uid := uint(id)
+		deptID = &uid
+	}
+
+	var locationID *uint
+	if locationIDStr := c.Query("location_id"); locationIDStr != "" {
+		id, err := strconv.ParseUint(locationIDStr, 10, 32)
+		if err != nil {
+			response.BadRequest(c, "Invalid location_id", nil)
+			return
+		}
+		uid := uint(id)
+		locationID = &uid
+	}
+
+	var empCode *string
+	if emp := c.Query("emp_code"); emp != "" {
+		empCode = &emp
+	}
+
+	data, err := h.service.GetOverview(startTime, endTime, view, deptID, locationID, empCode, lateThreshold)
+	if err != nil {
+		response.InternalServerError(c, "Unable to compute overview", err)
+		return
+	}
+
+	response.Success(c, "Attendance overview retrieved successfully", data)
+}
+
+func parseOverviewDateTime(value string, isStart bool) (time.Time, error) {
+	layouts := []string{
+		"2006-01-02 15:04:05",
+		time.RFC3339,
+		"2006-01-02",
+	}
+
+	for _, layout := range layouts {
+		if t, err := time.Parse(layout, value); err == nil {
+			if layout == "2006-01-02" {
+				if isStart {
+					return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC), nil
+				}
+				return time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, 0, time.UTC), nil
+			}
+			return t, nil
+		}
+	}
+
+	return time.Time{}, fmt.Errorf("invalid format, use YYYY-MM-DD HH:MM:SS")
 }
 
 // GetTimesheetSummaryReport returns a summary of timesheets
