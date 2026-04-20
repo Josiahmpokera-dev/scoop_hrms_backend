@@ -322,7 +322,7 @@ func (s *EnrollmentService) computeStatus(r models.MergedAttendance) string {
 
 	if r.CheckIn != nil {
 		cin, _ := time.Parse("15:04:05", *r.CheckIn)
-		threshold, _ := time.Parse("15:04:05", "08:30:00")
+		threshold, _ := time.Parse("15:04:05", "09:00:00")
 		if cin.After(threshold) {
 			return "Late"
 		}

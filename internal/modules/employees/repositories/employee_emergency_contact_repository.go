@@ -50,6 +50,10 @@ func (r *EmployeeEmergencyContactRepository) DeleteByDraftID(draftID uint) error
 	return r.db.Where("draft_id = ?", draftID).Delete(&models.EmployeeEmergencyContact{}).Error
 }
 
+func (r *EmployeeEmergencyContactRepository) DeleteByEmployeeID(employeeID uint) error {
+	return r.db.Where("employee_id = ?", employeeID).Delete(&models.EmployeeEmergencyContact{}).Error
+}
+
 // MigrateToEmployee migrates emergency contacts from draft to employee
 func (r *EmployeeEmergencyContactRepository) MigrateToEmployee(draftID uint, employeeID uint) error {
 	return r.db.Model(&models.EmployeeEmergencyContact{}).

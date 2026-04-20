@@ -25,6 +25,50 @@ func NewAssetService() *AssetService {
 	}
 }
 
+func (s *AssetService) GetOverview(req *models.AssetOverviewRequest, tenantID *uint) (*models.AssetOverviewResponse, error) {
+	filters := map[string]interface{}{}
+	if req.AssetType != nil && *req.AssetType != "" {
+		filters["asset_type"] = strings.ToLower(strings.TrimSpace(*req.AssetType))
+	}
+	if req.Status != nil && *req.Status != "" {
+		filters["status"] = strings.ToLower(strings.TrimSpace(*req.Status))
+	}
+	if req.Department != nil && *req.Department != "" {
+		filters["department"] = strings.TrimSpace(*req.Department)
+	}
+
+	row, err := s.repo.Overview(tenantID, filters)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get asset overview: %w", err)
+	}
+
+	currency := "TZS"
+	if req.Currency != nil && strings.TrimSpace(*req.Currency) != "" {
+		currency = strings.TrimSpace(*req.Currency)
+	}
+
+	return &models.AssetOverviewResponse{
+		Filters: models.AssetOverviewFilters{
+			AssetType:  req.AssetType,
+			Department: req.Department,
+			Status:     req.Status,
+			Currency:   &currency,
+		},
+		Totals: models.AssetOverviewTotals{
+			TotalAssets: row.TotalAssets,
+			InUse:       row.InUse,
+			Available:   row.Available,
+			UnderRepair: row.UnderRepair,
+			Retired:     row.Retired,
+			TotalValue:  row.TotalValue,
+		},
+		Meta: models.AssetOverviewMeta{
+			ValueUnit: "decimal",
+			Currency:  currency,
+		},
+	}, nil
+}
+
 // GetAssetTypePrefix returns the prefix for asset code generation
 func (s *AssetService) GetAssetTypePrefix(assetType string) string {
 	prefixMap := map[string]string{

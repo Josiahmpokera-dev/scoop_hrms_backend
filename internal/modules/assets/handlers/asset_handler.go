@@ -130,6 +130,23 @@ func (h *AssetHandler) ListAssets(c *gin.Context) {
 	})
 }
 
+func (h *AssetHandler) GetAssetOverview(c *gin.Context) {
+	var req models.AssetOverviewRequest
+	if err := c.ShouldBindQuery(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+	data, err := h.service.GetOverview(&req, tenantID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Asset overview retrieved successfully", data)
+}
+
 // GetAsset handles getting an asset by ID
 func (h *AssetHandler) GetAsset(c *gin.Context) {
 	var req models.GetAssetRequest

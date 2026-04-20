@@ -10,6 +10,15 @@ type AssetRepository struct {
 	db *gorm.DB
 }
 
+type assetOverviewRow struct {
+	TotalAssets int64    `gorm:"column:total_assets"`
+	InUse       int64    `gorm:"column:in_use"`
+	Available   int64    `gorm:"column:available"`
+	UnderRepair int64    `gorm:"column:under_repair"`
+	Retired     int64    `gorm:"column:retired"`
+	TotalValue  *float64 `gorm:"column:total_value"`
+}
+
 func NewAssetRepository() *AssetRepository {
 	return &AssetRepository{
 		db: database.GetDB(),
@@ -160,4 +169,34 @@ func (r *AssetRepository) FindByEmployeeID(employeeID string, tenantID *uint) ([
 	
 	err := query.Order("assigned_date DESC").Find(&assets).Error
 	return assets, err
+}
+
+func (r *AssetRepository) Overview(tenantID *uint, filters map[string]interface{}) (*assetOverviewRow, error) {
+	query := r.db.Model(&models.Asset{})
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	if status, ok := filters["status"].(string); ok && status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if assetType, ok := filters["asset_type"].(string); ok && assetType != "" {
+		query = query.Where("asset_type = ?", assetType)
+	}
+	if department, ok := filters["department"].(string); ok && department != "" {
+		query = query.Where("department = ?", department)
+	}
+
+	var out assetOverviewRow
+	if err := query.Select(`
+		COUNT(*) AS total_assets,
+		SUM(CASE WHEN status = 'in_use' THEN 1 ELSE 0 END) AS in_use,
+		SUM(CASE WHEN status = 'available' THEN 1 ELSE 0 END) AS available,
+		SUM(CASE WHEN status = 'under_repair' THEN 1 ELSE 0 END) AS under_repair,
+		SUM(CASE WHEN status = 'retired' THEN 1 ELSE 0 END) AS retired,
+		COALESCE(SUM(value), 0) AS total_value
+	`).Scan(&out).Error; err != nil {
+		return nil, err
+	}
+	return &out, nil
 }

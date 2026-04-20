@@ -82,6 +82,10 @@ func (r *EmployeeDocumentRepository) DeleteByDraftID(draftID uint) error {
 	return r.db.Where("draft_id = ?", draftID).Delete(&models.EmployeeDocument{}).Error
 }
 
+func (r *EmployeeDocumentRepository) DeleteByEmployeeID(employeeID uint) error {
+	return r.db.Where("employee_id = ?", employeeID).Delete(&models.EmployeeDocument{}).Error
+}
+
 // MigrateToEmployee migrates documents from draft to employee
 func (r *EmployeeDocumentRepository) MigrateToEmployee(draftID uint, employeeID uint) error {
 	return r.db.Model(&models.EmployeeDocument{}).

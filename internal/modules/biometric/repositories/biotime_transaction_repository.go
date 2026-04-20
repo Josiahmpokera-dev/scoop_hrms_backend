@@ -186,15 +186,15 @@ type LateArrivalRecord struct {
 	MinutesLate int        `json:"minutes_late"`
 }
 
-// GetLateArrivals gets employees who checked in more than 30 minutes after 08:00 (i.e., after 08:30)
+// GetLateArrivals gets employees who checked in after 09:00
 // Filters by datetime range but groups by date for daily summaries
 func (r *BioTimeTransactionRepository) GetLateArrivals(tenantID *uint, startTime, endTime time.Time, empCode *string, page, pageSize int) ([]LateArrivalRecord, int64, error) {
 	var records []LateArrivalRecord
 	var total int64
 
 	// Build base SQL query - filter by datetime range, group by date, and filter for late arrivals
-	// Late arrival = check-in time (MIN punch_time) is after 08:30 (08:00 + 30 minutes)
-	// minutes_late = (check_in_time - 08:30) in minutes
+	// Late arrival = check-in time (MIN punch_time) is after 09:00
+	// minutes_late = (check_in_time - 09:00) in minutes
 	// Use CTE to first get the min punch_time, then calculate minutes_late
 	baseSQL := `
 		WITH daily_checkins AS (
@@ -225,7 +225,7 @@ func (r *BioTimeTransactionRepository) GetLateArrivals(tenantID *uint, startTime
 
 	baseSQL += `
 			GROUP BY emp_code, first_name, last_name, DATE(punch_time)
-			HAVING MIN(punch_time)::time > TIME '08:30:00'
+			HAVING MIN(punch_time)::time > TIME '09:00:00'
 		)
 		SELECT 
 			emp_code,
@@ -233,7 +233,7 @@ func (r *BioTimeTransactionRepository) GetLateArrivals(tenantID *uint, startTime
 			last_name,
 			date,
 			check_in,
-			(EXTRACT(EPOCH FROM (check_in - (date::timestamp + INTERVAL '8 hours 30 minutes'))) / 60)::integer as minutes_late
+			(EXTRACT(EPOCH FROM (check_in - (date::timestamp + INTERVAL '9 hours'))) / 60)::integer as minutes_late
 		FROM daily_checkins
 	`
 
@@ -260,7 +260,7 @@ func (r *BioTimeTransactionRepository) GetLateArrivals(tenantID *uint, startTime
 
 	countSQL += `
 			GROUP BY emp_code, DATE(punch_time)
-			HAVING MIN(punch_time)::time > TIME '08:30:00'
+			HAVING MIN(punch_time)::time > TIME '09:00:00'
 		) as late_arrivals
 	`
 

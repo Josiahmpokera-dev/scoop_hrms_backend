@@ -777,3 +777,44 @@ func (h *OnboardingHandler) GetDraftEmployeeByID(c *gin.Context) {
 
 	response.Success(c, "Draft employee retrieved successfully", draftResponse)
 }
+
+func (h *OnboardingHandler) EditEmployeeStep(c *gin.Context) {
+	employeeID := c.Param("employee_id")
+	if employeeID == "" {
+		response.ValidationError(c, "Validation failed", "employee_id is required")
+		return
+	}
+
+	stepStr := c.Param("step")
+	step, err := strconv.Atoi(stepStr)
+	if err != nil || step < 1 || step > 10 {
+		response.ValidationError(c, "Validation failed", "step must be between 1 and 10")
+		return
+	}
+
+	var req models.EmployeeEditRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	if req.Step != step {
+		response.BadRequest(c, "Step number in URL must match step in request body", nil)
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+	user, _ := c.Get("user")
+	var updatedBy *uint
+	if userObj, ok := user.(*userModels.User); ok {
+		updatedBy = &userObj.ID
+	}
+
+	result, err := h.onboardingService.EditEmployeeStep(employeeID, tenantID, step, req.Data, updatedBy)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Employee step updated successfully", result)
+}

@@ -26,7 +26,7 @@ func NewAttendanceReportRepository() *AttendanceReportRepository {
 func (r *AttendanceReportRepository) GetAttendanceSummary(startDate, endDate time.Time, departmentID *uint) (*models.AttendanceSummaryResponse, error) {
 	var response models.AttendanceSummaryResponse
 
-	lateThreshold := "09:20:00"
+	lateThreshold := "09:00:00"
 
 	employeesQuery := r.db.Model(&employeeModels.Employee{}).
 		Where("status = ?", "active").
@@ -218,7 +218,7 @@ func (r *AttendanceReportRepository) GetComplianceViolations(startDate, endDate 
 
 // GetAttendanceTrends fetches daily trends
 func (r *AttendanceReportRepository) GetAttendanceTrends(startDate, endDate time.Time, departmentID *uint) ([]models.AttendanceTrendResponse, error) {
-	lateThreshold := "09:20:00"
+	lateThreshold := "09:00:00"
 
 	employeesQuery := r.db.Model(&employeeModels.Employee{}).
 		Where("status = ?", "active").
@@ -352,7 +352,7 @@ ORDER BY d.day
 
 // GetDepartmentAttendance fetches department-wise stats
 func (r *AttendanceReportRepository) GetDepartmentAttendance(date time.Time) ([]models.DepartmentAttendanceResponse, error) {
-	lateThreshold := "09:20:00"
+	lateThreshold := "09:00:00"
 
 	type row struct {
 		DepartmentID   string

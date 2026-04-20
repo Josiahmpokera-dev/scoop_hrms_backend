@@ -142,6 +142,40 @@ type ListAssetsRequest struct {
 	Department *string `form:"department"`
 }
 
+type AssetOverviewRequest struct {
+	AssetType  *string `form:"asset_type"`
+	Department *string `form:"department"`
+	Status     *string `form:"status"`
+	Currency   *string `form:"currency"`
+}
+
+type AssetOverviewResponse struct {
+	Filters AssetOverviewFilters `json:"filters"`
+	Totals  AssetOverviewTotals  `json:"totals"`
+	Meta    AssetOverviewMeta    `json:"meta"`
+}
+
+type AssetOverviewFilters struct {
+	AssetType  *string `json:"asset_type"`
+	Department *string `json:"department"`
+	Status     *string `json:"status"`
+	Currency   *string `json:"currency"`
+}
+
+type AssetOverviewTotals struct {
+	TotalAssets int64    `json:"total_assets"`
+	InUse       int64    `json:"in_use"`
+	Available   int64    `json:"available"`
+	UnderRepair int64    `json:"under_repair"`
+	Retired     int64    `json:"retired"`
+	TotalValue  *float64 `json:"total_value"`
+}
+
+type AssetOverviewMeta struct {
+	ValueUnit string `json:"value_unit"`
+	Currency  string `json:"currency"`
+}
+
 // AssetResponse represents the response for an asset
 type AssetResponse struct {
 	ID                  uint       `json:"id"`

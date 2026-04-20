@@ -294,7 +294,7 @@ func (h *AttendanceReportsHandler) GetOverview(c *gin.Context) {
 		return
 	}
 
-	lateThreshold := c.DefaultQuery("late_threshold", "09:20:00")
+	lateThreshold := c.DefaultQuery("late_threshold", "09:00:00")
 	if _, err := time.Parse("15:04:05", lateThreshold); err != nil {
 		response.ValidationError(c, "Validation failed", map[string]string{"late_threshold": "invalid format HH:mm:ss"})
 		return

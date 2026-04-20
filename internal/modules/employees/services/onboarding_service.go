@@ -263,6 +263,988 @@ func (s *OnboardingService) SaveStepByEmployeeID(employeeID string, tenantID *ui
 	return s.SaveStep(draft.ID, step, data, updatedBy)
 }
 
+func (s *OnboardingService) EditEmployeeStep(employeeID string, tenantID *uint, step int, data map[string]interface{}, updatedBy *uint) (*models.EmployeeEditResponse, error) {
+	_ = tenantID
+
+	employeeID = strings.TrimSpace(employeeID)
+	employeeID = strings.ToUpper(employeeID)
+	if employeeID == "" {
+		return nil, errors.New("employee ID cannot be empty")
+	}
+
+	employee, err := s.employeeRepo.FindByEmployeeID(employeeID)
+	if err != nil || employee == nil {
+		return nil, errors.New("employee not found")
+	}
+
+	updatedFields := make([]string, 0)
+
+	switch step {
+	case 1:
+		err = s.editEmployeeStep1(employee, data, updatedBy, &updatedFields)
+	case 2:
+		err = s.editEmployeeStep2(employee, data, updatedBy, &updatedFields)
+	case 3:
+		err = s.editEmployeeStep3(employee, data, updatedBy, &updatedFields)
+	case 4:
+		err = s.editEmployeeStep4(employee, data, updatedBy, &updatedFields)
+	case 5:
+		err = s.editEmployeeStep5(employee, data, updatedBy, &updatedFields)
+	case 6:
+		err = s.editEmployeeStep6(employee, data, updatedBy, &updatedFields)
+	case 7:
+		err = s.editEmployeeStep7(employee, data, updatedBy, &updatedFields)
+	case 8:
+		err = s.editEmployeeStep8(employee, data, updatedBy, &updatedFields)
+	case 9:
+		err = s.editEmployeeStep9(employee, data, updatedBy, &updatedFields)
+	case 10:
+		err = s.editEmployeeStep10(employee, data, updatedBy, &updatedFields)
+	default:
+		return nil, errors.New("invalid step number")
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.EmployeeEditResponse{
+		EmployeeID:    employee.EmployeeID,
+		Step:          step,
+		UpdatedFields: updatedFields,
+		Message:       "Updated successfully",
+		UpdatedAt:     employee.UpdatedAt,
+	}, nil
+}
+
+func (s *OnboardingService) editEmployeeStep1(employee *models.Employee, data map[string]interface{}, updatedBy *uint, updatedFields *[]string) error {
+	basicInfo, err := s.basicInfoRepo.FindByEmployeeID(employee.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			basicInfo = &models.EmployeeBasicInformation{
+				EmployeeID:       &employee.ID,
+				EmployeeIDString: &employee.EmployeeID,
+				FirstName:        employee.FirstName,
+				MiddleName:       employee.MiddleName,
+				LastName:         employee.LastName,
+				DateOfBirth:      employee.DateOfBirth,
+				Gender:           employee.Gender,
+				MaritalStatus:    employee.MaritalStatus,
+				BloodGroup:       employee.BloodGroup,
+				Nationality:      employee.Nationality,
+				PersonalEmail:    employee.PersonalEmail,
+				MobileNumber:     employee.PhoneNumber,
+				AlternateNumber:  employee.AlternatePhone,
+				PhotoURL:         employee.PhotoURL,
+			}
+			if err := s.basicInfoRepo.Create(basicInfo); err != nil {
+				return fmt.Errorf("failed to create basic information: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to load basic information: %w", err)
+		}
+	}
+
+	setEmployeeStringField := func(key string, target **string, recordTarget **string) {
+		if v, ok := data[key]; ok {
+			if sVal, ok := v.(string); ok {
+				*target = &sVal
+				*recordTarget = &sVal
+				*updatedFields = append(*updatedFields, key)
+			}
+		}
+	}
+
+	if v, ok := data["first_name"]; ok {
+		if sVal, ok := v.(string); ok {
+			employee.FirstName = sVal
+			basicInfo.FirstName = sVal
+			*updatedFields = append(*updatedFields, "first_name")
+		}
+	}
+	if v, ok := data["last_name"]; ok {
+		if sVal, ok := v.(string); ok {
+			employee.LastName = sVal
+			basicInfo.LastName = sVal
+			*updatedFields = append(*updatedFields, "last_name")
+		}
+	}
+	if v, ok := data["middle_name"]; ok {
+		if v == nil {
+			employee.MiddleName = nil
+			basicInfo.MiddleName = nil
+			*updatedFields = append(*updatedFields, "middle_name")
+		} else if sVal, ok := v.(string); ok {
+			employee.MiddleName = &sVal
+			basicInfo.MiddleName = &sVal
+			*updatedFields = append(*updatedFields, "middle_name")
+		}
+	}
+	if v, ok := data["photo_url"]; ok {
+		if v == nil {
+			employee.PhotoURL = nil
+			basicInfo.PhotoURL = nil
+			*updatedFields = append(*updatedFields, "photo_url")
+		} else if sVal, ok := v.(string); ok {
+			employee.PhotoURL = &sVal
+			basicInfo.PhotoURL = &sVal
+			*updatedFields = append(*updatedFields, "photo_url")
+		}
+	}
+	if v, ok := data["date_of_birth"]; ok {
+		if v == nil {
+			employee.DateOfBirth = nil
+			basicInfo.DateOfBirth = nil
+			*updatedFields = append(*updatedFields, "date_of_birth")
+		} else if sVal, ok := v.(string); ok {
+			if t, ok := parseTimeFlexible(sVal); ok {
+				employee.DateOfBirth = &t
+				basicInfo.DateOfBirth = &t
+				*updatedFields = append(*updatedFields, "date_of_birth")
+			}
+		}
+	}
+
+	setEmployeeStringField("gender", &employee.Gender, &basicInfo.Gender)
+	setEmployeeStringField("marital_status", &employee.MaritalStatus, &basicInfo.MaritalStatus)
+	setEmployeeStringField("blood_group", &employee.BloodGroup, &basicInfo.BloodGroup)
+	setEmployeeStringField("nationality", &employee.Nationality, &basicInfo.Nationality)
+	setEmployeeStringField("personal_email", &employee.PersonalEmail, &basicInfo.PersonalEmail)
+	setEmployeeStringField("mobile_number", &employee.PhoneNumber, &basicInfo.MobileNumber)
+	setEmployeeStringField("alternate_number", &employee.AlternatePhone, &basicInfo.AlternateNumber)
+
+	if err := s.basicInfoRepo.Update(basicInfo); err != nil {
+		return fmt.Errorf("failed to update basic information: %w", err)
+	}
+
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return fmt.Errorf("failed to update employee: %w", err)
+	}
+
+	addresses, err := s.addressRepo.FindByEmployeeID(employee.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to load addresses: %w", err)
+	}
+
+	var currentAddr *models.EmployeeAddress
+	var permanentAddr *models.EmployeeAddress
+	for i := range addresses {
+		addr := &addresses[i]
+		if addr.AddressType == models.AddressTypeCurrent {
+			currentAddr = addr
+		}
+		if addr.AddressType == models.AddressTypePermanent {
+			permanentAddr = addr
+		}
+	}
+
+	getString := func(key string) (*string, bool) {
+		v, ok := data[key]
+		if !ok {
+			return nil, false
+		}
+		if v == nil {
+			empty := ""
+			return &empty, true
+		}
+		sVal, ok := v.(string)
+		if !ok {
+			return nil, false
+		}
+		return &sVal, true
+	}
+
+	addrLine, hasCurrentAddress := getString("current_address")
+	_, hasCity := data["city"]
+	_, hasState := data["state"]
+	_, hasPostalCode := data["postal_code"]
+	_, hasCountry := data["country"]
+	if hasCurrentAddress || hasCity || hasState || hasPostalCode || hasCountry {
+		if currentAddr == nil {
+			currentAddr = &models.EmployeeAddress{
+				EmployeeID:       &employee.ID,
+				EmployeeIDString: &employee.EmployeeID,
+				AddressType:      models.AddressTypeCurrent,
+			}
+		}
+		if hasCurrentAddress && addrLine != nil {
+			if *addrLine == "" {
+				currentAddr.AddressLine1 = nil
+			} else {
+				currentAddr.AddressLine1 = addrLine
+			}
+			*updatedFields = append(*updatedFields, "current_address")
+		}
+		if city, ok := getString("city"); ok {
+			if *city == "" {
+				currentAddr.City = nil
+			} else {
+				currentAddr.City = city
+			}
+			*updatedFields = append(*updatedFields, "city")
+		}
+		if state, ok := getString("state"); ok {
+			if *state == "" {
+				currentAddr.State = nil
+			} else {
+				currentAddr.State = state
+			}
+			*updatedFields = append(*updatedFields, "state")
+		}
+		if pc, ok := getString("postal_code"); ok {
+			if *pc == "" {
+				currentAddr.PostalCode = nil
+			} else {
+				currentAddr.PostalCode = pc
+			}
+			*updatedFields = append(*updatedFields, "postal_code")
+		}
+		if country, ok := getString("country"); ok {
+			if *country == "" {
+				currentAddr.Country = nil
+			} else {
+				currentAddr.Country = country
+			}
+			*updatedFields = append(*updatedFields, "country")
+		}
+		if currentAddr.ID == 0 {
+			if err := s.addressRepo.Create(currentAddr); err != nil {
+				return fmt.Errorf("failed to save current address: %w", err)
+			}
+		} else if err := s.addressRepo.Update(currentAddr); err != nil {
+			return fmt.Errorf("failed to update current address: %w", err)
+		}
+	}
+
+	if permLine, ok := getString("permanent_address"); ok {
+		if permanentAddr == nil {
+			permanentAddr = &models.EmployeeAddress{
+				EmployeeID:       &employee.ID,
+				EmployeeIDString: &employee.EmployeeID,
+				AddressType:      models.AddressTypePermanent,
+			}
+		}
+		if *permLine == "" {
+			permanentAddr.AddressLine1 = nil
+		} else {
+			permanentAddr.AddressLine1 = permLine
+		}
+		*updatedFields = append(*updatedFields, "permanent_address")
+		if city, ok := getString("city"); ok {
+			if *city == "" {
+				permanentAddr.City = nil
+			} else {
+				permanentAddr.City = city
+			}
+		}
+		if state, ok := getString("state"); ok {
+			if *state == "" {
+				permanentAddr.State = nil
+			} else {
+				permanentAddr.State = state
+			}
+		}
+		if pc, ok := getString("postal_code"); ok {
+			if *pc == "" {
+				permanentAddr.PostalCode = nil
+			} else {
+				permanentAddr.PostalCode = pc
+			}
+		}
+		if country, ok := getString("country"); ok {
+			if *country == "" {
+				permanentAddr.Country = nil
+			} else {
+				permanentAddr.Country = country
+			}
+		}
+		if permanentAddr.ID == 0 {
+			if err := s.addressRepo.Create(permanentAddr); err != nil {
+				return fmt.Errorf("failed to save permanent address: %w", err)
+			}
+		} else if err := s.addressRepo.Update(permanentAddr); err != nil {
+			return fmt.Errorf("failed to update permanent address: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) editEmployeeStep2(employee *models.Employee, data map[string]interface{}, updatedBy *uint, updatedFields *[]string) error {
+	details, err := s.employmentDetailsRepo.FindByEmployeeID(employee.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			details = &models.EmployeeEmploymentDetails{
+				EmployeeID:       &employee.ID,
+				EmployeeIDString: &employee.EmployeeID,
+			}
+			if err := s.employmentDetailsRepo.Create(details); err != nil {
+				return fmt.Errorf("failed to create employment details: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to load employment details: %w", err)
+		}
+	}
+
+	if v, ok := data["official_email"]; ok {
+		if v == nil {
+			details.OfficialEmail = nil
+			employee.WorkEmail = nil
+			*updatedFields = append(*updatedFields, "official_email")
+		} else if sVal, ok := v.(string); ok {
+			details.OfficialEmail = &sVal
+			employee.WorkEmail = &sVal
+			*updatedFields = append(*updatedFields, "official_email")
+		}
+	}
+	if v, ok := data["date_of_joining"]; ok {
+		if v == nil {
+			details.DateOfJoining = nil
+			employee.HireDate = nil
+			*updatedFields = append(*updatedFields, "date_of_joining")
+		} else if sVal, ok := v.(string); ok {
+			if t, ok := parseTimeFlexible(sVal); ok {
+				details.DateOfJoining = &t
+				employee.HireDate = &t
+				*updatedFields = append(*updatedFields, "date_of_joining")
+			}
+		}
+	}
+
+	if id, ok := asUintPtr(data["department_id"]); ok {
+		details.DepartmentID = id
+		employee.DepartmentID = id
+		*updatedFields = append(*updatedFields, "department_id")
+	}
+	if id, ok := asUintPtr(data["position_id"]); ok {
+		details.PositionID = id
+		employee.PositionID = id
+		*updatedFields = append(*updatedFields, "position_id")
+	}
+	if id, ok := asUintPtr(data["reporting_manager_id"]); ok {
+		details.ReportingManagerID = id
+		employee.ReportsToID = id
+		*updatedFields = append(*updatedFields, "reporting_manager_id")
+	}
+	if id, ok := asUintPtr(data["location_id"]); ok {
+		details.LocationID = id
+		employee.LocationID = id
+		*updatedFields = append(*updatedFields, "location_id")
+	}
+
+	if v, ok := data["grade"]; ok {
+		if v == nil {
+			details.Grade = nil
+			employee.Grade = nil
+			*updatedFields = append(*updatedFields, "grade")
+		} else if sVal, ok := v.(string); ok {
+			details.Grade = &sVal
+			employee.Grade = &sVal
+			*updatedFields = append(*updatedFields, "grade")
+		}
+	}
+	if v, ok := data["employment_type"]; ok {
+		if v == nil {
+			details.EmploymentType = nil
+			employee.EmploymentType = nil
+			*updatedFields = append(*updatedFields, "employment_type")
+		} else if sVal, ok := v.(string); ok {
+			details.EmploymentType = &sVal
+			employee.EmploymentType = &sVal
+			*updatedFields = append(*updatedFields, "employment_type")
+		}
+	}
+	if v, ok := data["shift"]; ok {
+		if v == nil {
+			details.Shift = nil
+			employee.Shift = nil
+			*updatedFields = append(*updatedFields, "shift")
+		} else if sVal, ok := v.(string); ok {
+			details.Shift = &sVal
+			employee.Shift = &sVal
+			*updatedFields = append(*updatedFields, "shift")
+		}
+	}
+	if v, ok := data["work_phone"]; ok {
+		if v == nil {
+			details.WorkPhone = nil
+			employee.WorkPhone = nil
+			*updatedFields = append(*updatedFields, "work_phone")
+		} else if sVal, ok := v.(string); ok {
+			details.WorkPhone = &sVal
+			employee.WorkPhone = &sVal
+			*updatedFields = append(*updatedFields, "work_phone")
+		}
+	}
+	if days, ok := asIntPtr(data["probation_period_days"]); ok {
+		details.ProbationPeriodDays = days
+		employee.ProbationPeriodDays = days
+		*updatedFields = append(*updatedFields, "probation_period_days")
+	}
+	if v, ok := data["expected_confirmation_date"]; ok {
+		if v == nil {
+			details.ExpectedConfirmationDate = nil
+			employee.ExpectedConfirmationDate = nil
+			*updatedFields = append(*updatedFields, "expected_confirmation_date")
+		} else if sVal, ok := v.(string); ok {
+			if t, ok := parseTimeFlexible(sVal); ok {
+				details.ExpectedConfirmationDate = &t
+				employee.ExpectedConfirmationDate = &t
+				*updatedFields = append(*updatedFields, "expected_confirmation_date")
+			}
+		}
+	}
+
+	if err := s.employmentDetailsRepo.Update(details); err != nil {
+		return fmt.Errorf("failed to update employment details: %w", err)
+	}
+
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return fmt.Errorf("failed to update employee: %w", err)
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) editEmployeeStep3(employee *models.Employee, data map[string]interface{}, updatedBy *uint, updatedFields *[]string) error {
+	salary, err := s.salaryRepo.FindByEmployeeID(employee.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			salary = &models.EmployeeSalaryComponent{
+				EmployeeID:       &employee.ID,
+				EmployeeIDString: &employee.EmployeeID,
+				Currency:         "TZS",
+			}
+			if err := s.salaryRepo.Create(salary); err != nil {
+				return fmt.Errorf("failed to create salary: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to load salary: %w", err)
+		}
+	}
+
+	if v, ok := data["annual_ctc"]; ok {
+		if f, ok := asFloat64Ptr(v); ok {
+			salary.AnnualCTC = f
+			*updatedFields = append(*updatedFields, "annual_ctc")
+		}
+	}
+	if v, ok := data["ctc_effective_date"]; ok {
+		if v == nil {
+			salary.CTCEffectiveDate = nil
+			*updatedFields = append(*updatedFields, "ctc_effective_date")
+		} else if sVal, ok := v.(string); ok {
+			if t, ok := parseTimeFlexible(sVal); ok {
+				salary.CTCEffectiveDate = &t
+				*updatedFields = append(*updatedFields, "ctc_effective_date")
+			}
+		}
+	}
+	if v, ok := data["currency"]; ok {
+		if sVal, ok := v.(string); ok && sVal != "" {
+			salary.Currency = sVal
+			employee.Currency = sVal
+			*updatedFields = append(*updatedFields, "currency")
+		}
+	}
+
+	updateFloat := func(key string, target **float64) {
+		if v, ok := data[key]; ok {
+			if f, ok := asFloat64Ptr(v); ok {
+				*target = f
+				*updatedFields = append(*updatedFields, key)
+			}
+		}
+	}
+
+	updateFloat("basic_salary", &salary.BasicSalary)
+	updateFloat("house_rent_allowance", &salary.HouseRentAllowance)
+	updateFloat("transport_allowance", &salary.TransportAllowance)
+	updateFloat("special_allowance", &salary.SpecialAllowance)
+	updateFloat("other_allowances", &salary.OtherAllowances)
+	updateFloat("income_tax", &salary.IncomeTax)
+	updateFloat("provident_fund", &salary.ProvidentFund)
+	updateFloat("professional_tax", &salary.ProfessionalTax)
+	updateFloat("other_deductions", &salary.OtherDeductions)
+
+	salary.CalculateGrossSalary()
+	salary.CalculateNetSalary()
+
+	if err := s.salaryRepo.Update(salary); err != nil {
+		return fmt.Errorf("failed to update salary: %w", err)
+	}
+
+	if salary.BasicSalary != nil {
+		employee.Salary = salary.BasicSalary
+		*updatedFields = append(*updatedFields, "salary")
+	}
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return fmt.Errorf("failed to update employee: %w", err)
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) editEmployeeStep4(employee *models.Employee, data map[string]interface{}, updatedBy *uint, updatedFields *[]string) error {
+	banks, err := s.bankRepo.FindByEmployeeID(employee.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			banks = nil
+		} else {
+			return fmt.Errorf("failed to load bank details: %w", err)
+		}
+	}
+
+	var bank *models.EmployeeBankAccount
+	for i := range banks {
+		if banks[i].IsPrimary {
+			bank = &banks[i]
+			break
+		}
+	}
+	if bank == nil && len(banks) > 0 {
+		bank = &banks[0]
+	}
+	if bank == nil {
+		bank = &models.EmployeeBankAccount{
+			EmployeeID:       &employee.ID,
+			EmployeeIDString: &employee.EmployeeID,
+			IsPrimary:        true,
+		}
+		if err := s.bankRepo.Create(bank); err != nil {
+			return fmt.Errorf("failed to create bank details: %w", err)
+		}
+	}
+
+	setString := func(key string, target **string) {
+		if v, ok := data[key]; ok {
+			if v == nil {
+				*target = nil
+				*updatedFields = append(*updatedFields, key)
+			} else if sVal, ok := v.(string); ok {
+				*target = &sVal
+				*updatedFields = append(*updatedFields, key)
+			}
+		}
+	}
+
+	setString("bank_name", &bank.BankName)
+	setString("account_holder_name", &bank.AccountHolderName)
+	setString("account_number", &bank.AccountNumber)
+	setString("account_type", &bank.AccountType)
+	setString("branch_name", &bank.BranchName)
+	setString("swift_code", &bank.SWIFTCode)
+
+	if err := s.bankRepo.Update(bank); err != nil {
+		return fmt.Errorf("failed to update bank details: %w", err)
+	}
+
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return fmt.Errorf("failed to update employee: %w", err)
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) editEmployeeStep5(employee *models.Employee, data map[string]interface{}, updatedBy *uint, updatedFields *[]string) error {
+	stat, err := s.statutoryRepo.FindByEmployeeID(employee.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			stat = &models.EmployeeStatutoryInfo{
+				EmployeeID:       &employee.ID,
+				EmployeeIDString: &employee.EmployeeID,
+			}
+			if err := s.statutoryRepo.Create(stat); err != nil {
+				return fmt.Errorf("failed to create statutory details: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to load statutory details: %w", err)
+		}
+	}
+
+	setString := func(key string, target **string) {
+		if v, ok := data[key]; ok {
+			if v == nil {
+				*target = nil
+				*updatedFields = append(*updatedFields, key)
+			} else if sVal, ok := v.(string); ok {
+				*target = &sVal
+				*updatedFields = append(*updatedFields, key)
+			}
+		}
+	}
+
+	setString("tin_number", &stat.TINNumber)
+	setString("nssf_number", &stat.NSSFNumber)
+	setString("nhif_number", &stat.NHIFNumber)
+	setString("wcf_number", &stat.WCFNumber)
+	setString("sdl_number", &stat.SDLNumber)
+	setString("passport_number", &stat.PassportNumber)
+	setString("work_permit_number", &stat.WorkPermitNumber)
+
+	if v, ok := data["passport_expiry_date"]; ok {
+		if v == nil {
+			stat.PassportExpiryDate = nil
+			*updatedFields = append(*updatedFields, "passport_expiry_date")
+		} else if sVal, ok := v.(string); ok {
+			if t, ok := parseTimeFlexible(sVal); ok {
+				stat.PassportExpiryDate = &t
+				*updatedFields = append(*updatedFields, "passport_expiry_date")
+			}
+		}
+	}
+	if v, ok := data["work_permit_expiry_date"]; ok {
+		if v == nil {
+			stat.WorkPermitExpiryDate = nil
+			*updatedFields = append(*updatedFields, "work_permit_expiry_date")
+		} else if sVal, ok := v.(string); ok {
+			if t, ok := parseTimeFlexible(sVal); ok {
+				stat.WorkPermitExpiryDate = &t
+				*updatedFields = append(*updatedFields, "work_permit_expiry_date")
+			}
+		}
+	}
+
+	if err := s.statutoryRepo.Update(stat); err != nil {
+		return fmt.Errorf("failed to update statutory details: %w", err)
+	}
+
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return fmt.Errorf("failed to update employee: %w", err)
+	}
+
+	return nil
+}
+
+func (s *OnboardingService) editEmployeeStep6(employee *models.Employee, data map[string]interface{}, updatedBy *uint, updatedFields *[]string) error {
+	if docsRaw, ok := data["documents"]; ok {
+		docs, ok := docsRaw.([]interface{})
+		if !ok {
+			return errors.New("documents must be an array")
+		}
+
+		if err := s.documentRepo.DeleteByEmployeeID(employee.ID); err != nil {
+			return fmt.Errorf("failed to replace documents: %w", err)
+		}
+
+		for _, docData := range docs {
+			docMap, ok := docData.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			docTypeStr, _ := docMap["document_type"].(string)
+			fileName, _ := docMap["file_name"].(string)
+			fileURL, _ := docMap["file_url"].(string)
+
+			if docTypeStr == "" || fileName == "" || fileURL == "" {
+				continue
+			}
+
+			docType := models.DocumentType(docTypeStr)
+			doc := &models.EmployeeDocument{
+				EmployeeID:       &employee.ID,
+				EmployeeIDString: &employee.EmployeeID,
+				DocumentType:     docType,
+				FileName:         fileName,
+				FileURL:          fileURL,
+			}
+			if fs, ok := docMap["file_size"].(float64); ok {
+				val := int64(fs)
+				doc.FileSize = &val
+			}
+			if mt, ok := docMap["mime_type"].(string); ok {
+				doc.MimeType = &mt
+			}
+			if desc, ok := docMap["description"].(string); ok {
+				doc.Description = &desc
+			}
+
+			if err := s.documentRepo.Create(doc); err != nil {
+				return fmt.Errorf("failed to save document: %w", err)
+			}
+		}
+
+		*updatedFields = append(*updatedFields, "documents")
+	}
+
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return fmt.Errorf("failed to update employee: %w", err)
+	}
+	return nil
+}
+
+func (s *OnboardingService) editEmployeeStep7(employee *models.Employee, data map[string]interface{}, updatedBy *uint, updatedFields *[]string) error {
+	assetsRaw, ok := data["assets"]
+	if !ok {
+		return nil
+	}
+	assets, ok := assetsRaw.([]interface{})
+	if !ok {
+		return errors.New("assets must be an array")
+	}
+
+	if err := s.assetRepo.DeleteByEmployeeID(employee.ID); err != nil {
+		return fmt.Errorf("failed to replace assets: %w", err)
+	}
+
+	for _, assetData := range assets {
+		assetMap, ok := assetData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		assetType, _ := assetMap["asset_type"].(string)
+		assetName, _ := assetMap["asset_name"].(string)
+		if assetType == "" || assetName == "" {
+			continue
+		}
+
+		asset := &models.EmployeeAsset{
+			EmployeeID:       &employee.ID,
+			EmployeeIDString: &employee.EmployeeID,
+			AssetType:        assetType,
+			AssetName:        assetName,
+		}
+
+		if v, ok := assetMap["serial_number"].(string); ok {
+			asset.SerialNumber = &v
+		}
+		if v, ok := assetMap["asset_tag"].(string); ok {
+			asset.AssetTag = &v
+		}
+		if v, ok := assetMap["assigned_date"].(string); ok {
+			if t, ok := parseTimeFlexible(v); ok {
+				asset.AssignedDate = &t
+			}
+		}
+		if v, ok := assetMap["expected_return_date"].(string); ok {
+			if t, ok := parseTimeFlexible(v); ok {
+				asset.ExpectedReturnDate = &t
+			}
+		}
+		if v, ok := assetMap["condition"].(string); ok {
+			asset.Condition = &v
+		}
+		if v, ok := assetMap["notes"].(string); ok {
+			asset.Notes = &v
+		}
+
+		if err := s.assetRepo.Create(asset); err != nil {
+			return fmt.Errorf("failed to save asset: %w", err)
+		}
+	}
+
+	*updatedFields = append(*updatedFields, "assets")
+
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return fmt.Errorf("failed to update employee: %w", err)
+	}
+	return nil
+}
+
+func (s *OnboardingService) editEmployeeStep8(employee *models.Employee, data map[string]interface{}, updatedBy *uint, updatedFields *[]string) error {
+	policy, err := s.policyRepo.FindByEmployeeID(employee.ID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			policy = &models.EmployeePolicy{
+				EmployeeID:       &employee.ID,
+				EmployeeIDString: &employee.EmployeeID,
+			}
+			if err := s.policyRepo.Create(policy); err != nil {
+				return fmt.Errorf("failed to create policy: %w", err)
+			}
+		} else {
+			return fmt.Errorf("failed to load policy: %w", err)
+		}
+	}
+
+	if id, ok := asUintPtr(data["leave_policy_id"]); ok {
+		policy.LeavePolicyID = id
+		*updatedFields = append(*updatedFields, "leave_policy_id")
+	}
+	if id, ok := asUintPtr(data["attendance_policy_id"]); ok {
+		policy.AttendancePolicyID = id
+		*updatedFields = append(*updatedFields, "attendance_policy_id")
+	}
+	if v, ok := data["weekly_off_days"]; ok {
+		if v == nil {
+			policy.WeeklyOffDays = nil
+			*updatedFields = append(*updatedFields, "weekly_off_days")
+		} else if sVal, ok := v.(string); ok {
+			policy.WeeklyOffDays = &sVal
+			*updatedFields = append(*updatedFields, "weekly_off_days")
+		}
+	}
+	if v, ok := data["effective_date"]; ok {
+		if v == nil {
+			policy.EffectiveDate = nil
+			*updatedFields = append(*updatedFields, "effective_date")
+		} else if sVal, ok := v.(string); ok {
+			if t, ok := parseTimeFlexible(sVal); ok {
+				policy.EffectiveDate = &t
+				*updatedFields = append(*updatedFields, "effective_date")
+			}
+		}
+	}
+
+	if err := s.policyRepo.Update(policy); err != nil {
+		return fmt.Errorf("failed to update policy: %w", err)
+	}
+
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return fmt.Errorf("failed to update employee: %w", err)
+	}
+	return nil
+}
+
+func (s *OnboardingService) editEmployeeStep9(employee *models.Employee, data map[string]interface{}, updatedBy *uint, updatedFields *[]string) error {
+	contactsRaw, ok := data["contacts"]
+	if !ok {
+		return nil
+	}
+	contacts, ok := contactsRaw.([]interface{})
+	if !ok {
+		return errors.New("contacts must be an array")
+	}
+
+	if err := s.contactRepo.DeleteByEmployeeID(employee.ID); err != nil {
+		return fmt.Errorf("failed to replace contacts: %w", err)
+	}
+
+	for _, contactData := range contacts {
+		contactMap, ok := contactData.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		name, _ := contactMap["contact_name"].(string)
+		phone, _ := contactMap["phone_number"].(string)
+		if name == "" || phone == "" {
+			continue
+		}
+		contact := &models.EmployeeEmergencyContact{
+			EmployeeID:       &employee.ID,
+			EmployeeIDString: &employee.EmployeeID,
+			ContactName:      name,
+			PhoneNumber:      phone,
+		}
+		if v, ok := contactMap["relationship"].(string); ok {
+			contact.Relationship = &v
+		}
+		if v, ok := contactMap["alternate_phone"].(string); ok {
+			contact.AlternatePhone = &v
+		}
+		if v, ok := contactMap["email"].(string); ok {
+			contact.Email = &v
+		}
+		if v, ok := contactMap["address"].(string); ok {
+			contact.Address = &v
+		}
+		if v, ok := contactMap["is_primary"].(bool); ok {
+			contact.IsPrimary = v
+		}
+		if err := s.contactRepo.Create(contact); err != nil {
+			return fmt.Errorf("failed to save contact: %w", err)
+		}
+	}
+
+	*updatedFields = append(*updatedFields, "contacts")
+
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return fmt.Errorf("failed to update employee: %w", err)
+	}
+	return nil
+}
+
+func (s *OnboardingService) editEmployeeStep10(employee *models.Employee, data map[string]interface{}, updatedBy *uint, updatedFields *[]string) error {
+	if v, ok := data["notes"]; ok {
+		if v == nil {
+			employee.Notes = ""
+			*updatedFields = append(*updatedFields, "notes")
+		} else if sVal, ok := v.(string); ok {
+			employee.Notes = sVal
+			*updatedFields = append(*updatedFields, "notes")
+		}
+	}
+	employee.UpdatedBy = updatedBy
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return fmt.Errorf("failed to update employee: %w", err)
+	}
+	return nil
+}
+
+func asUintPtr(v interface{}) (*uint, bool) {
+	if v == nil {
+		return nil, true
+	}
+	switch t := v.(type) {
+	case float64:
+		u := uint(t)
+		return &u, true
+	case int:
+		u := uint(t)
+		return &u, true
+	case uint:
+		return &t, true
+	default:
+		return nil, false
+	}
+}
+
+func asIntPtr(v interface{}) (*int, bool) {
+	if v == nil {
+		return nil, true
+	}
+	switch t := v.(type) {
+	case float64:
+		i := int(t)
+		return &i, true
+	case int:
+		return &t, true
+	default:
+		return nil, false
+	}
+}
+
+func asFloat64Ptr(v interface{}) (*float64, bool) {
+	if v == nil {
+		return nil, true
+	}
+	switch t := v.(type) {
+	case float64:
+		return &t, true
+	case int:
+		f := float64(t)
+		return &f, true
+	default:
+		return nil, false
+	}
+}
+
+func parseTimeFlexible(s string) (time.Time, bool) {
+	if s == "" {
+		return time.Time{}, false
+	}
+	if t, err := time.Parse(time.RFC3339Nano, s); err == nil {
+		return t, true
+	}
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t, true
+	}
+	if t, err := time.Parse("2006-01-02", s); err == nil {
+		return t, true
+	}
+	return time.Time{}, false
+}
+
 // GetDraft retrieves a draft with all step data by draft ID
 func (s *OnboardingService) GetDraft(draftID uint) (*models.GetDraftResponse, error) {
 	draft, err := s.draftRepo.FindByID(draftID)

@@ -1,8 +1,11 @@
 package services
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
+	"math/big"
+	"strings"
 	"time"
 
 	departmentRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
@@ -10,7 +13,10 @@ import (
 	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
 	positionRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
+	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
+	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/email"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // EmployeeService handles employee business logic
@@ -19,6 +25,7 @@ type EmployeeService struct {
 	departmentRepo *departmentRepos.DepartmentRepository
 	positionRepo   *positionRepos.JobPositionRepository
 	locationRepo   *locationRepos.LocationRepository
+	userRepo       *userRepos.UserRepository
 	emailService   *email.EmailService
 }
 
@@ -29,6 +36,7 @@ func NewEmployeeService() *EmployeeService {
 		departmentRepo: departmentRepos.NewDepartmentRepository(),
 		positionRepo:   positionRepos.NewJobPositionRepository(),
 		locationRepo:   locationRepos.NewLocationRepository(),
+		userRepo:       userRepos.NewUserRepository(),
 		emailService:   email.NewEmailService(),
 	}
 }
@@ -168,23 +176,90 @@ func (s *EmployeeService) SendCredentialsEmail(employeeID uint) error {
 	return s.sendCredentialsEmail(*employee.PersonalEmail, employee, userCredentials)
 }
 
-// getUserCredentialsForEmployee retrieves user credentials for an employee
 func (s *EmployeeService) getUserCredentialsForEmployee(employee *models.Employee) (*UserCredentials, error) {
-	// This is a simplified implementation - in a real scenario, you would
-	// query the user repository to get the actual credentials
-	// For now, we'll return a mock response
-
 	if employee.UserID == nil {
 		return nil, errors.New("employee does not have a user account")
 	}
 
-	// In a real implementation, you would fetch from user repository
-	// For demonstration, we'll return mock credentials
+	user, err := s.userRepo.FindByID(*employee.UserID)
+	if err != nil || user == nil {
+		return nil, errors.New("user account not found for this employee")
+	}
+
+	newPassword, err := s.generateTemporaryPassword(16)
+	if err != nil {
+		return nil, errors.New("failed to generate password")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, errors.New("failed to hash password")
+	}
+
+	user.Password = string(hashedPassword)
+	user.FailedLoginCount = 0
+	user.LockedUntil = nil
+	user.Status = userModels.UserStatusActive
+	user.IsActive = true
+
+	if err := s.userRepo.Update(user); err != nil {
+		return nil, errors.New("failed to update user password")
+	}
+
 	return &UserCredentials{
-		Email:    *employee.PersonalEmail,
-		Username: fmt.Sprintf("%s.%s", employee.FirstName, employee.LastName),
-		Password: "TemporaryPassword123!", // This should be fetched from user table
+		Email:    user.Email,
+		Username: user.Username,
+		Password: newPassword,
 	}, nil
+}
+
+func (s *EmployeeService) generateTemporaryPassword(length int) (string, error) {
+	if length < 12 {
+		length = 12
+	}
+
+	lower := "abcdefghjkmnpqrstuvwxyz"
+	upper := "ABCDEFGHJKMNPQRSTUVWXYZ"
+	digits := "23456789"
+	symbols := "@#$%&*-_+!"
+
+	all := lower + upper + digits + symbols
+
+	pick := func(chars string) (byte, error) {
+		n, err := rand.Int(rand.Reader, big.NewInt(int64(len(chars))))
+		if err != nil {
+			return 0, err
+		}
+		return chars[n.Int64()], nil
+	}
+
+	chars := make([]byte, 0, length)
+	for _, set := range []string{lower, upper, digits, symbols} {
+		b, err := pick(set)
+		if err != nil {
+			return "", err
+		}
+		chars = append(chars, b)
+	}
+
+	for len(chars) < length {
+		b, err := pick(all)
+		if err != nil {
+			return "", err
+		}
+		chars = append(chars, b)
+	}
+
+	for i := len(chars) - 1; i > 0; i-- {
+		jBig, err := rand.Int(rand.Reader, big.NewInt(int64(i+1)))
+		if err != nil {
+			return "", err
+		}
+		j := int(jBig.Int64())
+		chars[i], chars[j] = chars[j], chars[i]
+	}
+
+	return strings.TrimSpace(string(chars)), nil
 }
 
 // sendCredentialsEmail sends the credentials email

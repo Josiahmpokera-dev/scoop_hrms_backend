@@ -342,6 +342,7 @@ func SetupRoutes(r *gin.Engine) {
 				onboarding.POST("/:employee_id/step/:step/upload", onboardingHandler.SaveStepByEmployeeIDWithFiles) // Save step with file uploads (multipart/form-data)
 				onboarding.POST("/:employee_id/complete", onboardingHandler.CompleteOnboardingByEmployeeID)         // Complete by employee ID
 				onboarding.PUT("/:employee_id/step/:step", onboardingHandler.UpdateStepByEmployeeID)
+				onboarding.PUT("/completed/:employee_id/step/:step", onboardingHandler.EditEmployeeStep)
 			}
 
 			// Post-onboarding task routes
@@ -479,6 +480,7 @@ func SetupRoutes(r *gin.Engine) {
 		assets := v1.Group("/assets")
 		assets.Use(middleware.AuthMiddleware(), middleware.HRMiddleware())
 		{
+			assets.GET("/overview", assetHandler.GetAssetOverview)       // Assets overview cards
 			assets.GET("", assetHandler.ListAssets)                      // List assets with pagination and filters
 			assets.GET("/get", assetHandler.GetAsset)                    // Get asset by ID (query param: ?id=1)
 			assets.GET("/types", assetHandler.GetAssetTypes)             // Get asset types

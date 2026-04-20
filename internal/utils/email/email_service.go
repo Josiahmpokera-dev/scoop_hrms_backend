@@ -173,7 +173,7 @@ func (s *EmailService) fallbackToSimulation(to, subject, body string, err error)
 	}
 	fmt.Printf("To: %s\n", to)
 	fmt.Printf("Subject: %s\n", subject)
-	fmt.Printf("Body: %s\n", body)
+	fmt.Printf("Body: [omitted]\n")
 	fmt.Printf("--------------------------------------------------\n")
 	return nil // Don't fail the operation, just log the error
 }
