@@ -180,7 +180,7 @@ type ApproveLeaveRequestRequest struct {
 	Action          string  `json:"action" binding:"required"` // "approve"
 	ApproverType    string  `json:"approver_type" binding:"required"`
 	ApproverName    string  `json:"approver_name" binding:"required"`
-	ApproverSignature string `json:"approver_signature" binding:"required"`
+	ApproverSignature *string `json:"approver_signature" binding:"omitempty"`
 	Remarks         *string `json:"remarks"`
 	PartialApproval *bool   `json:"partial_approval"`
 	PartialDays     *float64 `json:"partial_days"`
@@ -192,7 +192,7 @@ type ApproveLeaveRequestRequest struct {
 type RejectLeaveRequestRequest struct {
 	ApproverType     string  `json:"approver_type" binding:"required"`
 	ApproverName     string  `json:"approver_name" binding:"required"`
-	ApproverSignature string `json:"approver_signature" binding:"required"`
+	ApproverSignature *string `json:"approver_signature" binding:"omitempty"`
 	RejectionReason  string  `json:"rejection_reason" binding:"required"`
 	Remarks          *string `json:"remarks"`
 	NotifyEmployee   *bool   `json:"notify_employee"`

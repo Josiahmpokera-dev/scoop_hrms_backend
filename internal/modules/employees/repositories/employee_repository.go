@@ -160,6 +160,18 @@ func (r *EmployeeRepository) FindByName(name string) (*models.Employee, error) {
 	return nil, fmt.Errorf("employee not found with name: %s", name)
 }
 
+func (r *EmployeeRepository) FindByEmployeeIDs(employeeIDs []string) ([]models.Employee, error) {
+	var employees []models.Employee
+	if len(employeeIDs) == 0 {
+		return employees, nil
+	}
+
+	err := r.db.Select("employee_id, first_name, middle_name, last_name").
+		Where("employee_id IN ?", employeeIDs).
+		Find(&employees).Error
+	return employees, err
+}
+
 // ListManagers lists all active employees who can be reporting managers
 func (r *EmployeeRepository) ListManagers(tenantID *uint) ([]models.Employee, error) {
 	var employees []models.Employee

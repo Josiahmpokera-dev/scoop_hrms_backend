@@ -316,7 +316,7 @@ func (s *LeaveRequestService) ApproveLeaveRequest(id uint, req *models.ApproveLe
 	now := time.Now()
 	currentApproval.ApproverID = &approverID
 	currentApproval.ApproverName = &req.ApproverName
-	currentApproval.ApproverSignature = &req.ApproverSignature
+	currentApproval.ApproverSignature = req.ApproverSignature
 	currentApproval.Status = "approved"
 	currentApproval.ApprovedAt = &now
 	currentApproval.Remarks = req.Remarks
@@ -377,7 +377,7 @@ func (s *LeaveRequestService) RejectLeaveRequest(id uint, req *models.RejectLeav
 	now := time.Now()
 	currentApproval.ApproverID = &approverID
 	currentApproval.ApproverName = &req.ApproverName
-	currentApproval.ApproverSignature = &req.ApproverSignature
+	currentApproval.ApproverSignature = req.ApproverSignature
 	currentApproval.Status = "rejected"
 	currentApproval.ApprovedAt = &now
 	currentApproval.Remarks = &req.RejectionReason

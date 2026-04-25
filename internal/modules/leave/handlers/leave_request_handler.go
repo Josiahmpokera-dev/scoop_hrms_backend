@@ -2,28 +2,37 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
+	employeeModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
+	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/services"
-	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
+	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-gonic/gin"
-	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 )
 
 type LeaveRequestHandler struct {
-	service     *services.LeaveRequestService
+	service        *services.LeaveRequestService
 	balanceService *services.LeaveBalanceService
-	employeeRepo *employeeRepos.EmployeeRepository
+	employeeRepo   *employeeRepos.EmployeeRepository
+}
+
+type leaveRequestListItem struct {
+	models.LeaveRequest
+	EmployeeFirstName  string  `json:"employee_first_name"`
+	EmployeeMiddleName *string `json:"employee_middle_name,omitempty"`
+	EmployeeLastName   string  `json:"employee_last_name"`
 }
 
 func NewLeaveRequestHandler() *LeaveRequestHandler {
 	return &LeaveRequestHandler{
-		service:     services.NewLeaveRequestService(),
+		service:        services.NewLeaveRequestService(),
 		balanceService: services.NewLeaveBalanceService(),
-		employeeRepo: employeeRepos.NewEmployeeRepository(),
+		employeeRepo:   employeeRepos.NewEmployeeRepository(),
 	}
 }
 
@@ -31,7 +40,7 @@ func NewLeaveRequestHandler() *LeaveRequestHandler {
 func (h *LeaveRequestHandler) GetEmployeeInfo(c *gin.Context) {
 	user, _ := c.Get("user")
 	var employeeID string
-	
+
 	if userObj, ok := user.(*userModels.User); ok {
 		employee, err := h.employeeRepo.FindByUserID(userObj.ID)
 		if err != nil || employee == nil {
@@ -77,7 +86,7 @@ func (h *LeaveRequestHandler) GetEmployeeLeaveBalances(c *gin.Context) {
 	user, _ := c.Get("user")
 	var employeeID string
 	year := 0
-	
+
 	if userObj, ok := user.(*userModels.User); ok {
 		employee, err := h.employeeRepo.FindByUserID(userObj.ID)
 		if err != nil || employee == nil {
@@ -157,11 +166,11 @@ func (h *LeaveRequestHandler) CalculateLeaveDays(c *gin.Context) {
 	}
 
 	response.Success(c, "Days calculated successfully", map[string]interface{}{
-		"total_days":  totalDays,
+		"total_days":   totalDays,
 		"working_days": totalDays,
-		"weekends":    weekends,
-		"holidays":    holidays,
-		"half_day":    req.HalfDay,
+		"weekends":     weekends,
+		"holidays":     holidays,
+		"half_day":     req.HalfDay,
 	})
 }
 
@@ -176,7 +185,7 @@ func (h *LeaveRequestHandler) CreateLeaveRequest(c *gin.Context) {
 	user, _ := c.Get("user")
 	var employeeID string
 	var createdBy *uint
-	
+
 	if userObj, ok := user.(*userModels.User); ok {
 		createdBy = &userObj.ID
 		employee, err := h.employeeRepo.FindByUserID(userObj.ID)
@@ -227,6 +236,9 @@ func (h *LeaveRequestHandler) ListLeaveRequests(c *gin.Context) {
 	if toDate := c.Query("to_date"); toDate != "" {
 		filters["to_date"] = toDate
 	}
+	if search := strings.TrimSpace(c.Query("search")); search != "" {
+		filters["search"] = search
+	}
 
 	// For employees, filter by their own requests
 	user, _ := c.Get("user")
@@ -245,19 +257,59 @@ func (h *LeaveRequestHandler) ListLeaveRequests(c *gin.Context) {
 		return
 	}
 
+	employeeIDs := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, r := range requests {
+		if r.EmployeeID == "" {
+			continue
+		}
+		if _, ok := seen[r.EmployeeID]; ok {
+			continue
+		}
+		seen[r.EmployeeID] = struct{}{}
+		employeeIDs = append(employeeIDs, r.EmployeeID)
+	}
+
+	employees, err := h.employeeRepo.FindByEmployeeIDs(employeeIDs)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve employee details", err.Error())
+		return
+	}
+	employeeByID := make(map[string]employeeModels.Employee, len(employees))
+	for _, e := range employees {
+		employeeByID[e.EmployeeID] = e
+	}
+
+	items := make([]leaveRequestListItem, 0, len(requests))
+	for i := range requests {
+		r := requests[i]
+		e, ok := employeeByID[r.EmployeeID]
+		if ok {
+			items = append(items, leaveRequestListItem{
+				LeaveRequest:       r,
+				EmployeeFirstName:  e.FirstName,
+				EmployeeMiddleName: e.MiddleName,
+				EmployeeLastName:   e.LastName,
+			})
+		} else {
+			items = append(items, leaveRequestListItem{
+				LeaveRequest:      r,
+				EmployeeFirstName: "",
+				EmployeeLastName:  "",
+			})
+		}
+	}
+
 	totalPages := (total + int64(pageSize) - 1) / int64(pageSize)
 	if totalPages == 0 {
 		totalPages = 1
 	}
 
-	response.Success(c, "Leave requests retrieved successfully", map[string]interface{}{
-		"data": requests,
-		"meta": map[string]interface{}{
-			"page":       page,
-			"per_page":   pageSize,
-			"total":      total,
-			"total_pages": totalPages,
-		},
+	response.SuccessWithMeta(c, "Leave requests retrieved successfully", items, &response.Meta{
+		Page:       page,
+		PerPage:    pageSize,
+		Total:      total,
+		TotalPages: int(totalPages),
 	})
 }
 
@@ -490,6 +542,9 @@ func (h *LeaveRequestHandler) ListAllLeaveRequests(c *gin.Context) {
 	if toDate := c.Query("to_date"); toDate != "" {
 		filters["to_date"] = toDate
 	}
+	if search := strings.TrimSpace(c.Query("search")); search != "" {
+		filters["search"] = search
+	}
 
 	requests, total, err := h.service.ListLeaveRequests(tenantID, page, pageSize, filters)
 	if err != nil {
@@ -497,19 +552,59 @@ func (h *LeaveRequestHandler) ListAllLeaveRequests(c *gin.Context) {
 		return
 	}
 
+	employeeIDs := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, r := range requests {
+		if r.EmployeeID == "" {
+			continue
+		}
+		if _, ok := seen[r.EmployeeID]; ok {
+			continue
+		}
+		seen[r.EmployeeID] = struct{}{}
+		employeeIDs = append(employeeIDs, r.EmployeeID)
+	}
+
+	employees, err := h.employeeRepo.FindByEmployeeIDs(employeeIDs)
+	if err != nil {
+		response.InternalServerError(c, "Failed to retrieve employee details", err.Error())
+		return
+	}
+	employeeByID := make(map[string]employeeModels.Employee, len(employees))
+	for _, e := range employees {
+		employeeByID[e.EmployeeID] = e
+	}
+
+	items := make([]leaveRequestListItem, 0, len(requests))
+	for i := range requests {
+		r := requests[i]
+		e, ok := employeeByID[r.EmployeeID]
+		if ok {
+			items = append(items, leaveRequestListItem{
+				LeaveRequest:       r,
+				EmployeeFirstName:  e.FirstName,
+				EmployeeMiddleName: e.MiddleName,
+				EmployeeLastName:   e.LastName,
+			})
+		} else {
+			items = append(items, leaveRequestListItem{
+				LeaveRequest:      r,
+				EmployeeFirstName: "",
+				EmployeeLastName:  "",
+			})
+		}
+	}
+
 	totalPages := (total + int64(pageSize) - 1) / int64(pageSize)
 	if totalPages == 0 {
 		totalPages = 1
 	}
 
-	response.Success(c, "Leave requests retrieved successfully", map[string]interface{}{
-		"data": requests,
-		"meta": map[string]interface{}{
-			"page":        page,
-			"per_page":    pageSize,
-			"total":       total,
-			"total_pages": totalPages,
-		},
+	response.SuccessWithMeta(c, "Leave requests retrieved successfully", items, &response.Meta{
+		Page:       page,
+		PerPage:    pageSize,
+		Total:      total,
+		TotalPages: int(totalPages),
 	})
 }
 

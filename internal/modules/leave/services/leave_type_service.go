@@ -9,12 +9,14 @@ import (
 )
 
 type LeaveTypeService struct {
-	repo *repositories.LeaveTypeRepository
+	repo           *repositories.LeaveTypeRepository
+	leavePolicyRepo *repositories.LeavePolicyRepository
 }
 
 func NewLeaveTypeService() *LeaveTypeService {
 	return &LeaveTypeService{
-		repo: repositories.NewLeaveTypeRepository(),
+		repo:            repositories.NewLeaveTypeRepository(),
+		leavePolicyRepo: repositories.NewLeavePolicyRepository(),
 	}
 }
 
@@ -106,7 +108,18 @@ func (s *LeaveTypeService) UpdateLeaveType(id uint, req *models.UpdateLeaveTypeR
 
 // DeleteLeaveType deletes a leave type
 func (s *LeaveTypeService) DeleteLeaveType(id uint) error {
-	// TODO: Check if leave type is used in any policies or requests
+	leaveType, err := s.repo.FindByID(id)
+	if err != nil {
+		return errors.New("leave type not found")
+	}
+
+	count, err := s.leavePolicyRepo.CountByLeaveTypeCode(leaveType.Code, nil)
+	if err != nil {
+		return fmt.Errorf("failed to check leave type usage: %w", err)
+	}
+	if count > 0 {
+		return errors.New("Cannot delete leave type in use")
+	}
 	return s.repo.Delete(id)
 }
 

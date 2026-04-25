@@ -146,6 +146,10 @@ func (h *LeaveTypeHandler) DeleteLeaveType(c *gin.Context) {
 	}
 
 	if err := h.service.DeleteLeaveType(uint(id)); err != nil {
+		if err.Error() == "Cannot delete leave type in use" {
+			response.BadRequest(c, "Cannot delete leave type in use", map[string]string{"type_id": "referenced_by_policy"})
+			return
+		}
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}

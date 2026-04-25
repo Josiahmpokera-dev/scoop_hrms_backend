@@ -23,8 +23,9 @@ All endpoints require a valid Bearer token.
 `Authorization: Bearer <token>`
 
 ## Authorization (Recommended)
-- Read list/details: HR, Admin, Manager
-- Create/Update/Delete: HR, Admin
+- Leave Types: Read (any authenticated), Write (HR/Admin)
+- Leave Policies: HR/Admin (management endpoints)
+- Policy Guidelines: any authenticated user (used by employee request flow)
 
 ---
 
@@ -203,7 +204,7 @@ Used by **Delete Type** action.
 ```
 
 **Constraint Recommendation**
-- Block delete if type is referenced by active policies; return:
+- Block delete if type is referenced by policies; returns:
 ```json
 {
   "success": false,
@@ -245,7 +246,15 @@ Used by **Policies** tab table.
         "policy_name": "Default Annual Policy",
         "country": "Tanzania",
         "leave_type_code": "ANNUAL",
-        "leave_type_name": "Annual Leave",
+        "leave_type": {
+          "id": 1,
+          "code": "ANNUAL",
+          "name": "Annual Leave",
+          "category": "earned",
+          "paid_leave": true,
+          "requires_documentation": false,
+          "is_active": true
+        },
         "entitlement": 24,
         "accrual_frequency": "monthly",
         "proration_on_join": true,
@@ -286,21 +295,29 @@ Useful for edit/detail flows.
   "message": "Leave policy retrieved successfully",
   "data": {
     "id": 10,
-    "leave_type_id": 1,
+    "policy_name": "Default Annual Policy",
+    "country": "Tanzania",
     "leave_type_code": "ANNUAL",
-    "name": "Default Annual Policy",
-    "entitlement_days": 24,
-    "carry_forward_days": 10,
-    "carry_forward_expiry_months": 3,
-    "min_service_days": 90,
-    "applicable_gender": "all",
-    "probation_eligible": false,
-    "max_consecutive_days": 30,
-    "min_days_per_request": 1,
-    "advance_notice_days": 3,
-    "is_active": true,
-    "created_at": "2026-04-01T10:00:00Z",
-    "updated_at": "2026-04-01T10:00:00Z"
+    "leave_type": {
+      "id": 1,
+      "code": "ANNUAL",
+      "name": "Annual Leave"
+    },
+    "entitlement": 24,
+    "accrual_frequency": "monthly",
+    "proration_on_join": true,
+    "proration_on_exit": true,
+    "carry_forward": true,
+    "carry_forward_limit": 10,
+    "carry_forward_expiry": "2026-07-01T00:00:00Z",
+    "encashment_allowed": false,
+    "encashment_limit": null,
+    "negative_balance_allowed": false,
+    "sandwich_rules": false,
+    "half_day_allowed": true,
+    "minimum_notice_days": 3,
+    "maximum_days_per_request": 30,
+    "is_active": true
   }
 }
 ```
@@ -316,25 +333,26 @@ Used by **Add Policy** dialog.
 **Request Body**
 ```json
 {
-  "name": "Default Annual Policy",
+  "policy_name": "Default Annual Policy",
+  "country": "Tanzania",
   "leave_type_code": "ANNUAL",
-  "entitlement_days": 24,
-  "carry_forward_days": 10,
-  "carry_forward_expiry_months": 3,
-  "min_service_days": 90,
-  "applicable_gender": "all",
-  "probation_eligible": false,
-  "max_consecutive_days": 30,
-  "min_days_per_request": 1,
-  "advance_notice_days": 3,
+  "entitlement": 24,
+  "accrual_frequency": "monthly",
+  "carry_forward": true,
+  "carry_forward_limit": 10,
+  "half_day_allowed": true,
+  "minimum_notice_days": 3,
+  "maximum_days_per_request": 30,
   "is_active": true
 }
 ```
 
 **Validation**
-- `name` required
+- `policy_name` required
+- `country` required
 - `leave_type_code` (or `leave_type_id`) required
-- `entitlement_days` required and `> 0`
+- `entitlement` required and `> 0`
+- `accrual_frequency` required (e.g., `monthly`, `yearly`)
 
 **Success Response**
 ```json
@@ -343,18 +361,16 @@ Used by **Add Policy** dialog.
   "message": "Leave policy created successfully",
   "data": {
     "id": 10,
-    "leave_type_id": 1,
     "leave_type_code": "ANNUAL",
-    "name": "Default Annual Policy",
-    "entitlement_days": 24,
-    "carry_forward_days": 10,
-    "carry_forward_expiry_months": 3,
-    "min_service_days": 90,
-    "applicable_gender": "all",
-    "probation_eligible": false,
-    "max_consecutive_days": 30,
-    "min_days_per_request": 1,
-    "advance_notice_days": 3,
+    "policy_name": "Default Annual Policy",
+    "country": "Tanzania",
+    "entitlement": 24,
+    "accrual_frequency": "monthly",
+    "carry_forward": true,
+    "carry_forward_limit": 10,
+    "half_day_allowed": true,
+    "minimum_notice_days": 3,
+    "maximum_days_per_request": 30,
     "is_active": true
   }
 }
@@ -371,8 +387,8 @@ Used by **Edit Policy** action.
 **Request Body (partial allowed)**
 ```json
 {
-  "entitlement_days": 30,
-  "carry_forward_days": 12,
+  "entitlement": 30,
+  "carry_forward_limit": 12,
   "is_active": true
 }
 ```
@@ -385,16 +401,9 @@ Used by **Edit Policy** action.
   "data": {
     "id": 10,
     "leave_type_code": "ANNUAL",
-    "name": "Default Annual Policy",
-    "entitlement_days": 30,
-    "carry_forward_days": 12,
-    "carry_forward_expiry_months": 3,
-    "min_service_days": 90,
-    "applicable_gender": "all",
-    "probation_eligible": false,
-    "max_consecutive_days": 30,
-    "min_days_per_request": 1,
-    "advance_notice_days": 3,
+    "policy_name": "Default Annual Policy",
+    "entitlement": 30,
+    "carry_forward_limit": 12,
     "is_active": true,
     "updated_at": "2026-04-02T11:20:00Z"
   }
@@ -418,6 +427,18 @@ Used by **Delete Policy** action.
 }
 ```
 
+**Constraint**
+- Block delete if policy is assigned to any employee in `employee_policies.leave_policy_id`; returns:
+```json
+{
+  "success": false,
+  "message": "Cannot delete leave policy in use",
+  "error": {
+    "policy_id": "assigned_to_employee"
+  }
+}
+```
+
 ---
 
 # 3) Optional Supporting Endpoint
@@ -438,7 +459,7 @@ Useful for “policy hints” during request/apply flow.
     "minimum_notice_days": 3,
     "maximum_days_per_request": 30,
     "carry_forward_limit": 10,
-    "carry_forward_expiry": "3 months",
+    "carry_forward_expiry": "2026-07-01T00:00:00Z",
     "half_day_allowed": true,
     "requires_documentation": false,
     "documentation_types": [],
@@ -498,4 +519,3 @@ Useful for “policy hints” during request/apply flow.
   }
 }
 ```
-

@@ -101,3 +101,23 @@ func (r *LeavePolicyRepository) List(tenantID *uint, page, pageSize int, filters
 	err := query.Order("country ASC, leave_type_code ASC").Offset(offset).Limit(pageSize).Find(&policies).Error
 	return policies, total, err
 }
+
+func (r *LeavePolicyRepository) CountByLeaveTypeCode(leaveTypeCode string, tenantID *uint) (int64, error) {
+	var count int64
+	query := r.db.Model(&models.LeavePolicy{}).Where("leave_type_code = ?", leaveTypeCode)
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	if err := query.Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
+func (r *LeavePolicyRepository) CountEmployeeAssignments(policyID uint) (int64, error) {
+	var count int64
+	if err := r.db.Table("employee_policies").Where("leave_policy_id = ? AND deleted_at IS NULL", policyID).Count(&count).Error; err != nil {
+		return 0, err
+	}
+	return count, nil
+}

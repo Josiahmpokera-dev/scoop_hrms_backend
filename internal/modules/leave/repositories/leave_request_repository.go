@@ -2,6 +2,7 @@ package repositories
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
@@ -94,6 +95,19 @@ func (r *LeaveRequestRepository) List(tenantID *uint, page, pageSize int, filter
 
 	if toDate, ok := filters["to_date"].(string); ok && toDate != "" {
 		query = query.Where("to_date <= ?", toDate)
+	}
+
+	if search, ok := filters["search"].(string); ok && strings.TrimSpace(search) != "" {
+		term := "%" + strings.ToLower(strings.TrimSpace(search)) + "%"
+		query = query.Joins("LEFT JOIN employees e ON e.employee_id = leave_requests.employee_id").
+			Where(`(
+				LOWER(leave_requests.application_number) LIKE ? OR
+				LOWER(leave_requests.employee_id) LIKE ? OR
+				LOWER(leave_requests.leave_type_code) LIKE ? OR
+				LOWER(leave_requests.reason) LIKE ? OR
+				LOWER(e.first_name) LIKE ? OR
+				LOWER(e.last_name) LIKE ?
+			)`, term, term, term, term, term, term)
 	}
 
 	// Count total

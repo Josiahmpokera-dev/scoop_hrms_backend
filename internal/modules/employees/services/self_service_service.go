@@ -12,6 +12,8 @@ import (
 	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
 	positionRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
+	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
+	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
 	"gorm.io/gorm"
 )
 
@@ -28,6 +30,7 @@ type SelfServiceService struct {
 	departmentRepo        *departmentRepos.DepartmentRepository
 	positionRepo          *positionRepos.JobPositionRepository
 	locationRepo          *locationRepos.LocationRepository
+	userRepo              *userRepos.UserRepository
 }
 
 // NewSelfServiceService creates a new self-service service
@@ -44,6 +47,7 @@ func NewSelfServiceService() *SelfServiceService {
 		departmentRepo:        departmentRepos.NewDepartmentRepository(),
 		positionRepo:          positionRepos.NewJobPositionRepository(),
 		locationRepo:          locationRepos.NewLocationRepository(),
+		userRepo:              userRepos.NewUserRepository(),
 	}
 }
 
@@ -53,7 +57,8 @@ func (s *SelfServiceService) GetEmployeeProfile(userID uint, tenantID *uint) (ma
 	employee, err := s.employeeRepo.FindByUserID(userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("employee record not found for this user")
+			// No employee record found, return user profile instead
+			return s.getUserProfile(userID, tenantID)
 		}
 		return nil, fmt.Errorf("failed to get employee: %w", err)
 	}
@@ -291,6 +296,75 @@ func (s *SelfServiceService) GetEmployeeProfile(userID uint, tenantID *uint) (ma
 		updateStatus["last_update_status"] = string(latest.Status)
 	}
 	response["profile_update_status"] = updateStatus
+
+	return response, nil
+}
+
+// getUserProfile retrieves profile for non-employee users (admins, HR, etc.)
+func (s *SelfServiceService) getUserProfile(userID uint, tenantID *uint) (map[string]interface{}, error) {
+	// Get user by ID
+	user, err := s.userRepo.FindByID(userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, errors.New("user not found")
+		}
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	// Build user profile response
+	response := map[string]interface{}{
+		"user_id": user.ID,
+		"role":    string(userModels.UserRole(user.Role)),
+		"status":  user.Status,
+	}
+
+	// Personal information
+	personal := map[string]interface{}{
+		"first_name":   user.FirstName,
+		"last_name":    user.LastName,
+		"full_name":    user.FullName(),
+		"username":     user.Username,
+		"email":        user.Email,
+		"phone_number": nil,
+	}
+
+	if user.PhoneNumber != nil {
+		personal["phone_number"] = *user.PhoneNumber
+	}
+
+	response["personal"] = personal
+
+	// Account information
+	account := map[string]interface{}{
+		"email_verified": user.EmailVerified,
+		"is_active":      user.IsActive,
+		"last_login":     nil,
+		"created_at":     user.CreatedAt,
+		"updated_at":     user.UpdatedAt,
+	}
+
+	if user.LastLogin != nil {
+		account["last_login"] = user.LastLogin
+	}
+
+	response["account"] = account
+
+	// Job information (minimal for non-employees)
+	job := map[string]interface{}{
+		"role": string(user.Role),
+	}
+	response["job"] = job
+
+	// Empty arrays for consistency
+	response["emergency_contacts"] = []map[string]interface{}{}
+	response["documents"] = []map[string]interface{}{}
+
+	// Profile update status (not applicable for non-employees)
+	response["profile_update_status"] = map[string]interface{}{
+		"has_pending_updates":      false,
+		"last_update_request_date": nil,
+		"last_update_status":       nil,
+	}
 
 	return response, nil
 }

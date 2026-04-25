@@ -173,7 +173,13 @@ func (s *LeavePolicyService) UpdateLeavePolicy(id uint, req *models.UpdateLeaveP
 
 // DeleteLeavePolicy deletes a leave policy
 func (s *LeavePolicyService) DeleteLeavePolicy(id uint) error {
-	// TODO: Check if policy is assigned to any employees
+	count, err := s.repo.CountEmployeeAssignments(id)
+	if err != nil {
+		return fmt.Errorf("failed to check leave policy usage: %w", err)
+	}
+	if count > 0 {
+		return errors.New("Cannot delete leave policy in use")
+	}
 	return s.repo.Delete(id)
 }
 

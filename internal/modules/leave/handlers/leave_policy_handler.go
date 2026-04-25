@@ -7,9 +7,9 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/services"
+	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-gonic/gin"
-	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 )
 
 type LeavePolicyHandler struct {
@@ -60,9 +60,9 @@ func (h *LeavePolicyHandler) ListLeavePolicies(c *gin.Context) {
 	response.Success(c, "Leave policies retrieved successfully", map[string]interface{}{
 		"data": policies,
 		"meta": map[string]interface{}{
-			"page":       page,
-			"per_page":   pageSize,
-			"total":      total,
+			"page":        page,
+			"per_page":    pageSize,
+			"total":       total,
 			"total_pages": totalPages,
 		},
 	})
@@ -116,15 +116,15 @@ func (h *LeavePolicyHandler) GetPolicyGuidelines(c *gin.Context) {
 	}
 
 	response.Success(c, "Policy guidelines retrieved successfully", map[string]interface{}{
-		"leave_type":              leaveTypeCode,
-		"minimum_notice_days":     policy.MinimumNoticeDays,
+		"leave_type":               leaveTypeCode,
+		"minimum_notice_days":      policy.MinimumNoticeDays,
 		"maximum_days_per_request": policy.MaximumDaysPerRequest,
-		"carry_forward_limit":     policy.CarryForwardLimit,
-		"carry_forward_expiry":    policy.CarryForwardExpiry,
-		"half_day_allowed":        policy.HalfDayAllowed,
-		"requires_documentation":  false, // Would come from leave type
-		"documentation_types":    []string{},
-		"guidelines":              guidelines,
+		"carry_forward_limit":      policy.CarryForwardLimit,
+		"carry_forward_expiry":     policy.CarryForwardExpiry,
+		"half_day_allowed":         policy.HalfDayAllowed,
+		"requires_documentation":   policy.LeaveType.RequiresDocumentation,
+		"documentation_types":      []string{},
+		"guidelines":               guidelines,
 	})
 }
 
@@ -192,6 +192,10 @@ func (h *LeavePolicyHandler) DeleteLeavePolicy(c *gin.Context) {
 	}
 
 	if err := h.service.DeleteLeavePolicy(uint(id)); err != nil {
+		if err.Error() == "Cannot delete leave policy in use" {
+			response.BadRequest(c, "Cannot delete leave policy in use", map[string]string{"policy_id": "assigned_to_employee"})
+			return
+		}
 		response.BadRequest(c, err.Error(), nil)
 		return
 	}

@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/auth/services"
-	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
 	roleRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
+	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-gonic/gin"
 )
