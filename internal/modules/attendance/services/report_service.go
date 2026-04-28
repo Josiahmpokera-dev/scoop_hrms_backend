@@ -88,6 +88,46 @@ func (s *AttendanceReportService) GetDepartmentStats(dateStr string, orgID *uint
 	return s.repo.GetDepartmentAttendance(date)
 }
 
+func (s *AttendanceReportService) GetDepartmentAttendanceStats(startDate, endDate string) ([]models.DepartmentAttendanceResponse, error) {
+	start, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start date format")
+	}
+	end, err := time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end date format")
+	}
+
+	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
+	end = time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 0, time.UTC)
+
+	if start.After(end) {
+		return nil, fmt.Errorf("start date must be before or equal to end date")
+	}
+
+	return s.repo.GetDepartmentAttendanceStats(start, end)
+}
+
+func (s *AttendanceReportService) GetEmployeeAttendanceStats(employeeID uint, startDate, endDate string) (*models.EmployeeAttendanceReportResponse, error) {
+	start, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start date format")
+	}
+	end, err := time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end date format")
+	}
+
+	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
+	end = time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 0, time.UTC)
+
+	if start.After(end) {
+		return nil, fmt.Errorf("start date must be before or equal to end date")
+	}
+
+	return s.repo.GetEmployeeAttendanceStats(employeeID, start, end)
+}
+
 func (s *AttendanceReportService) GetComplianceViolations(startDate, endDate string, departmentID *uint, severity string) ([]models.ComplianceViolationResponse, error) {
 	start, err := time.Parse("2006-01-02", startDate)
 	if err != nil {
@@ -294,4 +334,45 @@ func (s *AttendanceReportService) GetOverview(startTime, endTime time.Time, view
 			},
 		},
 	}, nil
+}
+
+// GetComprehensiveEmployeeReport generates a comprehensive report for employees within a date range
+func (s *AttendanceReportService) GetComprehensiveEmployeeReport(startDate, endDate string, employeeID, departmentID, locationID *uint, page, pageSize int) ([]models.ComprehensiveEmployeeReportResponse, int64, error) {
+	// Parse dates
+	start, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invalid start date format")
+	}
+	end, err := time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return nil, 0, fmt.Errorf("invalid end date format")
+	}
+
+	// Validate date range
+	if start.After(end) {
+		return nil, 0, fmt.Errorf("start date must be before or equal to end date")
+	}
+
+	// Check maximum range (1 year)
+	maxEnd := start.AddDate(0, 0, 365)
+	if end.After(maxEnd) {
+		return nil, 0, fmt.Errorf("date range cannot exceed 365 days")
+	}
+
+	// Normalize times
+	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, time.UTC)
+	end = time.Date(end.Year(), end.Month(), end.Day(), 23, 59, 59, 0, time.UTC)
+
+	// Set default pagination
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 {
+		pageSize = 20
+	}
+	if pageSize > 100 {
+		pageSize = 100
+	}
+
+	return s.repo.GetComprehensiveEmployeeReport(start, end, employeeID, departmentID, locationID, page, pageSize)
 }

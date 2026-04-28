@@ -170,9 +170,9 @@ func (h *UploadHandler) DeleteFile(c *gin.Context) {
 // GET /uploads/info — storage configuration info
 func (h *UploadHandler) GetStorageInfo(c *gin.Context) {
 	response.Success(c, "Storage configuration", gin.H{
-		"backend":          h.storageBackend(),
-		"max_file_size_mb": maxFileSize >> 20,
-		"allowed_images":   []string{"jpg", "jpeg", "png", "gif", "webp", "svg"},
+		"backend":           h.storageBackend(),
+		"max_file_size_mb":  maxFileSize >> 20,
+		"allowed_images":    []string{"jpg", "jpeg", "png", "gif", "webp", "svg"},
 		"allowed_documents": []string{"pdf", "doc", "docx", "xls", "xlsx", "ppt", "pptx", "txt", "csv", "zip", "rar"},
 	})
 }

@@ -13,6 +13,7 @@ import (
 	assetModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/models"
 	attendanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/models"
 	auditModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/models"
+	attendanceWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/workers"
 	biometricModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/models"
 	biometricWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/workers"
 	costCenterModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/models"
@@ -37,9 +38,34 @@ import (
 	appRouter "github.com/Josiahmpokera-dev/hrms-backend/internal/router"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/seed"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/types"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/pkg/scheduler"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+
+// Swagger documentation
+// @title HRMS Backend API
+// @version 1.0
+// @description Human Resource Management System - REST API
+
+// @contact.name API Support
+// @contact.url https://github.com/Josiahmpokera-dev/hrms-backend
+// @contact.email support@hrms.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8080
+// @BasePath /api/v1
+// @schemes http
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @security BearerAuth
+
+_ "github.com/Josiahmpokera-dev/hrms-backend/docs/swagger"
+ginSwagger "github.com/swaggo/gin-swagger"
+swaggerFiles "github.com/swaggo/files"
 )
 
 func main() {
@@ -250,7 +276,7 @@ func main() {
 
 		apiInfo := types.APIInfo{
 			Title:       "HRMS Backend API",
-			Description: "Human Resource Management System (HRMS) Backend API ",
+			Description: "Human Resource Management System (HRMS) Backend API",
 			Version:     "1.0.0",
 			Status:      "running",
 			Environment: config.AppConfig.Server.Env,
@@ -332,6 +358,17 @@ func main() {
 	// Serve static files from storage directory
 	router.Static("/storage", storagePath)
 
+	// Serve API documentation as static files
+	// NOTE: /docs/index.html must be served as a real HTML file, not markdown.
+	// The ./docs folder contains index.html and API_DOCUMENTATION.md.
+	router.Static("/docs", "./docs")
+
+	// Swagger UI endpoint - with custom config to support Bearer token
+	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler,
+		ginSwagger.URL("http://localhost:8080/docs/swagger/swagger.json"),
+		ginSwagger.DefaultModelsExpandDepth(-1),
+	))
+
 	// Setup API routes
 	appRouter.SetupRoutes(router)
 
@@ -350,6 +387,24 @@ func main() {
 			}
 		}
 	}
+
+	// Start Attendance Report worker if RabbitMQ is enabled
+	if cfg != nil && cfg.RabbitMQ.Enabled {
+		reportWorker, err := attendanceWorkers.NewReportWorker()
+		if err != nil {
+			log.Printf("Warning: Failed to start attendance report worker: %v", err)
+		} else {
+			if err := reportWorker.Start(); err != nil {
+				log.Printf("Warning: Failed to start attendance report worker: %v", err)
+			} else {
+				log.Println("✅ Attendance report worker started successfully")
+			}
+		}
+	}
+
+	// Start Scheduler
+	s := scheduler.NewScheduler()
+	s.Start()
 
 	// Start server
 	port := config.AppConfig.Server.Port

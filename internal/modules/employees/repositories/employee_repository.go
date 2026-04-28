@@ -273,7 +273,7 @@ func (r *EmployeeRepository) SearchEmployees(tenantID *uint, search *string, dep
 	}
 
 	// Get paginated results
-	err := query.Order("first_name ASC, last_name ASC").Offset(offset).Limit(pageSize).Find(&employees).Error
+	err := query.Preload("Department").Order("first_name ASC, last_name ASC").Offset(offset).Limit(pageSize).Find(&employees).Error
 
 	return employees, total, err
 }

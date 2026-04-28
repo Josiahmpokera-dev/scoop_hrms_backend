@@ -34,7 +34,7 @@ func NewEmployeeHandler() *EmployeeHandler {
 // @Success 201 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 422 {object} response.APIResponse
-// @Router /api/v1/employees [post]
+// @Router/employees [post]
 func (h *EmployeeHandler) OnboardEmployee(c *gin.Context) {
 	var req models.OnboardEmployeeRequest
 
@@ -60,7 +60,7 @@ func (h *EmployeeHandler) OnboardEmployee(c *gin.Context) {
 // @Param id path int true "Employee ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /api/v1/employees/{id} [get]
+// @Router/employees/{id} [get]
 func (h *EmployeeHandler) GetEmployee(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -86,7 +86,7 @@ func (h *EmployeeHandler) GetEmployee(c *gin.Context) {
 // @Param employee_id path string true "Employee ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /api/v1/employees/employee-id/{employee_id} [get]
+// @Router/employees/employee-id/{employee_id} [get]
 func (h *EmployeeHandler) GetEmployeeByEmployeeID(c *gin.Context) {
 	employeeID := c.Param("employee_id")
 	if employeeID == "" {
@@ -114,7 +114,7 @@ func (h *EmployeeHandler) GetEmployeeByEmployeeID(c *gin.Context) {
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /api/v1/employees/{id} [put]
+// @Router/employees/{id} [put]
 func (h *EmployeeHandler) UpdateEmployee(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -146,7 +146,7 @@ func (h *EmployeeHandler) UpdateEmployee(c *gin.Context) {
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20)
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees [get]
+// @Router/employees [get]
 func (h *EmployeeHandler) ListEmployees(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -175,7 +175,7 @@ func (h *EmployeeHandler) ListEmployees(c *gin.Context) {
 // @Produce json
 // @Param department_id path int true "Department ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/department/{department_id} [get]
+// @Router/employees/department/{department_id} [get]
 func (h *EmployeeHandler) ListByDepartment(c *gin.Context) {
 	idParam := c.Param("department_id")
 	departmentID, err := strconv.ParseUint(idParam, 10, 32)
@@ -200,7 +200,7 @@ func (h *EmployeeHandler) ListByDepartment(c *gin.Context) {
 // @Produce json
 // @Param status path string true "Employee status" Enums(active, inactive, on_leave, terminated)
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/status/{status} [get]
+// @Router/employees/status/{status} [get]
 func (h *EmployeeHandler) ListByStatus(c *gin.Context) {
 	status := c.Param("status")
 	if status == "" {
@@ -225,7 +225,7 @@ func (h *EmployeeHandler) ListByStatus(c *gin.Context) {
 // @Param id path int true "Employee ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /api/v1/employees/{id} [delete]
+// @Router/employees/{id} [delete]
 func (h *EmployeeHandler) DeleteEmployee(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)
@@ -358,7 +358,7 @@ func (h *EmployeeHandler) ReactivateEmployee(c *gin.Context) {
 // @Produce json
 // @Param department_id query int false "Filter by department ID (also flags department head as suggested)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/managers [get]
+// @Router/employees/managers [get]
 func (h *EmployeeHandler) ListManagers(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -390,7 +390,7 @@ func (h *EmployeeHandler) ListManagers(c *gin.Context) {
 // @Produce json
 // @Param department_id path int true "Department ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/department-manager/{department_id} [get]
+// @Router/employees/department-manager/{department_id} [get]
 func (h *EmployeeHandler) GetDepartmentManager(c *gin.Context) {
 	departmentID, err := strconv.ParseUint(c.Param("department_id"), 10, 32)
 	if err != nil {
@@ -423,7 +423,7 @@ func (h *EmployeeHandler) GetDepartmentManager(c *gin.Context) {
 // @Failure 400 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
 // @Failure 422 {object} response.APIResponse
-// @Router /api/v1/employees/{id}/send-credentials [post]
+// @Router/employees/{id}/send-credentials [post]
 func (h *EmployeeHandler) SendCredentialsEmail(c *gin.Context) {
 	idParam := c.Param("id")
 	id, err := strconv.ParseUint(idParam, 10, 32)

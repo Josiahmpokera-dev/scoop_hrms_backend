@@ -42,7 +42,7 @@ func NewTicketAgentHandler() *TicketAgentHandler {
 // @Param assigned_to query string false "Assigned to (me, unassigned, or user_id)"
 // @Param queue query string false "Queue filter"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/agent/tickets [get]
+// @Router/helpdesk/agent/tickets [get]
 func (h *TicketAgentHandler) ListTickets(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -126,7 +126,7 @@ func (h *TicketAgentHandler) ListTickets(c *gin.Context) {
 // @Param ticket_id path int true "Ticket ID"
 // @Param request body map[string]interface{} true "Assignment"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/agent/tickets/:ticket_id/assign [post]
+// @Router/helpdesk/agent/tickets/:ticket_id/assign [post]
 func (h *TicketAgentHandler) AssignTicket(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -192,7 +192,7 @@ func (h *TicketAgentHandler) AssignTicket(c *gin.Context) {
 // @Param ticket_id path int true "Ticket ID"
 // @Param request body map[string]interface{} true "Status update"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/agent/tickets/:ticket_id/status [patch]
+// @Router/helpdesk/agent/tickets/:ticket_id/status [patch]
 func (h *TicketAgentHandler) UpdateTicketStatus(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -255,7 +255,7 @@ func (h *TicketAgentHandler) UpdateTicketStatus(c *gin.Context) {
 // @Param ticket_id path int true "Ticket ID"
 // @Param request body map[string]interface{} true "Resolution"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/agent/tickets/:ticket_id/resolve [post]
+// @Router/helpdesk/agent/tickets/:ticket_id/resolve [post]
 func (h *TicketAgentHandler) ResolveTicket(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -315,7 +315,7 @@ func (h *TicketAgentHandler) ResolveTicket(c *gin.Context) {
 // @Param from query string false "Custom start date (YYYY-MM-DD)"
 // @Param to query string false "Custom end date (YYYY-MM-DD)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/dashboard/statistics [get]
+// @Router/helpdesk/dashboard/statistics [get]
 func (h *TicketAgentHandler) GetStatistics(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -493,7 +493,7 @@ func roundToOneDecimal(v float64) float64 {
 // @Produce json
 // @Param limit query int false "Limit (default: 10, max: 50)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/tickets/recent [get]
+// @Router/helpdesk/tickets/recent [get]
 func (h *TicketAgentHandler) GetRecentTickets(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 

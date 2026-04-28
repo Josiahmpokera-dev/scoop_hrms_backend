@@ -43,7 +43,7 @@ func NewFileUploadHandler() *FileUploadHandler {
 // @Param description formData string false "Document description"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/upload-document [post]
+// @Router/employees/onboarding/upload-document [post]
 func (h *FileUploadHandler) UploadDocument(c *gin.Context) {
 	// Get employee ID
 	employeeID := c.PostForm("employee_id")
@@ -227,7 +227,7 @@ func (h *FileUploadHandler) getFullURL(c *gin.Context, storedURL string) string 
 // @Param file formData file true "Photo file (image)"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/upload-photo [post]
+// @Router/employees/onboarding/upload-photo [post]
 func (h *FileUploadHandler) UploadPhoto(c *gin.Context) {
 	// Get employee ID
 	employeeID := c.PostForm("employee_id")
@@ -272,7 +272,7 @@ func (h *FileUploadHandler) UploadPhoto(c *gin.Context) {
 // @Param request body map[string]string true "File URL"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/delete-file [post]
+// @Router/employees/onboarding/delete-file [post]
 func (h *FileUploadHandler) DeleteFile(c *gin.Context) {
 	var req struct {
 		FileURL string `json:"file_url" binding:"required"`
@@ -301,7 +301,7 @@ func (h *FileUploadHandler) DeleteFile(c *gin.Context) {
 // @Param request body map[string]uint true "Document ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/delete-document [post]
+// @Router/employees/onboarding/delete-document [post]
 func (h *FileUploadHandler) DeleteDocument(c *gin.Context) {
 	var req struct {
 		DocumentID uint `json:"document_id" binding:"required"`

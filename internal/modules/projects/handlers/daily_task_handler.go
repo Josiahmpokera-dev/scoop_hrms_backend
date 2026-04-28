@@ -33,7 +33,7 @@ func NewDailyTaskHandler() *DailyTaskHandler {
 // @Produce json
 // @Param body body models.CreateDailyTaskRequest true "Daily task data"
 // @Success 201 {object} response.APIResponse
-// @Router /api/v1/daily-tasks [post]
+// @Router/daily-tasks [post]
 func (h *DailyTaskHandler) CreateDailyTask(c *gin.Context) {
 	var req models.CreateDailyTaskRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -62,7 +62,7 @@ func (h *DailyTaskHandler) CreateDailyTask(c *gin.Context) {
 // @Produce json
 // @Param id path int true "Task ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/daily-tasks/{id} [get]
+// @Router/daily-tasks/{id} [get]
 func (h *DailyTaskHandler) GetDailyTask(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -87,7 +87,7 @@ func (h *DailyTaskHandler) GetDailyTask(c *gin.Context) {
 // @Param id path int true "Task ID"
 // @Param body body models.UpdateDailyTaskRequest true "Updated task data"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/daily-tasks/{id} [put]
+// @Router/daily-tasks/{id} [put]
 func (h *DailyTaskHandler) UpdateDailyTask(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -122,7 +122,7 @@ func (h *DailyTaskHandler) UpdateDailyTask(c *gin.Context) {
 // @Produce json
 // @Param id path int true "Task ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/daily-tasks/{id} [delete]
+// @Router/daily-tasks/{id} [delete]
 func (h *DailyTaskHandler) DeleteDailyTask(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -158,7 +158,7 @@ func (h *DailyTaskHandler) DeleteDailyTask(c *gin.Context) {
 // @Param date_to query string false "To date (YYYY-MM-DD)"
 // @Param search query string false "Search"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/daily-tasks [get]
+// @Router/daily-tasks [get]
 func (h *DailyTaskHandler) ListDailyTasks(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -189,7 +189,7 @@ func (h *DailyTaskHandler) ListDailyTasks(c *gin.Context) {
 // @Tags Daily Tasks
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/daily-tasks/categories [get]
+// @Router/daily-tasks/categories [get]
 func (h *DailyTaskHandler) GetTaskCategories(c *gin.Context) {
 	categories := h.service.GetTaskCategories()
 	response.Success(c, "Task categories retrieved successfully", categories)
@@ -201,7 +201,7 @@ func (h *DailyTaskHandler) GetTaskCategories(c *gin.Context) {
 // @Produce json
 // @Param project_id path int true "Project ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/daily-tasks/project/{project_id}/summary [get]
+// @Router/daily-tasks/project/{project_id}/summary [get]
 func (h *DailyTaskHandler) GetProjectTaskSummary(c *gin.Context) {
 	projectID, err := strconv.ParseUint(c.Param("project_id"), 10, 32)
 	if err != nil {
@@ -230,7 +230,7 @@ func (h *DailyTaskHandler) GetProjectTaskSummary(c *gin.Context) {
 // @Param date_from query string false "From date (YYYY-MM-DD)"
 // @Param date_to query string false "To date (YYYY-MM-DD)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/daily-tasks [get]
+// @Router/self-service/daily-tasks [get]
 func (h *DailyTaskHandler) GetMyTasks(c *gin.Context) {
 	employeeID, _, ok := getEmployeeFromUser(c)
 	if !ok || employeeID == "" {
@@ -267,7 +267,7 @@ func (h *DailyTaskHandler) GetMyTasks(c *gin.Context) {
 // @Tags Daily Tasks (Self-Service)
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/daily-tasks/today [get]
+// @Router/self-service/daily-tasks/today [get]
 func (h *DailyTaskHandler) GetMyTodayTasks(c *gin.Context) {
 	employeeID, _, ok := getEmployeeFromUser(c)
 	if !ok || employeeID == "" {
@@ -291,7 +291,7 @@ func (h *DailyTaskHandler) GetMyTodayTasks(c *gin.Context) {
 // @Param date_from query string false "From date (YYYY-MM-DD), defaults to start of current month"
 // @Param date_to query string false "To date (YYYY-MM-DD), defaults to today"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/daily-tasks/summary [get]
+// @Router/self-service/daily-tasks/summary [get]
 func (h *DailyTaskHandler) GetMyTaskSummary(c *gin.Context) {
 	employeeID, _, ok := getEmployeeFromUser(c)
 	if !ok || employeeID == "" {

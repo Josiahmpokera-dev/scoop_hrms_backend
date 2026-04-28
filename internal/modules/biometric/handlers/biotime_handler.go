@@ -61,7 +61,7 @@ func (h *BioTimeHandler) getService(c *gin.Context) *services.BioTimeService {
 // @Produce json
 // @Success 200 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
-// @Router /api/v1/biometric/biotime/test-connection [get]
+// @Router/biometric/biotime/test-connection [get]
 func (h *BioTimeHandler) TestConnection(c *gin.Context) {
 	service := h.getService(c)
 	result, err := service.TestConnection()
@@ -84,7 +84,7 @@ func (h *BioTimeHandler) TestConnection(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
-// @Router /api/v1/biometric/biotime/token [get]
+// @Router/biometric/biotime/token [get]
 func (h *BioTimeHandler) GetToken(c *gin.Context) {
 	service := h.getService(c)
 	token, err := service.GetToken()
@@ -106,7 +106,7 @@ func (h *BioTimeHandler) GetToken(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} response.APIResponse{data=services.TerminalsResponse}
 // @Failure 500 {object} response.APIResponse
-// @Router /api/v1/biometric/biotime/terminals [get]
+// @Router/biometric/biotime/terminals [get]
 func (h *BioTimeHandler) GetTerminals(c *gin.Context) {
 	service := h.getService(c)
 	terminalsResp, err := service.GetTerminals()
@@ -125,7 +125,7 @@ func (h *BioTimeHandler) GetTerminals(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} response.APIResponse{data=services.TerminalsResponse}
 // @Failure 500 {object} response.APIResponse
-// @Router /api/v1/biometric/biotime/device-status [get]
+// @Router/biometric/biotime/device-status [get]
 func (h *BioTimeHandler) GetDeviceStatus(c *gin.Context) {
 	service := h.getService(c)
 	terminalsResp, err := service.GetTerminals()
@@ -151,7 +151,7 @@ func (h *BioTimeHandler) GetDeviceStatus(c *gin.Context) {
 // @Param end_time query string false "End time filter (format: YYYY-MM-DD HH:MM:SS)"
 // @Success 200 {object} response.APIResponse{data=services.TransactionsResponse}
 // @Failure 500 {object} response.APIResponse
-// @Router /api/v1/biometric/biotime/transactions [get]
+// @Router/biometric/biotime/transactions [get]
 func (h *BioTimeHandler) GetTransactions(c *gin.Context) {
 	service := h.getService(c)
 
@@ -364,7 +364,7 @@ func roundTo2DP(v float64) float64 {
 // @Failure 400 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
-// @Router /api/v1/biometric/biotime/transactions/{id} [get]
+// @Router/biometric/biotime/transactions/{id} [get]
 func (h *BioTimeHandler) GetTransaction(c *gin.Context) {
 	transactionID := c.Param("id")
 	if transactionID == "" {
@@ -393,7 +393,7 @@ func (h *BioTimeHandler) GetTransaction(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
-// @Router /api/v1/biometric/biotime/refresh-token [post]
+// @Router/biometric/biotime/refresh-token [post]
 func (h *BioTimeHandler) RefreshToken(c *gin.Context) {
 	service := h.getService(c)
 	token, err := service.RefreshToken()
@@ -417,7 +417,7 @@ func (h *BioTimeHandler) RefreshToken(c *gin.Context) {
 // @Param end_date query string false "End date (YYYY-MM-DD). Default: now"
 // @Success 200 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
-// @Router /api/v1/biometric/biotime/backfill [post]
+// @Router/biometric/biotime/backfill [post]
 func (h *BioTimeHandler) BackfillTransactions(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	backfillService := services.NewBioTimeBackfillService(tenantID)
@@ -470,7 +470,7 @@ func (h *BioTimeHandler) BackfillTransactions(c *gin.Context) {
 // @Success 200 {object} response.APIResponse{data=[]services.DailyAttendanceResponse}
 // @Failure 400 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
-// @Router /api/v1/biometric/attendance/daily [get]
+// @Router/biometric/attendance/daily [get]
 func (h *BioTimeHandler) GetDailyAttendance(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	attendanceService := services.NewAttendanceService()
@@ -581,7 +581,7 @@ func (h *BioTimeHandler) GetDailyAttendance(c *gin.Context) {
 // @Success 200 {object} response.APIResponse{data=object{data=[]services.LateArrivalResponse,pagination=object{page=int,page_size=int,total=int,total_pages=int}}}
 // @Failure 400 {object} response.APIResponse
 // @Failure 500 {object} response.APIResponse
-// @Router /api/v1/biometric/attendance/exceptional [get]
+// @Router/biometric/attendance/exceptional [get]
 func (h *BioTimeHandler) GetExceptional(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	attendanceService := services.NewAttendanceService()

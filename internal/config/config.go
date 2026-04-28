@@ -17,6 +17,7 @@ type Config struct {
 	CORS           CORSConfig
 	BioTime        BioTimeConfig
 	RabbitMQ       RabbitMQConfig
+	SMTP           SMTPConfig
 	LoginRateLimit LoginRateLimitConfig
 	AWS            AWSConfig
 	Encryption     EncryptionConfig
@@ -96,6 +97,17 @@ type RabbitMQConfig struct {
 	BatchSize          int // Number of messages to process in a batch (0 = process one at a time)
 }
 
+// SMTPConfig holds email configuration
+type SMTPConfig struct {
+	Host      string
+	Port      int
+	Username  string
+	Password  string
+	From      string
+	FromName  string
+	HREmail   string
+}
+
 var AppConfig *Config
 
 // LoadConfig loads configuration from environment variables
@@ -139,6 +151,15 @@ func LoadConfig() (*Config, error) {
 			Queue:              getEnv("RABBITMQ_QUEUE", "biotime_transactions"),
 			ProcessingInterval: getEnvInt("RABBITMQ_PROCESSING_INTERVAL", 0), // 0 = immediate, or seconds (e.g., 5, 300)
 			BatchSize:          getEnvInt("RABBITMQ_BATCH_SIZE", 0),          // 0 = one at a time, or batch size
+		},
+		SMTP: SMTPConfig{
+			Host:     getEnv("SMTP_HOST", "smtp.mailtrap.io"),
+			Port:     getEnvInt("SMTP_PORT", 587),
+			Username: getEnv("SMTP_USER", ""),
+			Password: getEnv("SMTP_PASS", ""),
+			From:     getEnv("SMTP_FROM_EMAIL", "hrms@scoop.co.tz"),
+			FromName: getEnv("SMTP_FROM_NAME", "HRMS"),
+			HREmail:  getEnv("HR_EMAIL", "hr@scoop.co.tz"),
 		},
 		LoginRateLimit: LoginRateLimitConfig{
 			MaxAttempts:    getEnvInt("LOGIN_MAX_ATTEMPTS", 5),    // Block after N failed attempts

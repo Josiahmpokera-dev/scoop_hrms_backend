@@ -29,7 +29,7 @@ func NewAuthHandler() *AuthHandler {
 // @Success 201 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 422 {object} response.APIResponse
-// @Router /api/v1/auth/register [post]
+// @Router /auth/register [post]
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req models.RegisterRequest
 
@@ -57,7 +57,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 401 {object} response.APIResponse
-// @Router /api/v1/auth/login [post]
+// @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
 
@@ -85,7 +85,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 401 {object} response.APIResponse
-// @Router /api/v1/auth/refresh [post]
+// @Router /auth/refresh [post]
 func (h *AuthHandler) Refresh(c *gin.Context) {
 	var req models.RefreshTokenRequest
 
@@ -111,7 +111,7 @@ func (h *AuthHandler) Refresh(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} response.APIResponse
 // @Failure 401 {object} response.APIResponse
-// @Router /api/v1/auth/profile [get]
+// @Router /auth/profile [get]
 func (h *AuthHandler) GetProfile(c *gin.Context) {
 	// Get user ID from context (set by auth middleware)
 	userID, exists := c.Get("user_id")
@@ -140,7 +140,7 @@ func (h *AuthHandler) GetProfile(c *gin.Context) {
 // @Produce json
 // @Success 200 {object} response.APIResponse
 // @Failure 401 {object} response.APIResponse
-// @Router /api/v1/auth/logout [post]
+// @Router /auth/logout [post]
 func (h *AuthHandler) Logout(c *gin.Context) {
 	// Optional: could invalidate token in a blacklist here if you add one later
 	response.Success(c, "Logged out successfully. Please discard the access token on the client.", gin.H{"logged_out": true})

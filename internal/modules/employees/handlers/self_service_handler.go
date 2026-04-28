@@ -30,7 +30,7 @@ func NewSelfServiceHandler() *SelfServiceHandler {
 // @Success 200 {object} response.APIResponse
 // @Failure 401 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /api/v1/self-service/profile [get]
+// @Router/self-service/profile [get]
 func (h *SelfServiceHandler) GetProfile(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -64,7 +64,7 @@ func (h *SelfServiceHandler) GetProfile(c *gin.Context) {
 // @Param request body map[string]interface{} true "Update request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/self-service/profile/update [post]
+// @Router/self-service/profile/update [post]
 func (h *SelfServiceHandler) UpdateProfile(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -142,7 +142,7 @@ func (h *SelfServiceHandler) UpdateProfile(c *gin.Context) {
 // @Tags Self-Service
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/profile/update-status [get]
+// @Router/self-service/profile/update-status [get]
 func (h *SelfServiceHandler) GetProfileUpdateStatus(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -176,7 +176,7 @@ func (h *SelfServiceHandler) GetProfileUpdateStatus(c *gin.Context) {
 // @Param page query int false "Page number"
 // @Param page_size query int false "Items per page"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/profile/documents [get]
+// @Router/self-service/profile/documents [get]
 func (h *SelfServiceHandler) GetDocuments(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -241,7 +241,7 @@ func (h *SelfServiceHandler) GetDocuments(c *gin.Context) {
 // @Param page query int false "Page number"
 // @Param page_size query int false "Items per page"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/requests [get]
+// @Router/self-service/requests [get]
 func (h *SelfServiceHandler) ListServiceRequests(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -332,7 +332,7 @@ func (h *SelfServiceHandler) ListServiceRequests(c *gin.Context) {
 // @Produce json
 // @Param request_id path int true "Request ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/requests/:request_id [get]
+// @Router/self-service/requests/:request_id [get]
 func (h *SelfServiceHandler) GetServiceRequestDetails(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -399,7 +399,7 @@ func (h *SelfServiceHandler) GetServiceRequestDetails(c *gin.Context) {
 // @Produce json
 // @Param request body map[string]interface{} true "Service request"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/requests [post]
+// @Router/self-service/requests [post]
 func (h *SelfServiceHandler) CreateServiceRequest(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -511,7 +511,7 @@ func (h *SelfServiceHandler) CreateServiceRequest(c *gin.Context) {
 // @Produce json
 // @Param request body map[string]interface{} true "HR letter request"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/hr-letters [post]
+// @Router/self-service/hr-letters [post]
 func (h *SelfServiceHandler) CreateHRLetterRequest(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -634,7 +634,7 @@ func (h *SelfServiceHandler) CreateHRLetterRequest(c *gin.Context) {
 // @Param status query string false "Request status"
 // @Param letter_type query string false "Letter type filter"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/hr-letters [get]
+// @Router/self-service/hr-letters [get]
 func (h *SelfServiceHandler) ListHRLetterRequests(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -745,7 +745,7 @@ func (h *SelfServiceHandler) ListHRLetterRequests(c *gin.Context) {
 // @Param request_id path int true "Request ID"
 // @Param request body map[string]interface{} true "Cancel request"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/requests/:request_id/cancel [post]
+// @Router/self-service/requests/:request_id/cancel [post]
 func (h *SelfServiceHandler) CancelServiceRequest(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -799,7 +799,7 @@ func (h *SelfServiceHandler) CancelServiceRequest(c *gin.Context) {
 // @Param page query int false "Page number"
 // @Param page_size query int false "Items per page"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/directory [get]
+// @Router/self-service/directory [get]
 func (h *SelfServiceHandler) SearchDirectory(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -904,7 +904,7 @@ func (h *SelfServiceHandler) SearchDirectory(c *gin.Context) {
 // @Produce json
 // @Param employee_id path string true "Employee ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/directory/:employee_id [get]
+// @Router/self-service/directory/:employee_id [get]
 func (h *SelfServiceHandler) GetDirectoryEmployeeDetails(c *gin.Context) {
 	employeeID := c.Param("employee_id")
 	tenantID := middleware.GetTenantID(c)
@@ -924,7 +924,7 @@ func (h *SelfServiceHandler) GetDirectoryEmployeeDetails(c *gin.Context) {
 // @Tags Self-Service
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/profile/id-card [get]
+// @Router/self-service/profile/id-card [get]
 func (h *SelfServiceHandler) DownloadIDCard(c *gin.Context) {
 	response.BadRequest(c, "ID card generation is not yet implemented. This feature will be available in a future update.", nil)
 }
@@ -937,7 +937,7 @@ func (h *SelfServiceHandler) DownloadIDCard(c *gin.Context) {
 // @Param page query int false "Page number"
 // @Param page_size query int false "Items per page"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/payslips [get]
+// @Router/self-service/payslips [get]
 func (h *SelfServiceHandler) ListPayslips(c *gin.Context) {
 	response.BadRequest(c, "Payslip functionality is not yet implemented. This feature requires the payroll module to be integrated.", nil)
 }
@@ -949,7 +949,7 @@ func (h *SelfServiceHandler) ListPayslips(c *gin.Context) {
 // @Produce json
 // @Param payslip_id path int true "Payslip ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/payslips/:payslip_id [get]
+// @Router/self-service/payslips/:payslip_id [get]
 func (h *SelfServiceHandler) GetPayslipDetails(c *gin.Context) {
 	response.BadRequest(c, "Payslip functionality is not yet implemented. This feature requires the payroll module to be integrated.", nil)
 }
@@ -961,7 +961,7 @@ func (h *SelfServiceHandler) GetPayslipDetails(c *gin.Context) {
 // @Produce application/pdf
 // @Param payslip_id path int true "Payslip ID"
 // @Success 200 {file} application/pdf
-// @Router /api/v1/self-service/payslips/:payslip_id/download [get]
+// @Router/self-service/payslips/:payslip_id/download [get]
 func (h *SelfServiceHandler) DownloadPayslip(c *gin.Context) {
 	response.BadRequest(c, "Payslip download is not yet implemented. This feature requires the payroll module to be integrated.", nil)
 }
@@ -974,7 +974,7 @@ func (h *SelfServiceHandler) DownloadPayslip(c *gin.Context) {
 // @Produce json
 // @Param payslip_id path int true "Payslip ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/payslips/:payslip_id/email [post]
+// @Router/self-service/payslips/:payslip_id/email [post]
 func (h *SelfServiceHandler) EmailPayslip(c *gin.Context) {
 	response.BadRequest(c, "Payslip email functionality is not yet implemented. This feature requires the payroll module to be integrated.", nil)
 }
@@ -985,7 +985,7 @@ func (h *SelfServiceHandler) EmailPayslip(c *gin.Context) {
 // @Tags Self-Service
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/payslips/ytd-summary [get]
+// @Router/self-service/payslips/ytd-summary [get]
 func (h *SelfServiceHandler) GetYTDSummary(c *gin.Context) {
 	response.BadRequest(c, "YTD summary is not yet implemented. This feature requires the payroll module to be integrated.", nil)
 }
@@ -998,7 +998,7 @@ func (h *SelfServiceHandler) GetYTDSummary(c *gin.Context) {
 // @Produce json
 // @Param request body map[string]interface{} true "Query request"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/payslips/query [post]
+// @Router/self-service/payslips/query [post]
 func (h *SelfServiceHandler) RaiseSalaryQuery(c *gin.Context) {
 	response.BadRequest(c, "Salary query functionality is not yet implemented. This feature requires the payroll module to be integrated.", nil)
 }
@@ -1011,7 +1011,7 @@ func (h *SelfServiceHandler) RaiseSalaryQuery(c *gin.Context) {
 // @Param page query int false "Page number"
 // @Param page_size query int false "Items per page"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/hr/requests/pending [get]
+// @Router/hr/requests/pending [get]
 func (h *SelfServiceHandler) GetPendingHRRequests(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -1059,7 +1059,7 @@ func (h *SelfServiceHandler) GetPendingHRRequests(c *gin.Context) {
 // @Produce json
 // @Param request_id path int true "Service Request ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/hr/requests/{request_id}/approve [post]
+// @Router/hr/requests/{request_id}/approve [post]
 func (h *SelfServiceHandler) ApproveServiceRequest(c *gin.Context) {
 	// Parse request ID
 	requestID, err := strconv.ParseUint(c.Param("request_id"), 10, 32)
@@ -1100,7 +1100,7 @@ func (h *SelfServiceHandler) ApproveServiceRequest(c *gin.Context) {
 // @Param request_id path int true "Service Request ID"
 // @Param request body map[string]interface{} false "Rejection reason"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/hr/requests/{request_id}/reject [post]
+// @Router/hr/requests/{request_id}/reject [post]
 func (h *SelfServiceHandler) RejectServiceRequest(c *gin.Context) {
 	// Parse request ID
 	requestID, err := strconv.ParseUint(c.Param("request_id"), 10, 32)

@@ -74,7 +74,7 @@ func getEmployeeFromUser(c *gin.Context) (string, string, bool) {
 // @Produce json
 // @Param body body models.CreateProjectRequest true "Project data"
 // @Success 201 {object} response.APIResponse
-// @Router /api/v1/projects [post]
+// @Router/projects [post]
 func (h *ProjectHandler) CreateProject(c *gin.Context) {
 	var req models.CreateProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -100,7 +100,7 @@ func (h *ProjectHandler) CreateProject(c *gin.Context) {
 // @Produce json
 // @Param id path int true "Project ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/projects/{id} [get]
+// @Router/projects/{id} [get]
 func (h *ProjectHandler) GetProject(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -125,7 +125,7 @@ func (h *ProjectHandler) GetProject(c *gin.Context) {
 // @Param id path int true "Project ID"
 // @Param body body models.UpdateProjectRequest true "Updated project data"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/projects/{id} [put]
+// @Router/projects/{id} [put]
 func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -155,7 +155,7 @@ func (h *ProjectHandler) UpdateProject(c *gin.Context) {
 // @Produce json
 // @Param id path int true "Project ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/projects/{id} [delete]
+// @Router/projects/{id} [delete]
 func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -183,7 +183,7 @@ func (h *ProjectHandler) DeleteProject(c *gin.Context) {
 // @Param category query string false "Filter by category"
 // @Param search query string false "Search by name/code"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/projects [get]
+// @Router/projects [get]
 func (h *ProjectHandler) ListProjects(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -236,7 +236,7 @@ func (h *ProjectHandler) ListProjects(c *gin.Context) {
 // @Param id path int true "Project ID"
 // @Param body body models.AddMembersRequest true "Members to add"
 // @Success 201 {object} response.APIResponse
-// @Router /api/v1/projects/{id}/members [post]
+// @Router/projects/{id}/members [post]
 func (h *ProjectHandler) AddMembers(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -268,7 +268,7 @@ func (h *ProjectHandler) AddMembers(c *gin.Context) {
 // @Param id path int true "Project ID"
 // @Param body body models.RemoveMemberRequest true "Member to remove"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/projects/{id}/members/remove [post]
+// @Router/projects/{id}/members/remove [post]
 func (h *ProjectHandler) RemoveMember(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -296,7 +296,7 @@ func (h *ProjectHandler) RemoveMember(c *gin.Context) {
 // @Produce json
 // @Param id path int true "Project ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/projects/{id}/members [get]
+// @Router/projects/{id}/members [get]
 func (h *ProjectHandler) ListMembers(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -319,7 +319,7 @@ func (h *ProjectHandler) ListMembers(c *gin.Context) {
 // @Produce json
 // @Param id path int true "Project ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/projects/{id}/progress [get]
+// @Router/projects/{id}/progress [get]
 func (h *ProjectHandler) GetProjectProgress(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
@@ -341,7 +341,7 @@ func (h *ProjectHandler) GetProjectProgress(c *gin.Context) {
 // @Tags Projects
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/projects/statistics [get]
+// @Router/projects/statistics [get]
 func (h *ProjectHandler) GetStatistics(c *gin.Context) {
 	_ = middleware.GetTenantID(c) // backward compatibility
 
@@ -364,7 +364,7 @@ func (h *ProjectHandler) GetStatistics(c *gin.Context) {
 // @Param page_size query int false "Page size" default(20)
 // @Param status query string false "Filter by status"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/projects [get]
+// @Router/self-service/projects [get]
 func (h *ProjectHandler) ListMyProjects(c *gin.Context) {
 	employeeID, _, ok := getEmployeeFromUser(c)
 	if !ok || employeeID == "" {
@@ -409,7 +409,7 @@ func (h *ProjectHandler) ListMyProjects(c *gin.Context) {
 // @Produce json
 // @Param body body models.AssignProjectRequest true "Assignment data"
 // @Success 201 {object} response.APIResponse
-// @Router /api/v1/projects/assign [post]
+// @Router/projects/assign [post]
 func (h *ProjectHandler) AssignProject(c *gin.Context) {
 	var req models.AssignProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -457,7 +457,7 @@ func (h *ProjectHandler) AssignProject(c *gin.Context) {
 // @Produce json
 // @Param body body models.UnassignProjectRequest true "Unassignment data"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/projects/unassign [post]
+// @Router/projects/unassign [post]
 func (h *ProjectHandler) UnassignProject(c *gin.Context) {
 	var req models.UnassignProjectRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -479,7 +479,7 @@ func (h *ProjectHandler) UnassignProject(c *gin.Context) {
 // @Produce json
 // @Param id path int true "Project ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/projects/{id} [get]
+// @Router/self-service/projects/{id} [get]
 func (h *ProjectHandler) GetMyProjectDetails(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {

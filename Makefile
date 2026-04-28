@@ -66,6 +66,23 @@ test:
 	go test -v ./...
 
 # ==============================================================================
+# API Documentation (Swagger)
+# ==============================================================================
+
+# Install swagger tools (run once)
+swagger-install:
+	go install github.com/swaggo/swag/cmd/swag@latest
+
+# Generate Swagger documentation from Go annotations
+swagger-generate:
+	swag init -g cmd/api/main.go -o ./docs
+
+# Serve Swagger documentation locally (requires swag to be generated first)
+swagger-serve:
+	@echo "Swagger UI will be available at: http://localhost:8080/swagger/index.html"
+	@echo "Make sure the server is running with: make run"
+
+# ==============================================================================
 # Docker Commands (Full Stack)
 # ==============================================================================
 

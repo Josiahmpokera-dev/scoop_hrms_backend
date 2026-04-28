@@ -35,7 +35,7 @@ func NewAssetHRHandler() *AssetHRHandler {
 // @Param page query int false "Page number"
 // @Param page_size query int false "Items per page"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/assets/requests [get]
+// @Router/assets/requests [get]
 func (h *AssetHRHandler) ListAssetRequests(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -143,7 +143,7 @@ func (h *AssetHRHandler) ListAssetRequests(c *gin.Context) {
 // @Produce json
 // @Param request_id path int true "Request ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/assets/requests/:request_id [get]
+// @Router/assets/requests/:request_id [get]
 func (h *AssetHRHandler) GetAssetRequestDetails(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -214,7 +214,7 @@ func (h *AssetHRHandler) GetAssetRequestDetails(c *gin.Context) {
 // @Produce json
 // @Param request_id path int true "Request ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/assets/requests/:request_id/approve [post]
+// @Router/assets/requests/:request_id/approve [post]
 func (h *AssetHRHandler) ApproveAssetRequest(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -262,7 +262,7 @@ func (h *AssetHRHandler) ApproveAssetRequest(c *gin.Context) {
 // @Param request_id path int true "Request ID"
 // @Param request body map[string]interface{} true "Rejection reason"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/assets/requests/:request_id/reject [post]
+// @Router/assets/requests/:request_id/reject [post]
 func (h *AssetHRHandler) RejectAssetRequest(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -322,7 +322,7 @@ func (h *AssetHRHandler) RejectAssetRequest(c *gin.Context) {
 // @Param request_id path int true "Request ID"
 // @Param request body map[string]interface{} true "Asset assignment"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/assets/requests/:request_id/fulfill [post]
+// @Router/assets/requests/:request_id/fulfill [post]
 func (h *AssetHRHandler) FulfillAssetRequest(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -396,7 +396,7 @@ func (h *AssetHRHandler) FulfillAssetRequest(c *gin.Context) {
 // @Param asset_id path int true "Asset ID"
 // @Param request body map[string]interface{} true "Reassignment details"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/assets/:asset_id/reassign [post]
+// @Router/assets/:asset_id/reassign [post]
 func (h *AssetHRHandler) ReassignAsset(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {

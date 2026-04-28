@@ -983,6 +983,9 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceReports.GET("/summary", attendanceReportsHandler.GetSummary)
 			attendanceReports.GET("/trends", attendanceReportsHandler.GetTrends)
 			attendanceReports.GET("/by-department", attendanceReportsHandler.GetDepartmentStats)
+			attendanceReports.GET("/department-stats", attendanceReportsHandler.GetDepartmentStatsByRange)
+			attendanceReports.GET("/employee-stats", attendanceReportsHandler.GetEmployeeStats)
+			attendanceReports.POST("/trigger-monthly", attendanceReportsHandler.TriggerMonthlyReport)
 			attendanceReports.GET("/compliance", attendanceReportsHandler.GetComplianceViolations)
 			attendanceReports.GET("/overtime", attendanceReportsHandler.GetOvertimeAnalysis)          // Replaces previous overtime endpoint
 			attendanceReports.GET("/overtime-analysis", attendanceReportsHandler.GetOvertimeAnalysis) // Alias for frontend compatibility
@@ -992,6 +995,9 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceReports.GET("/timesheets", attendanceReportsHandler.GetTimesheetSummaryReport)              // Timesheet summary
 			attendanceReports.GET("/project-utilization", attendanceReportsHandler.GetProjectUtilizationReport)   // Project utilization
 			attendanceReports.GET("/employee-utilization", attendanceReportsHandler.GetEmployeeUtilizationReport) // Employee utilization
+
+			// Comprehensive employee report with attendance, timesheet, leave, overtime, compliance
+			attendanceReports.GET("/employee-comprehensive", attendanceReportsHandler.GetComprehensiveEmployeeReport) // Comprehensive employee report
 		}
 
 		attendanceOverview := v1.Group("/attendance")

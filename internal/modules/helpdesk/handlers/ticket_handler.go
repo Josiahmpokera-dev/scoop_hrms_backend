@@ -43,7 +43,7 @@ func NewTicketHandler() *TicketHandler {
 // @Param channel formData string false "Channel"
 // @Param tags formData string false "Tags (comma-separated)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/tickets [post]
+// @Router/helpdesk/tickets [post]
 func (h *TicketHandler) CreateTicket(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -116,7 +116,7 @@ func (h *TicketHandler) CreateTicket(c *gin.Context) {
 // @Param priority query string false "Priority filter"
 // @Param category query string false "Category filter"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/tickets [get]
+// @Router/helpdesk/tickets [get]
 func (h *TicketHandler) ListMyTickets(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -219,7 +219,7 @@ func (h *TicketHandler) ListMyTickets(c *gin.Context) {
 // @Produce json
 // @Param ticket_id path int true "Ticket ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/tickets/:ticket_id [get]
+// @Router/helpdesk/tickets/:ticket_id [get]
 func (h *TicketHandler) GetTicketDetails(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -280,7 +280,7 @@ func (h *TicketHandler) GetTicketDetails(c *gin.Context) {
 // @Param ticket_id path int true "Ticket ID"
 // @Param request body map[string]interface{} true "Comment"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/tickets/:ticket_id/comments [post]
+// @Router/helpdesk/tickets/:ticket_id/comments [post]
 func (h *TicketHandler) AddComment(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -346,7 +346,7 @@ func (h *TicketHandler) AddComment(c *gin.Context) {
 // @Param ticket_id path int true "Ticket ID"
 // @Param attachments[] formData file true "Files"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/tickets/:ticket_id/attachments [post]
+// @Router/helpdesk/tickets/:ticket_id/attachments [post]
 func (h *TicketHandler) UploadAttachments(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -421,7 +421,7 @@ func (h *TicketHandler) UploadAttachments(c *gin.Context) {
 // @Param ticket_id path int true "Ticket ID"
 // @Param request body map[string]interface{} true "Close request"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/tickets/:ticket_id/close [post]
+// @Router/helpdesk/tickets/:ticket_id/close [post]
 func (h *TicketHandler) CloseTicket(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -470,7 +470,7 @@ func (h *TicketHandler) CloseTicket(c *gin.Context) {
 // @Param ticket_id path int true "Ticket ID"
 // @Param request body map[string]interface{} true "CSAT"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/tickets/:ticket_id/csat [post]
+// @Router/helpdesk/tickets/:ticket_id/csat [post]
 func (h *TicketHandler) SubmitCSAT(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -525,7 +525,7 @@ func (h *TicketHandler) SubmitCSAT(c *gin.Context) {
 // @Tags Helpdesk (Employee)
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/helpdesk/ticket-categories [get]
+// @Router/helpdesk/ticket-categories [get]
 func (h *TicketHandler) GetTicketCategories(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 

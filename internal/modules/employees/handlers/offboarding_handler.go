@@ -40,7 +40,7 @@ func NewOffboardingHandler() *OffboardingHandler {
 // @Param request body models.InitiateSeparationRequest true "Separation request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/initiate [post]
+// @Router/employees/offboarding/initiate [post]
 func (h *OffboardingHandler) InitiateSeparation(c *gin.Context) {
 	var req models.InitiateSeparationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -92,7 +92,7 @@ func (h *OffboardingHandler) InitiateSeparation(c *gin.Context) {
 // @Param date_from query string false "Date from"
 // @Param date_to query string false "Date to"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows [get]
+// @Router/employees/offboarding/workflows [get]
 func (h *OffboardingHandler) ListWorkflows(c *gin.Context) {
 	var req models.ListOffboardingWorkflowsRequest
 	if err := c.ShouldBindQuery(&req); err != nil {
@@ -144,7 +144,7 @@ func (h *OffboardingHandler) ListWorkflows(c *gin.Context) {
 // @Param offboarding_id path string true "Offboarding ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id} [get]
+// @Router/employees/offboarding/workflows/{offboarding_id} [get]
 func (h *OffboardingHandler) GetWorkflowDetails(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	tenantID := middleware.GetTenantID(c)
@@ -181,7 +181,7 @@ func (h *OffboardingHandler) GetWorkflowDetails(c *gin.Context) {
 // @Param request body models.UpdateOffboardingWorkflowRequest true "Update request"
 // @Success 200 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id} [patch]
+// @Router/employees/offboarding/workflows/{offboarding_id} [patch]
 func (h *OffboardingHandler) UpdateWorkflow(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	var req models.UpdateOffboardingWorkflowRequest
@@ -215,7 +215,7 @@ func (h *OffboardingHandler) UpdateWorkflow(c *gin.Context) {
 // @Produce json
 // @Param offboarding_id path string true "Offboarding ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/clearances [get]
+// @Router/employees/offboarding/workflows/{offboarding_id}/clearances [get]
 func (h *OffboardingHandler) GetClearances(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	tenantID := middleware.GetTenantID(c)
@@ -267,7 +267,7 @@ func (h *OffboardingHandler) GetClearances(c *gin.Context) {
 // @Param request body models.UpdateClearanceRequest true "Update request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/clearances/{clearance_id} [patch]
+// @Router/employees/offboarding/workflows/{offboarding_id}/clearances/{clearance_id} [patch]
 func (h *OffboardingHandler) UpdateClearance(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	clearanceID := c.Param("clearance_id")
@@ -481,7 +481,7 @@ func (h *OffboardingHandler) buildWorkflowResponse(
 // @Produce json
 // @Param offboarding_id path string true "Offboarding ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/assets [get]
+// @Router/employees/offboarding/workflows/{offboarding_id}/assets [get]
 func (h *OffboardingHandler) GetAssetReturns(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	tenantID := middleware.GetTenantID(c)
@@ -533,7 +533,7 @@ func (h *OffboardingHandler) GetAssetReturns(c *gin.Context) {
 // @Param request body models.RecordAssetReturnRequest true "Asset return request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/assets/{asset_id}/return [post]
+// @Router/employees/offboarding/workflows/{offboarding_id}/assets/{asset_id}/return [post]
 func (h *OffboardingHandler) RecordAssetReturn(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	assetIDStr := c.Param("asset_id")
@@ -592,7 +592,7 @@ func (h *OffboardingHandler) RecordAssetReturn(c *gin.Context) {
 // @Param request body models.RecordAssetIssueRequest true "Asset issue request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/assets/{asset_id}/issue [post]
+// @Router/employees/offboarding/workflows/{offboarding_id}/assets/{asset_id}/issue [post]
 func (h *OffboardingHandler) RecordAssetIssue(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	assetIDStr := c.Param("asset_id")
@@ -649,7 +649,7 @@ func (h *OffboardingHandler) RecordAssetIssue(c *gin.Context) {
 // @Param request body models.ScheduleExitInterviewRequest true "Schedule request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/exit-interview/schedule [post]
+// @Router/employees/offboarding/workflows/{offboarding_id}/exit-interview/schedule [post]
 func (h *OffboardingHandler) ScheduleExitInterview(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	var req models.ScheduleExitInterviewRequest
@@ -698,7 +698,7 @@ func (h *OffboardingHandler) ScheduleExitInterview(c *gin.Context) {
 // @Param request body models.CompleteExitInterviewRequest true "Complete request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/exit-interview/complete [post]
+// @Router/employees/offboarding/workflows/{offboarding_id}/exit-interview/complete [post]
 func (h *OffboardingHandler) CompleteExitInterview(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	var req models.CompleteExitInterviewRequest
@@ -748,7 +748,7 @@ func (h *OffboardingHandler) CompleteExitInterview(c *gin.Context) {
 // @Param offboarding_id path string true "Offboarding ID"
 // @Param request body models.CancelExitInterviewRequest true "Cancel request"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/exit-interview/cancel [post]
+// @Router/employees/offboarding/workflows/{offboarding_id}/exit-interview/cancel [post]
 func (h *OffboardingHandler) CancelExitInterview(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	var req models.CancelExitInterviewRequest
@@ -784,7 +784,7 @@ func (h *OffboardingHandler) CancelExitInterview(c *gin.Context) {
 // @Param request body models.CalculateSettlementRequest true "Calculate request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/settlement/calculate [post]
+// @Router/employees/offboarding/workflows/{offboarding_id}/settlement/calculate [post]
 func (h *OffboardingHandler) CalculateSettlement(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	var req models.CalculateSettlementRequest
@@ -834,7 +834,7 @@ func (h *OffboardingHandler) CalculateSettlement(c *gin.Context) {
 // @Produce json
 // @Param offboarding_id path string true "Offboarding ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/settlement [get]
+// @Router/employees/offboarding/workflows/{offboarding_id}/settlement [get]
 func (h *OffboardingHandler) GetSettlement(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	tenantID := middleware.GetTenantID(c)
@@ -914,7 +914,7 @@ func (h *OffboardingHandler) GetSettlement(c *gin.Context) {
 // @Param request body models.ApproveSettlementRequest true "Approve request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/settlement/approve [post]
+// @Router/employees/offboarding/workflows/{offboarding_id}/settlement/approve [post]
 func (h *OffboardingHandler) ApproveSettlement(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	var req models.ApproveSettlementRequest
@@ -962,7 +962,7 @@ func (h *OffboardingHandler) ApproveSettlement(c *gin.Context) {
 // @Param request body models.PaySettlementRequest true "Pay request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/settlement/pay [post]
+// @Router/employees/offboarding/workflows/{offboarding_id}/settlement/pay [post]
 func (h *OffboardingHandler) PaySettlement(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	var req models.PaySettlementRequest
@@ -1012,7 +1012,7 @@ func (h *OffboardingHandler) PaySettlement(c *gin.Context) {
 // @Param request body models.CompleteOffboardingRequest true "Complete request"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/workflows/{offboarding_id}/complete [post]
+// @Router/employees/offboarding/workflows/{offboarding_id}/complete [post]
 func (h *OffboardingHandler) CompleteOffboarding(c *gin.Context) {
 	offboardingID := c.Param("offboarding_id")
 	var req models.CompleteOffboardingRequest
@@ -1047,7 +1047,7 @@ func (h *OffboardingHandler) CompleteOffboarding(c *gin.Context) {
 // @Tags Employee Offboarding
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/offboarding/statistics [get]
+// @Router/employees/offboarding/statistics [get]
 func (h *OffboardingHandler) GetStatistics(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 

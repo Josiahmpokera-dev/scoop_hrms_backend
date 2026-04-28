@@ -32,7 +32,7 @@ func NewAssetSelfServiceHandler() *AssetSelfServiceHandler {
 // @Success 200 {object} response.APIResponse
 // @Failure 401 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /api/v1/self-service/assets [get]
+// @Router/self-service/assets [get]
 func (h *AssetSelfServiceHandler) GetMyAssignedAssets(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -96,7 +96,7 @@ func (h *AssetSelfServiceHandler) GetMyAssignedAssets(c *gin.Context) {
 // @Produce json
 // @Param request body map[string]interface{} true "Asset request"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/assets/requests [post]
+// @Router/self-service/assets/requests [post]
 func (h *AssetSelfServiceHandler) CreateAssetRequest(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -202,7 +202,7 @@ func (h *AssetSelfServiceHandler) CreateAssetRequest(c *gin.Context) {
 // @Param page query int false "Page number"
 // @Param page_size query int false "Items per page"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/assets/requests [get]
+// @Router/self-service/assets/requests [get]
 func (h *AssetSelfServiceHandler) ListAssetRequests(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -309,7 +309,7 @@ func (h *AssetSelfServiceHandler) ListAssetRequests(c *gin.Context) {
 // @Produce json
 // @Param request_id path int true "Request ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/assets/requests/:request_id [get]
+// @Router/self-service/assets/requests/:request_id [get]
 func (h *AssetSelfServiceHandler) GetAssetRequestDetails(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -388,7 +388,7 @@ func (h *AssetSelfServiceHandler) GetAssetRequestDetails(c *gin.Context) {
 // @Param request_id path int true "Request ID"
 // @Param request body map[string]interface{} true "Cancel request"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/assets/requests/:request_id/cancel [post]
+// @Router/self-service/assets/requests/:request_id/cancel [post]
 func (h *AssetSelfServiceHandler) CancelAssetRequest(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -435,7 +435,7 @@ func (h *AssetSelfServiceHandler) CancelAssetRequest(c *gin.Context) {
 // @Produce json
 // @Param request body map[string]interface{} true "Asset issue"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/assets/issues [post]
+// @Router/self-service/assets/issues [post]
 func (h *AssetSelfServiceHandler) CreateAssetIssue(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -554,7 +554,7 @@ func (h *AssetSelfServiceHandler) CreateAssetIssue(c *gin.Context) {
 // @Param page query int false "Page number"
 // @Param page_size query int false "Items per page"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/assets/issues [get]
+// @Router/self-service/assets/issues [get]
 func (h *AssetSelfServiceHandler) ListAssetIssues(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {
@@ -659,7 +659,7 @@ func (h *AssetSelfServiceHandler) ListAssetIssues(c *gin.Context) {
 // @Produce json
 // @Param issue_id path int true "Issue ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/self-service/assets/issues/:issue_id [get]
+// @Router/self-service/assets/issues/:issue_id [get]
 func (h *AssetSelfServiceHandler) GetAssetIssueDetails(c *gin.Context) {
 	user, exists := c.Get("user")
 	if !exists {

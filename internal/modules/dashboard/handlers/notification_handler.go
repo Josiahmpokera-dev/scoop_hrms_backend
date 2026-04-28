@@ -39,7 +39,7 @@ func NewNotificationHandler() *NotificationHandler {
 // @Tags Notifications
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/notifications/count [get]
+// @Router/notifications/count [get]
 func (h *NotificationHandler) GetNotificationCount(c *gin.Context) {
 	user, _ := c.Get("user")
 	userObj, ok := user.(*userModels.User)
@@ -132,7 +132,7 @@ func (h *NotificationHandler) GetNotificationCount(c *gin.Context) {
 // @Tags Notifications
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/notifications [get]
+// @Router/notifications [get]
 func (h *NotificationHandler) GetNotifications(c *gin.Context) {
 	user, _ := c.Get("user")
 	userObj, ok := user.(*userModels.User)

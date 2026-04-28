@@ -37,7 +37,7 @@ func NewOnboardingHandler() *OnboardingHandler {
 // @Param request body models.CreateDraftRequest false "Optional step 1 data"
 // @Success 201 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/draft [post]
+// @Router/employees/onboarding/draft [post]
 func (h *OnboardingHandler) CreateDraft(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	user, _ := c.Get("user")
@@ -157,7 +157,7 @@ func (h *OnboardingHandler) CreateDraft(c *gin.Context) {
 // @Param request body models.SaveDraftRequest true "Step data"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/draft/{draft_id}/step/{step} [post]
+// @Router/employees/onboarding/draft/{draft_id}/step/{step} [post]
 func (h *OnboardingHandler) SaveStep(c *gin.Context) {
 	draftIDStr := c.Param("draft_id")
 	draftID, err := strconv.ParseUint(draftIDStr, 10, 32)
@@ -211,7 +211,7 @@ func (h *OnboardingHandler) SaveStep(c *gin.Context) {
 // @Param request body models.SaveDraftRequest true "Step data"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/{employee_id}/step/{step} [post]
+// @Router/employees/onboarding/{employee_id}/step/{step} [post]
 func (h *OnboardingHandler) SaveStepByEmployeeID(c *gin.Context) {
 	employeeID := c.Param("employee_id")
 	if employeeID == "" {
@@ -344,7 +344,7 @@ func (h *OnboardingHandler) UpdateStepByEmployeeID(c *gin.Context) {
 // @Param draft_id path int true "Draft ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/draft/{draft_id} [get]
+// @Router/employees/onboarding/draft/{draft_id} [get]
 func (h *OnboardingHandler) GetDraft(c *gin.Context) {
 	draftIDStr := c.Param("draft_id")
 	draftID, err := strconv.ParseUint(draftIDStr, 10, 32)
@@ -370,7 +370,7 @@ func (h *OnboardingHandler) GetDraft(c *gin.Context) {
 // @Param employee_id path string true "Employee ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 404 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/{employee_id} [get]
+// @Router/employees/onboarding/{employee_id} [get]
 func (h *OnboardingHandler) GetDraftByEmployeeID(c *gin.Context) {
 	employeeID := c.Param("employee_id")
 	if employeeID == "" {
@@ -397,7 +397,7 @@ func (h *OnboardingHandler) GetDraftByEmployeeID(c *gin.Context) {
 // @Param request body models.CompleteOnboardingRequest true "Complete onboarding request"
 // @Success 201 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/complete [post]
+// @Router/employees/onboarding/complete [post]
 func (h *OnboardingHandler) CompleteOnboarding(c *gin.Context) {
 	var req models.CompleteOnboardingRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -440,7 +440,7 @@ func (h *OnboardingHandler) CompleteOnboarding(c *gin.Context) {
 // @Param employee_id path string true "Employee ID"
 // @Success 201 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/{employee_id}/complete [post]
+// @Router/employees/onboarding/{employee_id}/complete [post]
 func (h *OnboardingHandler) CompleteOnboardingByEmployeeID(c *gin.Context) {
 	employeeID := c.Param("employee_id")
 	if employeeID == "" {
@@ -484,7 +484,7 @@ func (h *OnboardingHandler) CompleteOnboardingByEmployeeID(c *gin.Context) {
 // @Param page_size query int false "Page size" default(20) maximum(100)
 // @Param search query string false "Search by email, first name, last name, username"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/non-employee-users [get]
+// @Router/employees/onboarding/non-employee-users [get]
 func (h *OnboardingHandler) ListNonEmployeeUsers(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -524,7 +524,7 @@ func (h *OnboardingHandler) ListNonEmployeeUsers(c *gin.Context) {
 // @Tags Employee Onboarding
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/drafts [get]
+// @Router/employees/onboarding/drafts [get]
 func (h *OnboardingHandler) ListDrafts(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	
@@ -545,7 +545,7 @@ func (h *OnboardingHandler) ListDrafts(c *gin.Context) {
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20) maximum(100)
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/draft-employees [get]
+// @Router/employees/onboarding/draft-employees [get]
 func (h *OnboardingHandler) ListDraftEmployees(c *gin.Context) {
 	// Get pagination parameters
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -592,7 +592,7 @@ func (h *OnboardingHandler) ListDraftEmployees(c *gin.Context) {
 // @Param request body models.GetDraftEmployeeRequest true "Employee ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/completed-employee [post]
+// @Router/employees/onboarding/completed-employee [post]
 func (h *OnboardingHandler) GetCompletedEmployeeOnboarding(c *gin.Context) {
 	var req models.GetDraftEmployeeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -630,7 +630,7 @@ func (h *OnboardingHandler) GetCompletedEmployeeOnboarding(c *gin.Context) {
 // @Param data formData string false "JSON string of step data (excluding file fields)"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/:employee_id/step/:step/upload [post]
+// @Router/employees/onboarding/:employee_id/step/:step/upload [post]
 func (h *OnboardingHandler) SaveStepByEmployeeIDWithFiles(c *gin.Context) {
 	employeeID := c.Param("employee_id")
 	if employeeID == "" {
@@ -752,7 +752,7 @@ func (h *OnboardingHandler) SaveStepByEmployeeIDWithFiles(c *gin.Context) {
 // @Param employee_id path string true "Employee ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/employees/onboarding/draft-employee/:employee_id [get]
+// @Router/employees/onboarding/draft-employee/:employee_id [get]
 func (h *OnboardingHandler) GetDraftEmployeeByID(c *gin.Context) {
 	employeeID := c.Param("employee_id")
 	if employeeID == "" {

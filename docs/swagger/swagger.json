@@ -1,0 +1,2857 @@
+{
+    "schemes": [
+        "http"
+    ],
+    "swagger": "2.0",
+    "info": {
+        "description": "Human Resource Management System - REST API",
+        "title": "HRMS Backend API",
+        "contact": {
+            "name": "API Support",
+            "url": "https://github.com/Josiahmpokera-dev/hrms-backend",
+            "email": "support@hrms.com"
+        },
+        "license": {
+            "name": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+        },
+        "version": "1.0"
+    },
+    "host": "localhost:8080",
+    "basePath": "/api/v1",
+    "paths": {
+        "/api/v1/features": {
+            "get": {
+                "description": "Get the complete feature catalog with all modules and permissions",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Features"
+                ],
+                "summary": "List all features",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/features/my-access": {
+            "get": {
+                "description": "Get feature access permissions for the currently authenticated user",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Features"
+                ],
+                "summary": "Get my feature access",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/features/roles/{id}": {
+            "get": {
+                "description": "Get feature access permissions for a specific role",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Features"
+                ],
+                "summary": "Get role feature access",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Role ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Update the permissions assigned to a specific role",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Features"
+                ],
+                "summary": "Update role permissions",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Role ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Permission codes",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.UpdateRolePermissionsReq"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/attendance/manual-punches": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all manual punch requests with optional filtering and pagination",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Get all manual punch requests (Admin/HR)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Filter by employee ID",
+                        "name": "employee_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by status (pending, approved, rejected, cancelled)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Filter by punch type (in, out)",
+                        "name": "punch_type",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date filter (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date filter (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page (default: 20, max: 100)",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Manual punches retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.ManualPunch"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Create a manual attendance punch request for when biometric/fingerprint fails",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Create a manual punch request",
+                "parameters": [
+                    {
+                        "description": "Manual punch request details",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ManualPunchRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Manual punch created successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/attendance/manual-punches/my": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all manual punch requests for the authenticated employee",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Get my manual punch requests",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Filter by status (pending, approved, rejected, cancelled)",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "Start date filter (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query"
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date filter (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Manual punches retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.ManualPunch"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/attendance/manual-punches/pending": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get all pending manual punch requests for approval",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Get pending manual punch requests (Admin/HR)",
+                "responses": {
+                    "200": {
+                        "description": "Pending manual punches retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.ManualPunch"
+                                            }
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/attendance/manual-punches/{id}": {
+            "get": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Get a specific manual punch request by ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Get manual punch by ID",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Manual punch ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Manual punch retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ManualPunch"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Manual punch not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Delete a manual punch request (soft delete)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Delete manual punch request (Admin/HR)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Manual punch ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Manual punch deleted successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Manual punch not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/attendance/manual-punches/{id}/cancel": {
+            "post": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Cancel a pending manual punch request",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Cancel manual punch request",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Manual punch ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Manual punch cancelled successfully",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Manual punch not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/attendance/manual-punches/{id}/status": {
+            "patch": {
+                "security": [
+                    {
+                        "ApiKeyAuth": []
+                    }
+                ],
+                "description": "Approve or reject a manual punch request",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attendance"
+                ],
+                "summary": "Approve/Reject manual punch request (Admin/HR)",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Manual punch ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Approval decision",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.ManualPunchApprovalRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Manual punch status updated successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.ManualPunch"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Manual punch not found",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/attendance/reports/employee-comprehensive": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generate a comprehensive report for employees within a date range, combining attendance, timesheet, leave, overtime, and compliance data",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Attendance Reports"
+                ],
+                "summary": "Generate comprehensive employee report",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Start date (YYYY-MM-DD)",
+                        "name": "start_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "End date (YYYY-MM-DD)",
+                        "name": "end_date",
+                        "in": "query",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Filter by employee ID",
+                        "name": "employee_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Filter by department ID",
+                        "name": "department_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Filter by location ID",
+                        "name": "location_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Page number (default: 1)",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Items per page (default: 20, max: 100)",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Comprehensive employee report retrieved successfully",
+                        "schema": {
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/response.APIResponse"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/definitions/models.ComprehensiveEmployeeReportResponse"
+                                            }
+                                        },
+                                        "meta": {
+                                            "$ref": "#/definitions/response.Meta"
+                                        }
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid date range or parameters",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/login": {
+            "post": {
+                "description": "Authenticate user and get access token",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Login user",
+                "parameters": [
+                    {
+                        "description": "Login credentials",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.LoginRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/logout": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Logout the current user. Client must discard the access token after calling this.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Logout",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/profile": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Get authenticated user's profile",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Get user profile",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/refresh": {
+            "post": {
+                "description": "Exchange a valid refresh token for new access and refresh tokens to stay logged in",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Refresh token",
+                "parameters": [
+                    {
+                        "description": "Refresh token",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RefreshTokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/auth/register": {
+            "post": {
+                "description": "Create a new user account",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Authentication"
+                ],
+                "summary": "Register a new user",
+                "parameters": [
+                    {
+                        "description": "Registration data",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.RegisterRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    },
+                    "422": {
+                        "description": "Unprocessable Entity",
+                        "schema": {
+                            "$ref": "#/definitions/response.APIResponse"
+                        }
+                    }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "handlers.UpdateRolePermissionsReq": {
+            "type": "object",
+            "required": [
+                "permissions"
+            ],
+            "properties": {
+                "permissions": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "models.AddMemberEntry": {
+            "type": "object",
+            "required": [
+                "employee_id"
+            ],
+            "properties": {
+                "employee_id": {
+                    "type": "string"
+                },
+                "role": {
+                    "$ref": "#/definitions/models.MemberRole"
+                }
+            }
+        },
+        "models.AddMembersRequest": {
+            "type": "object",
+            "required": [
+                "members"
+            ],
+            "properties": {
+                "members": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "$ref": "#/definitions/models.AddMemberEntry"
+                    }
+                }
+            }
+        },
+        "models.AddRoleRequest": {
+            "type": "object",
+            "required": [
+                "role",
+                "user_id"
+            ],
+            "properties": {
+                "role": {
+                    "description": "Role to add",
+                    "type": "string",
+                    "enum": [
+                        "super_admin",
+                        "admin",
+                        "hr",
+                        "it",
+                        "manager",
+                        "employee",
+                        "user"
+                    ]
+                },
+                "user_id": {
+                    "description": "User to add role to",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ApproveSettlementRequest": {
+            "type": "object",
+            "required": [
+                "approved_by_id"
+            ],
+            "properties": {
+                "approval_notes": {
+                    "type": "string"
+                },
+                "approved_by_id": {
+                    "description": "Employee ID",
+                    "type": "string"
+                }
+            }
+        },
+        "models.AssignProjectRequest": {
+            "type": "object",
+            "required": [
+                "employee_ids",
+                "project_id"
+            ],
+            "properties": {
+                "employee_ids": {
+                    "description": "One or more employee IDs",
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "project_id": {
+                    "type": "integer"
+                },
+                "role": {
+                    "description": "Role for all (default: member)",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.MemberRole"
+                        }
+                    ]
+                }
+            }
+        },
+        "models.AssignRoleRequest": {
+            "type": "object",
+            "required": [
+                "role",
+                "user_id"
+            ],
+            "properties": {
+                "position_id": {
+                    "description": "Optional: set employee's job position",
+                    "type": "integer"
+                },
+                "role": {
+                    "description": "Role to assign",
+                    "type": "string",
+                    "enum": [
+                        "super_admin",
+                        "admin",
+                        "hr",
+                        "it",
+                        "manager",
+                        "employee"
+                    ]
+                },
+                "user_id": {
+                    "description": "User to assign role to",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.CalculateSettlementRequest": {
+            "type": "object",
+            "properties": {
+                "advances": {
+                    "type": "number"
+                },
+                "asset_damages": {
+                    "type": "number"
+                },
+                "bonus": {
+                    "type": "number"
+                },
+                "currency": {
+                    "description": "Default: TZS",
+                    "type": "string"
+                },
+                "incentives": {
+                    "type": "number"
+                },
+                "leave_encashment": {
+                    "type": "number"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "other_deductions": {
+                    "type": "number"
+                },
+                "other_earnings": {
+                    "type": "number"
+                },
+                "outstanding_loans": {
+                    "type": "number"
+                },
+                "outstanding_salary": {
+                    "description": "Optional: Can be calculated automatically based on employee data\nOr can provide custom values",
+                    "type": "number"
+                },
+                "tax_deductions": {
+                    "type": "number"
+                }
+            }
+        },
+        "models.CancelExitInterviewRequest": {
+            "type": "object",
+            "required": [
+                "cancellation_reason",
+                "cancelled_by_id"
+            ],
+            "properties": {
+                "cancellation_reason": {
+                    "type": "string"
+                },
+                "cancelled_by_id": {
+                    "description": "Employee ID",
+                    "type": "string"
+                }
+            }
+        },
+        "models.ChangeRolesRequest": {
+            "type": "object",
+            "required": [
+                "roles",
+                "user_id"
+            ],
+            "properties": {
+                "roles": {
+                    "description": "Desired roles (checked items), e.g. [\"employee\", \"manager\", \"hr\"]",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "user_id": {
+                    "description": "Target user ID",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.CompleteExitInterviewRequest": {
+            "type": "object",
+            "required": [
+                "conducted_by_id",
+                "interview_notes"
+            ],
+            "properties": {
+                "conducted_by_id": {
+                    "description": "Employee ID",
+                    "type": "string"
+                },
+                "feedback_rating": {
+                    "type": "integer",
+                    "maximum": 5,
+                    "minimum": 1
+                },
+                "interview_notes": {
+                    "type": "string"
+                },
+                "would_recommend": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.CompleteOffboardingRequest": {
+            "type": "object",
+            "properties": {
+                "completed_by_id": {
+                    "description": "Employee ID",
+                    "type": "string"
+                }
+            }
+        },
+        "models.CompleteOnboardingRequest": {
+            "type": "object",
+            "required": [
+                "draft_id"
+            ],
+            "properties": {
+                "draft_id": {
+                    "description": "Draft ID to complete",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ComplianceViolationDetail": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "details": {
+                    "type": "string"
+                },
+                "severity": {
+                    "type": "string"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ComprehensiveEmployeeReportResponse": {
+            "type": "object",
+            "properties": {
+                "attendance": {
+                    "$ref": "#/definitions/models.EmployeeAttendanceStats"
+                },
+                "compliance": {
+                    "$ref": "#/definitions/models.EmployeeComplianceStats"
+                },
+                "department": {
+                    "type": "string"
+                },
+                "employee_id": {
+                    "type": "string"
+                },
+                "employee_name": {
+                    "type": "string"
+                },
+                "leave": {
+                    "$ref": "#/definitions/models.EmployeeLeaveStats"
+                },
+                "overtime": {
+                    "$ref": "#/definitions/models.EmployeeOvertimeStats"
+                },
+                "period": {
+                    "$ref": "#/definitions/models.EmployeeReportPeriod"
+                },
+                "position": {
+                    "type": "string"
+                },
+                "timesheet": {
+                    "$ref": "#/definitions/models.EmployeeTimesheetStats"
+                }
+            }
+        },
+        "models.CreateDailyTaskRequest": {
+            "type": "object",
+            "required": [
+                "category",
+                "hours_spent",
+                "project_id",
+                "title"
+            ],
+            "properties": {
+                "category": {
+                    "$ref": "#/definitions/models.TaskCategory"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "hours_spent": {
+                    "type": "number",
+                    "maximum": 24
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "progress_contribution": {
+                    "description": "0-100",
+                    "type": "number"
+                },
+                "project_id": {
+                    "type": "integer"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.TaskStatus"
+                },
+                "tags": {
+                    "type": "string"
+                },
+                "task_date": {
+                    "description": "YYYY-MM-DD, defaults to today",
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 300,
+                    "minLength": 2
+                }
+            }
+        },
+        "models.CreateDraftRequest": {
+            "type": "object",
+            "properties": {
+                "data": {
+                    "description": "Optional: Step data (requires step number)",
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "existing_user_email": {
+                    "description": "Optional: Onboard user with this email (no credentials at end)",
+                    "type": "string"
+                },
+                "linked_user_id": {
+                    "description": "Optional: Onboard this existing user (no credentials at end)",
+                    "type": "integer"
+                },
+                "step": {
+                    "description": "Optional: Step number (1-10) if providing step data",
+                    "type": "integer"
+                },
+                "step1_data": {
+                    "description": "Optional: Step 1 data to save immediately (legacy)",
+                    "type": "object",
+                    "additionalProperties": true
+                }
+            }
+        },
+        "models.CreateProjectRequest": {
+            "type": "object",
+            "required": [
+                "name"
+            ],
+            "properties": {
+                "budget": {
+                    "type": "number"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "department_id": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "description": "YYYY-MM-DD or ISO 8601",
+                    "type": "string"
+                },
+                "end_date": {
+                    "description": "YYYY-MM-DD or ISO 8601",
+                    "type": "string"
+                },
+                "estimated_hours": {
+                    "type": "number"
+                },
+                "member_ids": {
+                    "description": "Employee IDs to assign initially",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 2
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "priority": {
+                    "$ref": "#/definitions/models.ProjectPriority"
+                },
+                "start_date": {
+                    "description": "YYYY-MM-DD or ISO 8601",
+                    "type": "string"
+                }
+            }
+        },
+        "models.CreateUserRequest": {
+            "type": "object",
+            "required": [
+                "employee_id",
+                "password",
+                "role"
+            ],
+            "properties": {
+                "employee_id": {
+                    "description": "ID of the existing employee to create a user for",
+                    "type": "integer"
+                },
+                "password": {
+                    "description": "Login password (minimum 6 characters)",
+                    "type": "string",
+                    "minLength": 6
+                },
+                "role": {
+                    "description": "Role to assign: admin, hr, it, manager, employee, or user",
+                    "type": "string",
+                    "enum": [
+                        "admin",
+                        "hr",
+                        "it",
+                        "manager",
+                        "employee",
+                        "user"
+                    ]
+                },
+                "username": {
+                    "description": "Optional username (auto-generated from employee email if not provided)",
+                    "type": "string",
+                    "minLength": 3
+                }
+            }
+        },
+        "models.EmployeeAttendanceStats": {
+            "type": "object",
+            "properties": {
+                "absent_days": {
+                    "type": "integer"
+                },
+                "average_working_hours": {
+                    "type": "number"
+                },
+                "early_departure_days": {
+                    "type": "integer"
+                },
+                "late_days": {
+                    "type": "integer"
+                },
+                "present_days": {
+                    "type": "integer"
+                },
+                "present_percentage": {
+                    "type": "number"
+                },
+                "total_working_days": {
+                    "type": "integer"
+                },
+                "total_working_hours": {
+                    "type": "number"
+                }
+            }
+        },
+        "models.EmployeeComplianceStats": {
+            "type": "object",
+            "properties": {
+                "violations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ComplianceViolationDetail"
+                    }
+                },
+                "violations_count": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.EmployeeLeaveStats": {
+            "type": "object",
+            "properties": {
+                "approved_requests": {
+                    "type": "integer"
+                },
+                "leave_breakdown": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.LeaveTypeBreakdown"
+                    }
+                },
+                "pending_requests": {
+                    "type": "integer"
+                },
+                "rejected_requests": {
+                    "type": "integer"
+                },
+                "total_leave_days": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.EmployeeOvertimeStats": {
+            "type": "object",
+            "properties": {
+                "approved_hours": {
+                    "type": "number"
+                },
+                "comp_off_hours": {
+                    "type": "number"
+                },
+                "pending_hours": {
+                    "type": "number"
+                },
+                "rejected_hours": {
+                    "type": "number"
+                },
+                "total_payout": {
+                    "type": "number"
+                },
+                "total_requests": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.EmployeeReportPeriod": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.EmployeeTimesheetStats": {
+            "type": "object",
+            "properties": {
+                "billable_hours": {
+                    "type": "number"
+                },
+                "non_billable_hours": {
+                    "type": "number"
+                },
+                "overtime_hours": {
+                    "type": "number"
+                },
+                "regular_hours": {
+                    "type": "number"
+                },
+                "total_hours": {
+                    "type": "number"
+                }
+            }
+        },
+        "models.GetDraftEmployeeRequest": {
+            "type": "object",
+            "required": [
+                "employee_id"
+            ],
+            "properties": {
+                "employee_id": {
+                    "description": "Employee ID (e.g., \"EMP001\")",
+                    "type": "string"
+                }
+            }
+        },
+        "models.InitiateSeparationRequest": {
+            "type": "object",
+            "required": [
+                "employee_id",
+                "last_working_date",
+                "notice_period_days",
+                "reason",
+                "resignation_date",
+                "separation_type"
+            ],
+            "properties": {
+                "additional_notes": {
+                    "type": "string"
+                },
+                "employee_id": {
+                    "type": "string"
+                },
+                "exit_interview_required": {
+                    "type": "boolean"
+                },
+                "initiated_by": {
+                    "description": "Employee ID of person initiating",
+                    "type": "string"
+                },
+                "last_working_date": {
+                    "description": "ISO 8601 format",
+                    "type": "string"
+                },
+                "notice_period_days": {
+                    "type": "integer",
+                    "minimum": 1
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "reason_code": {
+                    "description": "Better Opportunity, Higher Studies, etc.",
+                    "type": "string"
+                },
+                "resignation_date": {
+                    "description": "ISO 8601 format",
+                    "type": "string"
+                },
+                "separation_type": {
+                    "type": "string",
+                    "enum": [
+                        "Resignation",
+                        "Termination",
+                        "Retirement",
+                        "Mutual Separation",
+                        "End of Contract",
+                        "Layoff"
+                    ]
+                }
+            }
+        },
+        "models.LeaveTypeBreakdown": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "number"
+                },
+                "leave_type": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.LoginRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string",
+                    "minLength": 6
+                }
+            }
+        },
+        "models.ManualPunch": {
+            "type": "object",
+            "properties": {
+                "approved_at": {
+                    "type": "string"
+                },
+                "approver_id": {
+                    "description": "References employees(id) - who approved/rejected",
+                    "type": "integer"
+                },
+                "approver_name": {
+                    "type": "string"
+                },
+                "created_at": {
+                    "description": "Timestamps",
+                    "type": "string"
+                },
+                "employee_id": {
+                    "description": "References employees(id)",
+                    "type": "integer"
+                },
+                "employee_name": {
+                    "description": "Virtual fields (not stored in database)",
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "punch_date": {
+                    "description": "Date of the punch",
+                    "type": "string"
+                },
+                "punch_time": {
+                    "description": "Actual time of punch",
+                    "type": "string"
+                },
+                "punch_type": {
+                    "description": "in or out",
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.ManualPunchType"
+                        }
+                    ]
+                },
+                "reason": {
+                    "description": "Reason for manual punch",
+                    "type": "string"
+                },
+                "rejection_reason": {
+                    "description": "Reason for rejection if applicable",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.ManualPunchStatus"
+                },
+                "supporting_document": {
+                    "description": "Optional document URL",
+                    "type": "string"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ManualPunchApprovalRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "rejection_reason": {
+                    "description": "Required if status is rejected",
+                    "type": "string"
+                },
+                "status": {
+                    "enum": [
+                        "approved",
+                        "rejected"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.ManualPunchStatus"
+                        }
+                    ]
+                }
+            }
+        },
+        "models.ManualPunchRequest": {
+            "type": "object",
+            "required": [
+                "punch_type",
+                "reason"
+            ],
+            "properties": {
+                "punch_type": {
+                    "enum": [
+                        "in",
+                        "out"
+                    ],
+                    "allOf": [
+                        {
+                            "$ref": "#/definitions/models.ManualPunchType"
+                        }
+                    ]
+                },
+                "reason": {
+                    "type": "string",
+                    "maxLength": 500,
+                    "minLength": 10
+                },
+                "supporting_document": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ManualPunchStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "approved",
+                "rejected",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "ManualPunchStatusPending",
+                "ManualPunchStatusApproved",
+                "ManualPunchStatusRejected",
+                "ManualPunchStatusCancelled"
+            ]
+        },
+        "models.ManualPunchType": {
+            "type": "string",
+            "enum": [
+                "in",
+                "out"
+            ],
+            "x-enum-varnames": [
+                "ManualPunchTypeIn",
+                "ManualPunchTypeOut"
+            ]
+        },
+        "models.MemberRole": {
+            "type": "string",
+            "enum": [
+                "lead",
+                "member",
+                "reviewer"
+            ],
+            "x-enum-varnames": [
+                "MemberRoleLead",
+                "MemberRoleMember",
+                "MemberRoleReviewer"
+            ]
+        },
+        "models.OnboardEmployeeRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "employee_id",
+                "first_name",
+                "last_name"
+            ],
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "date_of_birth": {
+                    "type": "string"
+                },
+                "department_id": {
+                    "description": "Employment Details",
+                    "type": "integer"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "emergency_contact_name": {
+                    "description": "Emergency Contact",
+                    "type": "string"
+                },
+                "emergency_contact_phone": {
+                    "type": "string"
+                },
+                "emergency_contact_relation": {
+                    "type": "string"
+                },
+                "employee_id": {
+                    "type": "string",
+                    "minLength": 3
+                },
+                "employment_type": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string",
+                    "minLength": 2
+                },
+                "gender": {
+                    "type": "string"
+                },
+                "hire_date": {
+                    "type": "string"
+                },
+                "last_name": {
+                    "type": "string",
+                    "minLength": 2
+                },
+                "location_id": {
+                    "type": "integer"
+                },
+                "notes": {
+                    "description": "Additional",
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "position_id": {
+                    "type": "integer"
+                },
+                "postal_code": {
+                    "type": "string"
+                },
+                "salary": {
+                    "description": "Salary",
+                    "type": "number"
+                },
+                "state": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.PaySettlementRequest": {
+            "type": "object",
+            "required": [
+                "paid_by_id",
+                "paid_date",
+                "payment_method"
+            ],
+            "properties": {
+                "paid_by_id": {
+                    "description": "Employee ID",
+                    "type": "string"
+                },
+                "paid_date": {
+                    "description": "ISO 8601 format",
+                    "type": "string"
+                },
+                "payment_method": {
+                    "type": "string",
+                    "enum": [
+                        "Bank Transfer",
+                        "Cheque",
+                        "Cash",
+                        "Other"
+                    ]
+                },
+                "payment_notes": {
+                    "type": "string"
+                },
+                "payment_reference": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ProjectPriority": {
+            "type": "string",
+            "enum": [
+                "low",
+                "medium",
+                "high",
+                "critical"
+            ],
+            "x-enum-varnames": [
+                "ProjectPriorityLow",
+                "ProjectPriorityMedium",
+                "ProjectPriorityHigh",
+                "ProjectPriorityCritical"
+            ]
+        },
+        "models.ProjectStatus": {
+            "type": "string",
+            "enum": [
+                "planning",
+                "active",
+                "on_hold",
+                "completed",
+                "cancelled"
+            ],
+            "x-enum-varnames": [
+                "ProjectStatusPlanning",
+                "ProjectStatusActive",
+                "ProjectStatusOnHold",
+                "ProjectStatusCompleted",
+                "ProjectStatusCancelled"
+            ]
+        },
+        "models.RecordAssetIssueRequest": {
+            "type": "object",
+            "required": [
+                "issue_description",
+                "issue_type",
+                "reported_by_id"
+            ],
+            "properties": {
+                "issue_description": {
+                    "type": "string"
+                },
+                "issue_type": {
+                    "type": "string",
+                    "enum": [
+                        "Not Returned",
+                        "Damaged",
+                        "Missing",
+                        "Stolen",
+                        "Other"
+                    ]
+                },
+                "reported_by_id": {
+                    "description": "Employee ID",
+                    "type": "string"
+                }
+            }
+        },
+        "models.RecordAssetReturnRequest": {
+            "type": "object",
+            "required": [
+                "return_condition",
+                "return_date",
+                "returned_by_id"
+            ],
+            "properties": {
+                "return_condition": {
+                    "type": "string",
+                    "enum": [
+                        "Excellent",
+                        "Good",
+                        "Fair",
+                        "Poor",
+                        "Damaged"
+                    ]
+                },
+                "return_date": {
+                    "description": "ISO 8601 format",
+                    "type": "string"
+                },
+                "return_notes": {
+                    "type": "string"
+                },
+                "returned_by_id": {
+                    "description": "Employee ID",
+                    "type": "string"
+                }
+            }
+        },
+        "models.RefreshTokenRequest": {
+            "type": "object",
+            "required": [
+                "refresh_token"
+            ],
+            "properties": {
+                "refresh_token": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.RegisterRequest": {
+            "type": "object",
+            "required": [
+                "email",
+                "first_name",
+                "last_name",
+                "password"
+            ],
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string",
+                    "minLength": 2
+                },
+                "last_name": {
+                    "type": "string",
+                    "minLength": 2
+                },
+                "password": {
+                    "type": "string",
+                    "minLength": 6
+                },
+                "role": {
+                    "description": "Optional, defaults to \"user\"",
+                    "type": "string"
+                },
+                "username": {
+                    "description": "Optional, will be generated from email if not provided",
+                    "type": "string",
+                    "minLength": 3
+                }
+            }
+        },
+        "models.RemoveMemberRequest": {
+            "type": "object",
+            "required": [
+                "employee_id"
+            ],
+            "properties": {
+                "employee_id": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.RemoveRoleRequest": {
+            "type": "object",
+            "required": [
+                "role",
+                "user_id"
+            ],
+            "properties": {
+                "role": {
+                    "description": "Role to remove",
+                    "type": "string"
+                },
+                "user_id": {
+                    "description": "User to remove role from",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ResetPasswordRequest": {
+            "type": "object",
+            "required": [
+                "user_id"
+            ],
+            "properties": {
+                "password": {
+                    "description": "New password (optional, default: GreenTelecom@2026)",
+                    "type": "string",
+                    "minLength": 6
+                },
+                "user_id": {
+                    "description": "User whose password to reset",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.ReturnForInfoRequest": {
+            "type": "object",
+            "required": [
+                "information_required"
+            ],
+            "properties": {
+                "information_required": {
+                    "type": "string"
+                },
+                "notify_employee": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "models.SaveDraftRequest": {
+            "type": "object",
+            "required": [
+                "data",
+                "step"
+            ],
+            "properties": {
+                "data": {
+                    "description": "Step-specific data",
+                    "type": "object",
+                    "additionalProperties": true
+                },
+                "step": {
+                    "description": "Step number (1-10)",
+                    "type": "integer",
+                    "maximum": 10,
+                    "minimum": 1
+                }
+            }
+        },
+        "models.ScheduleExitInterviewRequest": {
+            "type": "object",
+            "required": [
+                "interview_date",
+                "interviewer_id"
+            ],
+            "properties": {
+                "interview_date": {
+                    "description": "ISO 8601 format",
+                    "type": "string"
+                },
+                "interviewer_id": {
+                    "description": "Employee ID",
+                    "type": "string"
+                },
+                "location": {
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.SetRolesRequest": {
+            "type": "object",
+            "required": [
+                "roles",
+                "user_id"
+            ],
+            "properties": {
+                "roles": {
+                    "description": "New roles array (e.g. [\"admin\", \"employee\"])",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "user_id": {
+                    "description": "User to set roles for",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.TaskCategory": {
+            "type": "string",
+            "enum": [
+                "development",
+                "testing",
+                "design",
+                "documentation",
+                "meeting",
+                "research",
+                "planning",
+                "review",
+                "support",
+                "other"
+            ],
+            "x-enum-varnames": [
+                "TaskCategoryDevelopment",
+                "TaskCategoryTesting",
+                "TaskCategoryDesign",
+                "TaskCategoryDocumentation",
+                "TaskCategoryMeeting",
+                "TaskCategoryResearch",
+                "TaskCategoryPlanning",
+                "TaskCategoryReview",
+                "TaskCategorySupport",
+                "TaskCategoryOther"
+            ]
+        },
+        "models.TaskStatus": {
+            "type": "string",
+            "enum": [
+                "pending",
+                "in_progress",
+                "completed",
+                "blocked"
+            ],
+            "x-enum-varnames": [
+                "TaskStatusPending",
+                "TaskStatusInProgress",
+                "TaskStatusCompleted",
+                "TaskStatusBlocked"
+            ]
+        },
+        "models.TransferRoleRequest": {
+            "type": "object",
+            "required": [
+                "role",
+                "target_user_id"
+            ],
+            "properties": {
+                "from_user_id": {
+                    "description": "Required when caller is Admin: the user who currently has the role",
+                    "type": "integer"
+                },
+                "role": {
+                    "description": "Role to transfer: admin, hr, it, or manager",
+                    "type": "string",
+                    "enum": [
+                        "admin",
+                        "hr",
+                        "it",
+                        "manager"
+                    ]
+                },
+                "target_user_id": {
+                    "description": "User who will receive the role (typically a normal employee)",
+                    "type": "integer"
+                }
+            }
+        },
+        "models.UnassignProjectRequest": {
+            "type": "object",
+            "required": [
+                "employee_id",
+                "project_id"
+            ],
+            "properties": {
+                "employee_id": {
+                    "type": "string"
+                },
+                "project_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "models.UpdateClearanceRequest": {
+            "type": "object",
+            "required": [
+                "status"
+            ],
+            "properties": {
+                "cleared_by_id": {
+                    "description": "Required if status is \"Cleared\"",
+                    "type": "string"
+                },
+                "issues": {
+                    "description": "Required if status is \"Issues\"",
+                    "type": "string"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "Pending",
+                        "Cleared",
+                        "Issues"
+                    ]
+                }
+            }
+        },
+        "models.UpdateDailyTaskRequest": {
+            "type": "object",
+            "properties": {
+                "category": {
+                    "$ref": "#/definitions/models.TaskCategory"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "hours_spent": {
+                    "type": "number",
+                    "maximum": 24
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "progress_contribution": {
+                    "type": "number"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.TaskStatus"
+                },
+                "tags": {
+                    "type": "string"
+                },
+                "title": {
+                    "type": "string",
+                    "maxLength": 300,
+                    "minLength": 2
+                }
+            }
+        },
+        "models.UpdateEmployeeRequest": {
+            "type": "object",
+            "properties": {
+                "address": {
+                    "type": "string"
+                },
+                "city": {
+                    "type": "string"
+                },
+                "country": {
+                    "type": "string"
+                },
+                "currency": {
+                    "type": "string"
+                },
+                "date_of_birth": {
+                    "type": "string"
+                },
+                "department_id": {
+                    "type": "integer"
+                },
+                "email": {
+                    "type": "string"
+                },
+                "emergency_contact_name": {
+                    "type": "string"
+                },
+                "emergency_contact_phone": {
+                    "type": "string"
+                },
+                "emergency_contact_relation": {
+                    "type": "string"
+                },
+                "employment_type": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "gender": {
+                    "type": "string"
+                },
+                "is_active": {
+                    "type": "boolean"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "location_id": {
+                    "type": "integer"
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "phone": {
+                    "type": "string"
+                },
+                "position_id": {
+                    "type": "integer"
+                },
+                "postal_code": {
+                    "type": "string"
+                },
+                "salary": {
+                    "type": "number"
+                },
+                "state": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.UpdateOffboardingWorkflowRequest": {
+            "type": "object",
+            "properties": {
+                "additional_notes": {
+                    "type": "string"
+                },
+                "last_working_date": {
+                    "description": "ISO 8601 format",
+                    "type": "string"
+                },
+                "reason": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string",
+                    "enum": [
+                        "In Progress",
+                        "Completed",
+                        "On Hold"
+                    ]
+                }
+            }
+        },
+        "models.UpdateProjectRequest": {
+            "type": "object",
+            "properties": {
+                "budget": {
+                    "type": "number"
+                },
+                "category": {
+                    "type": "string"
+                },
+                "department_id": {
+                    "type": "integer"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "due_date": {
+                    "description": "YYYY-MM-DD or ISO 8601",
+                    "type": "string"
+                },
+                "end_date": {
+                    "description": "YYYY-MM-DD or ISO 8601",
+                    "type": "string"
+                },
+                "estimated_hours": {
+                    "type": "number"
+                },
+                "name": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "minLength": 2
+                },
+                "notes": {
+                    "type": "string"
+                },
+                "priority": {
+                    "$ref": "#/definitions/models.ProjectPriority"
+                },
+                "progress": {
+                    "description": "Manual progress override",
+                    "type": "number"
+                },
+                "start_date": {
+                    "description": "YYYY-MM-DD or ISO 8601",
+                    "type": "string"
+                },
+                "status": {
+                    "$ref": "#/definitions/models.ProjectStatus"
+                }
+            }
+        },
+        "response.APIResponse": {
+            "type": "object",
+            "properties": {
+                "data": {},
+                "error": {},
+                "message": {
+                    "type": "string"
+                },
+                "meta": {
+                    "$ref": "#/definitions/response.Meta"
+                },
+                "success": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "response.Meta": {
+            "type": "object",
+            "properties": {
+                "page": {
+                    "type": "integer"
+                },
+                "per_page": {
+                    "type": "integer"
+                },
+                "total": {
+                    "type": "integer"
+                },
+                "total_pages": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.DailyAttendanceResponse": {
+            "type": "object",
+            "properties": {
+                "checkin": {
+                    "description": "Check-in time in HH:MM:SS format (nullable)",
+                    "type": "string"
+                },
+                "checkout": {
+                    "description": "Check-out time in HH:MM:SS format (nullable)",
+                    "type": "string"
+                },
+                "date": {
+                    "description": "Date in YYYY-MM-DD format",
+                    "type": "string"
+                },
+                "emp_code": {
+                    "description": "Employee code",
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Full name (FirstName + LastName)",
+                    "type": "string"
+                },
+                "punch_count": {
+                    "description": "Number of punches for the day",
+                    "type": "integer"
+                },
+                "working_hours": {
+                    "description": "Working hours in HH:MM format (nullable)",
+                    "type": "string"
+                }
+            }
+        },
+        "services.IntOrString": {
+            "type": "object",
+            "properties": {
+                "valid": {
+                    "type": "boolean"
+                },
+                "value": {
+                    "type": "integer"
+                }
+            }
+        },
+        "services.LateArrivalResponse": {
+            "type": "object",
+            "properties": {
+                "checkin": {
+                    "description": "Check-in time in HH:MM:SS format (nullable)",
+                    "type": "string"
+                },
+                "date": {
+                    "description": "Date in YYYY-MM-DD format",
+                    "type": "string"
+                },
+                "emp_code": {
+                    "description": "Employee code",
+                    "type": "string"
+                },
+                "minutes_late": {
+                    "description": "Minutes late (after 08:30)",
+                    "type": "integer"
+                },
+                "name": {
+                    "description": "Full name (FirstName + LastName)",
+                    "type": "string"
+                }
+            }
+        },
+        "services.Terminal": {
+            "type": "object",
+            "properties": {
+                "alias": {
+                    "type": "string"
+                },
+                "area": {
+                    "$ref": "#/definitions/services.TerminalArea"
+                },
+                "area_name": {
+                    "type": "string"
+                },
+                "face_count": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "fp_count": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "fw_ver": {
+                    "type": "string"
+                },
+                "id": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "ip_address": {
+                    "type": "string"
+                },
+                "is_attendance": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "last_activity": {
+                    "type": "string"
+                },
+                "palm_count": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "push_time": {
+                    "type": "string"
+                },
+                "push_ver": {
+                    "type": "string"
+                },
+                "sn": {
+                    "type": "string"
+                },
+                "state": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "terminal_name": {
+                    "type": "string"
+                },
+                "terminal_tz": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "transaction_count": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "transfer_interval": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "transfer_time": {
+                    "type": "string"
+                },
+                "user_count": {
+                    "$ref": "#/definitions/services.IntOrString"
+                }
+            }
+        },
+        "services.TerminalArea": {
+            "type": "object",
+            "properties": {
+                "area_code": {
+                    "type": "string"
+                },
+                "area_name": {
+                    "type": "string"
+                },
+                "id": {
+                    "$ref": "#/definitions/services.IntOrString"
+                }
+            }
+        },
+        "services.TerminalsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.Terminal"
+                    }
+                },
+                "msg": {
+                    "type": "string"
+                },
+                "next": {
+                    "type": "string"
+                },
+                "previous": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.Transaction": {
+            "type": "object",
+            "properties": {
+                "area_alias": {
+                    "type": "string"
+                },
+                "department": {
+                    "type": "string"
+                },
+                "emp_code": {
+                    "type": "string"
+                },
+                "first_name": {
+                    "type": "string"
+                },
+                "gps_location": {
+                    "type": "string"
+                },
+                "id": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "last_name": {
+                    "type": "string"
+                },
+                "position": {
+                    "type": "string"
+                },
+                "punch_state": {
+                    "type": "string"
+                },
+                "punch_state_display": {
+                    "type": "string"
+                },
+                "punch_time": {
+                    "type": "string"
+                },
+                "temperature": {
+                    "type": "number"
+                },
+                "terminal_alias": {
+                    "type": "string"
+                },
+                "terminal_sn": {
+                    "type": "string"
+                },
+                "upload_time": {
+                    "type": "string"
+                },
+                "verify_type": {
+                    "$ref": "#/definitions/services.IntOrString"
+                },
+                "verify_type_display": {
+                    "type": "string"
+                },
+                "work_code": {
+                    "type": "string"
+                }
+            }
+        },
+        "services.TransactionsResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "integer"
+                },
+                "count": {
+                    "type": "integer"
+                },
+                "data": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/services.Transaction"
+                    }
+                },
+                "msg": {
+                    "type": "string"
+                },
+                "next": {
+                    "type": "string"
+                },
+                "previous": {
+                    "type": "string"
+                }
+            }
+        }
+    },
+    "securityDefinitions": {
+        "BearerAuth": {
+            "type": "apiKey",
+            "name": "Authorization",
+            "in": "header"
+        }
+    }
+}

@@ -31,7 +31,7 @@ func NewDashboardHandler() *DashboardHandler {
 // @Param view query string false "View type: admin or employee (defaults based on user role)"
 // @Param date query string false "Date for statistics (default: today, format: YYYY-MM-DD)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/dashboard/statistics [get]
+// @Router/dashboard/statistics [get]
 func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	userID, exists := c.Get("user_id")
@@ -108,7 +108,7 @@ func (h *DashboardHandler) GetStatistics(c *gin.Context) {
 // @Param type query string false "Filter by type: info, warning, success, urgent"
 // @Param active_only query bool false "Only show active announcements (default: true)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/dashboard/announcements [get]
+// @Router/dashboard/announcements [get]
 func (h *DashboardHandler) GetAnnouncements(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	userID, exists := c.Get("user_id")
@@ -155,7 +155,7 @@ func (h *DashboardHandler) GetAnnouncements(c *gin.Context) {
 // @Produce json
 // @Param id path int true "Announcement ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/dashboard/announcements/{id}/read [post]
+// @Router/dashboard/announcements/{id}/read [post]
 func (h *DashboardHandler) MarkAnnouncementAsRead(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	userID, exists := c.Get("user_id")
@@ -195,7 +195,7 @@ func (h *DashboardHandler) MarkAnnouncementAsRead(c *gin.Context) {
 // @Param page query int false "Page number (default: 1)"
 // @Param page_size query int false "Items per page (default: 10)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/dashboard/events [get]
+// @Router/dashboard/events [get]
 func (h *DashboardHandler) GetEvents(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -241,7 +241,7 @@ func (h *DashboardHandler) GetEvents(c *gin.Context) {
 // @Param activity_type query string false "Filter: leave, timesheet, payslip, request, all"
 // @Param days query int false "Activities from last N days (default: 30)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/dashboard/my-activity [get]
+// @Router/dashboard/my-activity [get]
 func (h *DashboardHandler) GetMyActivity(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -288,7 +288,7 @@ func (h *DashboardHandler) GetMyActivity(c *gin.Context) {
 // @Tags Dashboard
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/dashboard/quick-actions [get]
+// @Router/dashboard/quick-actions [get]
 func (h *DashboardHandler) GetQuickActions(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	userID, exists := c.Get("user_id")
@@ -333,7 +333,7 @@ func (h *DashboardHandler) GetQuickActions(c *gin.Context) {
 // @Param page query int false "Page number (default: 1)"
 // @Param page_size query int false "Items per page (default: 10)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/dashboard/pending-approvals [get]
+// @Router/dashboard/pending-approvals [get]
 func (h *DashboardHandler) GetPendingApprovals(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -368,7 +368,7 @@ func (h *DashboardHandler) GetPendingApprovals(c *gin.Context) {
 // @Tags Dashboard
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/dashboard/approval-counts [get]
+// @Router/dashboard/approval-counts [get]
 func (h *DashboardHandler) GetApprovalCounts(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -407,7 +407,7 @@ func (h *DashboardHandler) GetApprovalCounts(c *gin.Context) {
 // @Produce json
 // @Param date query string false "Date for statistics (default: today, format: YYYY-MM-DD)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/dashboard/employee/statistics [get]
+// @Router/dashboard/employee/statistics [get]
 func (h *DashboardHandler) GetEmployeeStatistics(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -443,7 +443,7 @@ func (h *DashboardHandler) GetEmployeeStatistics(c *gin.Context) {
 // @Param activity_type query string false "Filter: leave, timesheet, payslip, request, all"
 // @Param days query int false "Activities from last N days (default: 30, max: 365)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/dashboard/employee/my-activity [get]
+// @Router/dashboard/employee/my-activity [get]
 func (h *DashboardHandler) GetEmployeeActivity(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {

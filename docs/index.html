@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HRMS API Documentation</title>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 40px 0;
+            text-align: center;
+            margin-bottom: 30px;
+            border-radius: 10px;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            background: white;
+            padding: 40px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .loading {
+            text-align: center;
+            padding: 50px;
+            font-size: 1.2em;
+            color: #666;
+        }
+        
+        .error {
+            text-align: center;
+            padding: 50px;
+            color: #e74c3c;
+        }
+        
+        /* Markdown styling */
+        .content h1 { color: #2c3e50; border-bottom: 3px solid #3498db; padding-bottom: 10px; margin: 30px 0 20px 0; }
+        .content h2 { color: #34495e; border-bottom: 2px solid #ecf0f1; padding-bottom: 8px; margin: 25px 0 15px 0; }
+        .content h3 { color: #7f8c8d; margin: 20px 0 10px 0; }
+        .content h4 { color: #95a5a6; margin: 15px 0 10px 0; }
+        
+        .content p { margin: 10px 0; }
+        .content ul, .content ol { margin: 10px 0; padding-left: 30px; }
+        .content li { margin: 5px 0; }
+        
+        .content code {
+            background: #f8f9fa;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        
+        .content pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            margin: 15px 0;
+        }
+        
+        .content pre code {
+            background: transparent;
+            color: inherit;
+            padding: 0;
+        }
+        
+        .content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .content th, .content td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        
+        .content th {
+            background: #f8f9fa;
+            font-weight: bold;
+        }
+        
+        .content tr:nth-child(even) {
+            background: #f8f9fa;
+        }
+        
+        .content blockquote {
+            border-left: 4px solid #3498db;
+            padding-left: 20px;
+            margin: 15px 0;
+            color: #666;
+        }
+        
+        .content a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        .content a:hover {
+            text-decoration: underline;
+        }
+        
+        .nav {
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 15px 0;
+            border-bottom: 2px solid #ecf0f1;
+            margin-bottom: 20px;
+            z-index: 100;
+        }
+        
+        .nav a {
+            display: inline-block;
+            padding: 8px 15px;
+            margin: 0 5px;
+            background: #3498db;
+            color: white;
+            border-radius: 5px;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+        
+        .nav a:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>HRMS API Documentation</h1>
+            <p>Human Resource Management System - REST API Reference</p>
+        </div>
+        
+        <div class="nav">
+            <a href="#overview">Overview</a>
+            <a href="#authentication">Authentication</a>
+            <a href="#employees">Employees</a>
+            <a href="#attendance">Attendance</a>
+            <a href="#leave">Leave</a>
+            <a href="#payroll">Payroll</a>
+            <a href="#biometric">Biometric</a>
+            <a href="#dashboard">Dashboard</a>
+        </div>
+        
+        <div class="content" id="content">
+            <div class="loading">Loading documentation...</div>
+        </div>
+    </div>
+
+    <script>
+        // Load and render the markdown documentation
+        fetch('/docs/API_DOCUMENTATION.md')
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load documentation');
+                }
+                return response.text();
+            })
+            .then(markdown => {
+                const html = marked.parse(markdown);
+                document.getElementById('content').innerHTML = html;
+                
+                // Add anchor IDs to headers for navigation
+                const headers = document.querySelectorAll('h1, h2, h3');
+                headers.forEach(header => {
+                    const id = header.textContent.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                    header.id = id;
+                });
+            })
+            .catch(error => {
+                document.getElementById('content').innerHTML = `
+                    <div class="error">
+                        <h2>Error Loading Documentation</h2>
+                        <p>${error.message}</p>
+                        <p>Please ensure the API documentation file is available.</p>
+                    </div>
+                `;
+            });
+    </script>
+</body>
+</html>

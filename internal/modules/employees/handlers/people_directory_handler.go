@@ -56,7 +56,7 @@ func NewPeopleDirectoryHandler() *PeopleDirectoryHandler {
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Items per page" default(20)
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/people-directory [get]
+// @Router/people-directory [get]
 func (h *PeopleDirectoryHandler) SearchDirectory(c *gin.Context) {
 	// Build filters from query parameters
 	filters := employeeRepos.PeopleDirectoryFilters{
@@ -281,7 +281,7 @@ func (h *PeopleDirectoryHandler) SearchDirectory(c *gin.Context) {
 // @Produce json
 // @Param id path int true "Employee ID (database ID)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/people-directory/:id [get]
+// @Router/people-directory/:id [get]
 func (h *PeopleDirectoryHandler) GetEmployeeProfile(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -333,7 +333,7 @@ func (h *PeopleDirectoryHandler) GetEmployeeProfile(c *gin.Context) {
 // @Tags People Directory
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/people-directory/filters [get]
+// @Router/people-directory/filters [get]
 func (h *PeopleDirectoryHandler) GetFilters(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -423,7 +423,7 @@ func (h *PeopleDirectoryHandler) GetFilters(c *gin.Context) {
 // @Tags People Directory
 // @Produce json
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/people-directory/stats [get]
+// @Router/people-directory/stats [get]
 func (h *PeopleDirectoryHandler) GetStatistics(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 

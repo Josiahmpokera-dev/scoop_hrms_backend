@@ -3,6 +3,7 @@ package models
 import (
 	"time"
 
+	deptModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/models"
 	"gorm.io/gorm"
 )
 
@@ -80,6 +81,9 @@ type Employee struct {
 	// Additional Info
 	Notes    string `json:"notes" gorm:"type:text"`
 	IsActive bool   `json:"is_active" gorm:"default:true"`
+	
+	// Relations
+	Department *deptModels.Department `json:"department,omitempty" gorm:"foreignKey:DepartmentID"`
 
 	// Timestamps
 	CreatedAt time.Time      `json:"created_at"`

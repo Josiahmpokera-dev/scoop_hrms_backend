@@ -37,7 +37,7 @@ func NewAuditHandler() *AuditHandler {
 // @Param status_code query int false "Filter by HTTP response status code"
 // @Param search query string false "Search in action, resource, path, details, reason"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/security/audit [get]
+// @Router/security/audit [get]
 func (h *AuditHandler) ListAuditLogs(c *gin.Context) {
 	// Do not filter by tenant so admins see all audit logs (including unauthenticated requests with tenant_id = nil)
 	page := 1

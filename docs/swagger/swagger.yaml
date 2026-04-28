@@ -1,0 +1,1932 @@
+basePath: /api/v1
+definitions:
+  handlers.UpdateRolePermissionsReq:
+    properties:
+      permissions:
+        items:
+          type: string
+        type: array
+    required:
+    - permissions
+    type: object
+  models.AddMemberEntry:
+    properties:
+      employee_id:
+        type: string
+      role:
+        $ref: '#/definitions/models.MemberRole'
+    required:
+    - employee_id
+    type: object
+  models.AddMembersRequest:
+    properties:
+      members:
+        items:
+          $ref: '#/definitions/models.AddMemberEntry'
+        minItems: 1
+        type: array
+    required:
+    - members
+    type: object
+  models.AddRoleRequest:
+    properties:
+      role:
+        description: Role to add
+        enum:
+        - super_admin
+        - admin
+        - hr
+        - it
+        - manager
+        - employee
+        - user
+        type: string
+      user_id:
+        description: User to add role to
+        type: integer
+    required:
+    - role
+    - user_id
+    type: object
+  models.ApproveSettlementRequest:
+    properties:
+      approval_notes:
+        type: string
+      approved_by_id:
+        description: Employee ID
+        type: string
+    required:
+    - approved_by_id
+    type: object
+  models.AssignProjectRequest:
+    properties:
+      employee_ids:
+        description: One or more employee IDs
+        items:
+          type: string
+        minItems: 1
+        type: array
+      project_id:
+        type: integer
+      role:
+        allOf:
+        - $ref: '#/definitions/models.MemberRole'
+        description: 'Role for all (default: member)'
+    required:
+    - employee_ids
+    - project_id
+    type: object
+  models.AssignRoleRequest:
+    properties:
+      position_id:
+        description: 'Optional: set employee''s job position'
+        type: integer
+      role:
+        description: Role to assign
+        enum:
+        - super_admin
+        - admin
+        - hr
+        - it
+        - manager
+        - employee
+        type: string
+      user_id:
+        description: User to assign role to
+        type: integer
+    required:
+    - role
+    - user_id
+    type: object
+  models.CalculateSettlementRequest:
+    properties:
+      advances:
+        type: number
+      asset_damages:
+        type: number
+      bonus:
+        type: number
+      currency:
+        description: 'Default: TZS'
+        type: string
+      incentives:
+        type: number
+      leave_encashment:
+        type: number
+      notes:
+        type: string
+      other_deductions:
+        type: number
+      other_earnings:
+        type: number
+      outstanding_loans:
+        type: number
+      outstanding_salary:
+        description: |-
+          Optional: Can be calculated automatically based on employee data
+          Or can provide custom values
+        type: number
+      tax_deductions:
+        type: number
+    type: object
+  models.CancelExitInterviewRequest:
+    properties:
+      cancellation_reason:
+        type: string
+      cancelled_by_id:
+        description: Employee ID
+        type: string
+    required:
+    - cancellation_reason
+    - cancelled_by_id
+    type: object
+  models.ChangeRolesRequest:
+    properties:
+      roles:
+        description: Desired roles (checked items), e.g. ["employee", "manager", "hr"]
+        items:
+          type: string
+        type: array
+      user_id:
+        description: Target user ID
+        type: integer
+    required:
+    - roles
+    - user_id
+    type: object
+  models.CompleteExitInterviewRequest:
+    properties:
+      conducted_by_id:
+        description: Employee ID
+        type: string
+      feedback_rating:
+        maximum: 5
+        minimum: 1
+        type: integer
+      interview_notes:
+        type: string
+      would_recommend:
+        type: boolean
+    required:
+    - conducted_by_id
+    - interview_notes
+    type: object
+  models.CompleteOffboardingRequest:
+    properties:
+      completed_by_id:
+        description: Employee ID
+        type: string
+    type: object
+  models.CompleteOnboardingRequest:
+    properties:
+      draft_id:
+        description: Draft ID to complete
+        type: integer
+    required:
+    - draft_id
+    type: object
+  models.ComplianceViolationDetail:
+    properties:
+      date:
+        type: string
+      details:
+        type: string
+      severity:
+        type: string
+      type:
+        type: string
+    type: object
+  models.ComprehensiveEmployeeReportResponse:
+    properties:
+      attendance:
+        $ref: '#/definitions/models.EmployeeAttendanceStats'
+      compliance:
+        $ref: '#/definitions/models.EmployeeComplianceStats'
+      department:
+        type: string
+      employee_id:
+        type: string
+      employee_name:
+        type: string
+      leave:
+        $ref: '#/definitions/models.EmployeeLeaveStats'
+      overtime:
+        $ref: '#/definitions/models.EmployeeOvertimeStats'
+      period:
+        $ref: '#/definitions/models.EmployeeReportPeriod'
+      position:
+        type: string
+      timesheet:
+        $ref: '#/definitions/models.EmployeeTimesheetStats'
+    type: object
+  models.CreateDailyTaskRequest:
+    properties:
+      category:
+        $ref: '#/definitions/models.TaskCategory'
+      description:
+        type: string
+      hours_spent:
+        maximum: 24
+        type: number
+      notes:
+        type: string
+      progress_contribution:
+        description: 0-100
+        type: number
+      project_id:
+        type: integer
+      status:
+        $ref: '#/definitions/models.TaskStatus'
+      tags:
+        type: string
+      task_date:
+        description: YYYY-MM-DD, defaults to today
+        type: string
+      title:
+        maxLength: 300
+        minLength: 2
+        type: string
+    required:
+    - category
+    - hours_spent
+    - project_id
+    - title
+    type: object
+  models.CreateDraftRequest:
+    properties:
+      data:
+        additionalProperties: true
+        description: 'Optional: Step data (requires step number)'
+        type: object
+      existing_user_email:
+        description: 'Optional: Onboard user with this email (no credentials at end)'
+        type: string
+      linked_user_id:
+        description: 'Optional: Onboard this existing user (no credentials at end)'
+        type: integer
+      step:
+        description: 'Optional: Step number (1-10) if providing step data'
+        type: integer
+      step1_data:
+        additionalProperties: true
+        description: 'Optional: Step 1 data to save immediately (legacy)'
+        type: object
+    type: object
+  models.CreateProjectRequest:
+    properties:
+      budget:
+        type: number
+      category:
+        type: string
+      department_id:
+        type: integer
+      description:
+        type: string
+      due_date:
+        description: YYYY-MM-DD or ISO 8601
+        type: string
+      end_date:
+        description: YYYY-MM-DD or ISO 8601
+        type: string
+      estimated_hours:
+        type: number
+      member_ids:
+        description: Employee IDs to assign initially
+        items:
+          type: string
+        type: array
+      name:
+        maxLength: 200
+        minLength: 2
+        type: string
+      notes:
+        type: string
+      priority:
+        $ref: '#/definitions/models.ProjectPriority'
+      start_date:
+        description: YYYY-MM-DD or ISO 8601
+        type: string
+    required:
+    - name
+    type: object
+  models.CreateUserRequest:
+    properties:
+      employee_id:
+        description: ID of the existing employee to create a user for
+        type: integer
+      password:
+        description: Login password (minimum 6 characters)
+        minLength: 6
+        type: string
+      role:
+        description: 'Role to assign: admin, hr, it, manager, employee, or user'
+        enum:
+        - admin
+        - hr
+        - it
+        - manager
+        - employee
+        - user
+        type: string
+      username:
+        description: Optional username (auto-generated from employee email if not
+          provided)
+        minLength: 3
+        type: string
+    required:
+    - employee_id
+    - password
+    - role
+    type: object
+  models.EmployeeAttendanceStats:
+    properties:
+      absent_days:
+        type: integer
+      average_working_hours:
+        type: number
+      early_departure_days:
+        type: integer
+      late_days:
+        type: integer
+      present_days:
+        type: integer
+      present_percentage:
+        type: number
+      total_working_days:
+        type: integer
+      total_working_hours:
+        type: number
+    type: object
+  models.EmployeeComplianceStats:
+    properties:
+      violations:
+        items:
+          $ref: '#/definitions/models.ComplianceViolationDetail'
+        type: array
+      violations_count:
+        type: integer
+    type: object
+  models.EmployeeLeaveStats:
+    properties:
+      approved_requests:
+        type: integer
+      leave_breakdown:
+        items:
+          $ref: '#/definitions/models.LeaveTypeBreakdown'
+        type: array
+      pending_requests:
+        type: integer
+      rejected_requests:
+        type: integer
+      total_leave_days:
+        type: integer
+    type: object
+  models.EmployeeOvertimeStats:
+    properties:
+      approved_hours:
+        type: number
+      comp_off_hours:
+        type: number
+      pending_hours:
+        type: number
+      rejected_hours:
+        type: number
+      total_payout:
+        type: number
+      total_requests:
+        type: integer
+    type: object
+  models.EmployeeReportPeriod:
+    properties:
+      end_date:
+        type: string
+      start_date:
+        type: string
+    type: object
+  models.EmployeeTimesheetStats:
+    properties:
+      billable_hours:
+        type: number
+      non_billable_hours:
+        type: number
+      overtime_hours:
+        type: number
+      regular_hours:
+        type: number
+      total_hours:
+        type: number
+    type: object
+  models.GetDraftEmployeeRequest:
+    properties:
+      employee_id:
+        description: Employee ID (e.g., "EMP001")
+        type: string
+    required:
+    - employee_id
+    type: object
+  models.InitiateSeparationRequest:
+    properties:
+      additional_notes:
+        type: string
+      employee_id:
+        type: string
+      exit_interview_required:
+        type: boolean
+      initiated_by:
+        description: Employee ID of person initiating
+        type: string
+      last_working_date:
+        description: ISO 8601 format
+        type: string
+      notice_period_days:
+        minimum: 1
+        type: integer
+      reason:
+        type: string
+      reason_code:
+        description: Better Opportunity, Higher Studies, etc.
+        type: string
+      resignation_date:
+        description: ISO 8601 format
+        type: string
+      separation_type:
+        enum:
+        - Resignation
+        - Termination
+        - Retirement
+        - Mutual Separation
+        - End of Contract
+        - Layoff
+        type: string
+    required:
+    - employee_id
+    - last_working_date
+    - notice_period_days
+    - reason
+    - resignation_date
+    - separation_type
+    type: object
+  models.LeaveTypeBreakdown:
+    properties:
+      days:
+        type: number
+      leave_type:
+        type: string
+    type: object
+  models.LoginRequest:
+    properties:
+      email:
+        type: string
+      password:
+        minLength: 6
+        type: string
+    required:
+    - email
+    - password
+    type: object
+  models.ManualPunch:
+    properties:
+      approved_at:
+        type: string
+      approver_id:
+        description: References employees(id) - who approved/rejected
+        type: integer
+      approver_name:
+        type: string
+      created_at:
+        description: Timestamps
+        type: string
+      employee_id:
+        description: References employees(id)
+        type: integer
+      employee_name:
+        description: Virtual fields (not stored in database)
+        type: string
+      id:
+        type: integer
+      punch_date:
+        description: Date of the punch
+        type: string
+      punch_time:
+        description: Actual time of punch
+        type: string
+      punch_type:
+        allOf:
+        - $ref: '#/definitions/models.ManualPunchType'
+        description: in or out
+      reason:
+        description: Reason for manual punch
+        type: string
+      rejection_reason:
+        description: Reason for rejection if applicable
+        type: string
+      status:
+        $ref: '#/definitions/models.ManualPunchStatus'
+      supporting_document:
+        description: Optional document URL
+        type: string
+      updated_at:
+        type: string
+    type: object
+  models.ManualPunchApprovalRequest:
+    properties:
+      rejection_reason:
+        description: Required if status is rejected
+        type: string
+      status:
+        allOf:
+        - $ref: '#/definitions/models.ManualPunchStatus'
+        enum:
+        - approved
+        - rejected
+    required:
+    - status
+    type: object
+  models.ManualPunchRequest:
+    properties:
+      punch_type:
+        allOf:
+        - $ref: '#/definitions/models.ManualPunchType'
+        enum:
+        - in
+        - out
+      reason:
+        maxLength: 500
+        minLength: 10
+        type: string
+      supporting_document:
+        type: string
+    required:
+    - punch_type
+    - reason
+    type: object
+  models.ManualPunchStatus:
+    enum:
+    - pending
+    - approved
+    - rejected
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - ManualPunchStatusPending
+    - ManualPunchStatusApproved
+    - ManualPunchStatusRejected
+    - ManualPunchStatusCancelled
+  models.ManualPunchType:
+    enum:
+    - in
+    - out
+    type: string
+    x-enum-varnames:
+    - ManualPunchTypeIn
+    - ManualPunchTypeOut
+  models.MemberRole:
+    enum:
+    - lead
+    - member
+    - reviewer
+    type: string
+    x-enum-varnames:
+    - MemberRoleLead
+    - MemberRoleMember
+    - MemberRoleReviewer
+  models.OnboardEmployeeRequest:
+    properties:
+      address:
+        type: string
+      city:
+        type: string
+      country:
+        type: string
+      currency:
+        type: string
+      date_of_birth:
+        type: string
+      department_id:
+        description: Employment Details
+        type: integer
+      email:
+        type: string
+      emergency_contact_name:
+        description: Emergency Contact
+        type: string
+      emergency_contact_phone:
+        type: string
+      emergency_contact_relation:
+        type: string
+      employee_id:
+        minLength: 3
+        type: string
+      employment_type:
+        type: string
+      first_name:
+        minLength: 2
+        type: string
+      gender:
+        type: string
+      hire_date:
+        type: string
+      last_name:
+        minLength: 2
+        type: string
+      location_id:
+        type: integer
+      notes:
+        description: Additional
+        type: string
+      phone:
+        type: string
+      position_id:
+        type: integer
+      postal_code:
+        type: string
+      salary:
+        description: Salary
+        type: number
+      state:
+        type: string
+    required:
+    - email
+    - employee_id
+    - first_name
+    - last_name
+    type: object
+  models.PaySettlementRequest:
+    properties:
+      paid_by_id:
+        description: Employee ID
+        type: string
+      paid_date:
+        description: ISO 8601 format
+        type: string
+      payment_method:
+        enum:
+        - Bank Transfer
+        - Cheque
+        - Cash
+        - Other
+        type: string
+      payment_notes:
+        type: string
+      payment_reference:
+        type: string
+    required:
+    - paid_by_id
+    - paid_date
+    - payment_method
+    type: object
+  models.ProjectPriority:
+    enum:
+    - low
+    - medium
+    - high
+    - critical
+    type: string
+    x-enum-varnames:
+    - ProjectPriorityLow
+    - ProjectPriorityMedium
+    - ProjectPriorityHigh
+    - ProjectPriorityCritical
+  models.ProjectStatus:
+    enum:
+    - planning
+    - active
+    - on_hold
+    - completed
+    - cancelled
+    type: string
+    x-enum-varnames:
+    - ProjectStatusPlanning
+    - ProjectStatusActive
+    - ProjectStatusOnHold
+    - ProjectStatusCompleted
+    - ProjectStatusCancelled
+  models.RecordAssetIssueRequest:
+    properties:
+      issue_description:
+        type: string
+      issue_type:
+        enum:
+        - Not Returned
+        - Damaged
+        - Missing
+        - Stolen
+        - Other
+        type: string
+      reported_by_id:
+        description: Employee ID
+        type: string
+    required:
+    - issue_description
+    - issue_type
+    - reported_by_id
+    type: object
+  models.RecordAssetReturnRequest:
+    properties:
+      return_condition:
+        enum:
+        - Excellent
+        - Good
+        - Fair
+        - Poor
+        - Damaged
+        type: string
+      return_date:
+        description: ISO 8601 format
+        type: string
+      return_notes:
+        type: string
+      returned_by_id:
+        description: Employee ID
+        type: string
+    required:
+    - return_condition
+    - return_date
+    - returned_by_id
+    type: object
+  models.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  models.RegisterRequest:
+    properties:
+      email:
+        type: string
+      first_name:
+        minLength: 2
+        type: string
+      last_name:
+        minLength: 2
+        type: string
+      password:
+        minLength: 6
+        type: string
+      role:
+        description: Optional, defaults to "user"
+        type: string
+      username:
+        description: Optional, will be generated from email if not provided
+        minLength: 3
+        type: string
+    required:
+    - email
+    - first_name
+    - last_name
+    - password
+    type: object
+  models.RemoveMemberRequest:
+    properties:
+      employee_id:
+        type: string
+    required:
+    - employee_id
+    type: object
+  models.RemoveRoleRequest:
+    properties:
+      role:
+        description: Role to remove
+        type: string
+      user_id:
+        description: User to remove role from
+        type: integer
+    required:
+    - role
+    - user_id
+    type: object
+  models.ResetPasswordRequest:
+    properties:
+      password:
+        description: 'New password (optional, default: GreenTelecom@2026)'
+        minLength: 6
+        type: string
+      user_id:
+        description: User whose password to reset
+        type: integer
+    required:
+    - user_id
+    type: object
+  models.ReturnForInfoRequest:
+    properties:
+      information_required:
+        type: string
+      notify_employee:
+        type: boolean
+    required:
+    - information_required
+    type: object
+  models.SaveDraftRequest:
+    properties:
+      data:
+        additionalProperties: true
+        description: Step-specific data
+        type: object
+      step:
+        description: Step number (1-10)
+        maximum: 10
+        minimum: 1
+        type: integer
+    required:
+    - data
+    - step
+    type: object
+  models.ScheduleExitInterviewRequest:
+    properties:
+      interview_date:
+        description: ISO 8601 format
+        type: string
+      interviewer_id:
+        description: Employee ID
+        type: string
+      location:
+        type: string
+      notes:
+        type: string
+    required:
+    - interview_date
+    - interviewer_id
+    type: object
+  models.SetRolesRequest:
+    properties:
+      roles:
+        description: New roles array (e.g. ["admin", "employee"])
+        items:
+          type: string
+        type: array
+      user_id:
+        description: User to set roles for
+        type: integer
+    required:
+    - roles
+    - user_id
+    type: object
+  models.TaskCategory:
+    enum:
+    - development
+    - testing
+    - design
+    - documentation
+    - meeting
+    - research
+    - planning
+    - review
+    - support
+    - other
+    type: string
+    x-enum-varnames:
+    - TaskCategoryDevelopment
+    - TaskCategoryTesting
+    - TaskCategoryDesign
+    - TaskCategoryDocumentation
+    - TaskCategoryMeeting
+    - TaskCategoryResearch
+    - TaskCategoryPlanning
+    - TaskCategoryReview
+    - TaskCategorySupport
+    - TaskCategoryOther
+  models.TaskStatus:
+    enum:
+    - pending
+    - in_progress
+    - completed
+    - blocked
+    type: string
+    x-enum-varnames:
+    - TaskStatusPending
+    - TaskStatusInProgress
+    - TaskStatusCompleted
+    - TaskStatusBlocked
+  models.TransferRoleRequest:
+    properties:
+      from_user_id:
+        description: 'Required when caller is Admin: the user who currently has the
+          role'
+        type: integer
+      role:
+        description: 'Role to transfer: admin, hr, it, or manager'
+        enum:
+        - admin
+        - hr
+        - it
+        - manager
+        type: string
+      target_user_id:
+        description: User who will receive the role (typically a normal employee)
+        type: integer
+    required:
+    - role
+    - target_user_id
+    type: object
+  models.UnassignProjectRequest:
+    properties:
+      employee_id:
+        type: string
+      project_id:
+        type: integer
+    required:
+    - employee_id
+    - project_id
+    type: object
+  models.UpdateClearanceRequest:
+    properties:
+      cleared_by_id:
+        description: Required if status is "Cleared"
+        type: string
+      issues:
+        description: Required if status is "Issues"
+        type: string
+      notes:
+        type: string
+      status:
+        enum:
+        - Pending
+        - Cleared
+        - Issues
+        type: string
+    required:
+    - status
+    type: object
+  models.UpdateDailyTaskRequest:
+    properties:
+      category:
+        $ref: '#/definitions/models.TaskCategory'
+      description:
+        type: string
+      hours_spent:
+        maximum: 24
+        type: number
+      notes:
+        type: string
+      progress_contribution:
+        type: number
+      status:
+        $ref: '#/definitions/models.TaskStatus'
+      tags:
+        type: string
+      title:
+        maxLength: 300
+        minLength: 2
+        type: string
+    type: object
+  models.UpdateEmployeeRequest:
+    properties:
+      address:
+        type: string
+      city:
+        type: string
+      country:
+        type: string
+      currency:
+        type: string
+      date_of_birth:
+        type: string
+      department_id:
+        type: integer
+      email:
+        type: string
+      emergency_contact_name:
+        type: string
+      emergency_contact_phone:
+        type: string
+      emergency_contact_relation:
+        type: string
+      employment_type:
+        type: string
+      first_name:
+        type: string
+      gender:
+        type: string
+      is_active:
+        type: boolean
+      last_name:
+        type: string
+      location_id:
+        type: integer
+      notes:
+        type: string
+      phone:
+        type: string
+      position_id:
+        type: integer
+      postal_code:
+        type: string
+      salary:
+        type: number
+      state:
+        type: string
+      status:
+        type: string
+    type: object
+  models.UpdateOffboardingWorkflowRequest:
+    properties:
+      additional_notes:
+        type: string
+      last_working_date:
+        description: ISO 8601 format
+        type: string
+      reason:
+        type: string
+      status:
+        enum:
+        - In Progress
+        - Completed
+        - On Hold
+        type: string
+    type: object
+  models.UpdateProjectRequest:
+    properties:
+      budget:
+        type: number
+      category:
+        type: string
+      department_id:
+        type: integer
+      description:
+        type: string
+      due_date:
+        description: YYYY-MM-DD or ISO 8601
+        type: string
+      end_date:
+        description: YYYY-MM-DD or ISO 8601
+        type: string
+      estimated_hours:
+        type: number
+      name:
+        maxLength: 200
+        minLength: 2
+        type: string
+      notes:
+        type: string
+      priority:
+        $ref: '#/definitions/models.ProjectPriority'
+      progress:
+        description: Manual progress override
+        type: number
+      start_date:
+        description: YYYY-MM-DD or ISO 8601
+        type: string
+      status:
+        $ref: '#/definitions/models.ProjectStatus'
+    type: object
+  response.APIResponse:
+    properties:
+      data: {}
+      error: {}
+      message:
+        type: string
+      meta:
+        $ref: '#/definitions/response.Meta'
+      success:
+        type: boolean
+    type: object
+  response.Meta:
+    properties:
+      page:
+        type: integer
+      per_page:
+        type: integer
+      total:
+        type: integer
+      total_pages:
+        type: integer
+    type: object
+  services.DailyAttendanceResponse:
+    properties:
+      checkin:
+        description: Check-in time in HH:MM:SS format (nullable)
+        type: string
+      checkout:
+        description: Check-out time in HH:MM:SS format (nullable)
+        type: string
+      date:
+        description: Date in YYYY-MM-DD format
+        type: string
+      emp_code:
+        description: Employee code
+        type: string
+      name:
+        description: Full name (FirstName + LastName)
+        type: string
+      punch_count:
+        description: Number of punches for the day
+        type: integer
+      working_hours:
+        description: Working hours in HH:MM format (nullable)
+        type: string
+    type: object
+  services.IntOrString:
+    properties:
+      valid:
+        type: boolean
+      value:
+        type: integer
+    type: object
+  services.LateArrivalResponse:
+    properties:
+      checkin:
+        description: Check-in time in HH:MM:SS format (nullable)
+        type: string
+      date:
+        description: Date in YYYY-MM-DD format
+        type: string
+      emp_code:
+        description: Employee code
+        type: string
+      minutes_late:
+        description: Minutes late (after 08:30)
+        type: integer
+      name:
+        description: Full name (FirstName + LastName)
+        type: string
+    type: object
+  services.Terminal:
+    properties:
+      alias:
+        type: string
+      area:
+        $ref: '#/definitions/services.TerminalArea'
+      area_name:
+        type: string
+      face_count:
+        $ref: '#/definitions/services.IntOrString'
+      fp_count:
+        $ref: '#/definitions/services.IntOrString'
+      fw_ver:
+        type: string
+      id:
+        $ref: '#/definitions/services.IntOrString'
+      ip_address:
+        type: string
+      is_attendance:
+        $ref: '#/definitions/services.IntOrString'
+      last_activity:
+        type: string
+      palm_count:
+        $ref: '#/definitions/services.IntOrString'
+      push_time:
+        type: string
+      push_ver:
+        type: string
+      sn:
+        type: string
+      state:
+        $ref: '#/definitions/services.IntOrString'
+      terminal_name:
+        type: string
+      terminal_tz:
+        $ref: '#/definitions/services.IntOrString'
+      transaction_count:
+        $ref: '#/definitions/services.IntOrString'
+      transfer_interval:
+        $ref: '#/definitions/services.IntOrString'
+      transfer_time:
+        type: string
+      user_count:
+        $ref: '#/definitions/services.IntOrString'
+    type: object
+  services.TerminalArea:
+    properties:
+      area_code:
+        type: string
+      area_name:
+        type: string
+      id:
+        $ref: '#/definitions/services.IntOrString'
+    type: object
+  services.TerminalsResponse:
+    properties:
+      code:
+        type: integer
+      count:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/services.Terminal'
+        type: array
+      msg:
+        type: string
+      next:
+        type: string
+      previous:
+        type: string
+    type: object
+  services.Transaction:
+    properties:
+      area_alias:
+        type: string
+      department:
+        type: string
+      emp_code:
+        type: string
+      first_name:
+        type: string
+      gps_location:
+        type: string
+      id:
+        $ref: '#/definitions/services.IntOrString'
+      last_name:
+        type: string
+      position:
+        type: string
+      punch_state:
+        type: string
+      punch_state_display:
+        type: string
+      punch_time:
+        type: string
+      temperature:
+        type: number
+      terminal_alias:
+        type: string
+      terminal_sn:
+        type: string
+      upload_time:
+        type: string
+      verify_type:
+        $ref: '#/definitions/services.IntOrString'
+      verify_type_display:
+        type: string
+      work_code:
+        type: string
+    type: object
+  services.TransactionsResponse:
+    properties:
+      code:
+        type: integer
+      count:
+        type: integer
+      data:
+        items:
+          $ref: '#/definitions/services.Transaction'
+        type: array
+      msg:
+        type: string
+      next:
+        type: string
+      previous:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: support@hrms.com
+    name: API Support
+    url: https://github.com/Josiahmpokera-dev/hrms-backend
+  description: Human Resource Management System - REST API
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+  title: HRMS Backend API
+  version: "1.0"
+paths:
+  /api/v1/features:
+    get:
+      description: Get the complete feature catalog with all modules and permissions
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: List all features
+      tags:
+      - Features
+  /api/v1/features/my-access:
+    get:
+      description: Get feature access permissions for the currently authenticated
+        user
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Get my feature access
+      tags:
+      - Features
+  /api/v1/features/roles/{id}:
+    get:
+      description: Get feature access permissions for a specific role
+      parameters:
+      - description: Role ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Get role feature access
+      tags:
+      - Features
+    put:
+      consumes:
+      - application/json
+      description: Update the permissions assigned to a specific role
+      parameters:
+      - description: Role ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Permission codes
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.UpdateRolePermissionsReq'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Update role permissions
+      tags:
+      - Features
+  /attendance/manual-punches:
+    get:
+      consumes:
+      - application/json
+      description: Get all manual punch requests with optional filtering and pagination
+      parameters:
+      - description: Filter by employee ID
+        in: query
+        name: employee_id
+        type: integer
+      - description: Filter by status (pending, approved, rejected, cancelled)
+        in: query
+        name: status
+        type: string
+      - description: Filter by punch type (in, out)
+        in: query
+        name: punch_type
+        type: string
+      - description: Start date filter (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date filter (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 20, max: 100)'
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manual punches retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.ManualPunch'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get all manual punch requests (Admin/HR)
+      tags:
+      - Attendance
+    post:
+      consumes:
+      - application/json
+      description: Create a manual attendance punch request for when biometric/fingerprint
+        fails
+      parameters:
+      - description: Manual punch request details
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ManualPunchRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Manual punch created successfully
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Create a manual punch request
+      tags:
+      - Attendance
+  /attendance/manual-punches/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Delete a manual punch request (soft delete)
+      parameters:
+      - description: Manual punch ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manual punch deleted successfully
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Manual punch not found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Delete manual punch request (Admin/HR)
+      tags:
+      - Attendance
+    get:
+      consumes:
+      - application/json
+      description: Get a specific manual punch request by ID
+      parameters:
+      - description: Manual punch ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manual punch retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ManualPunch'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Manual punch not found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get manual punch by ID
+      tags:
+      - Attendance
+  /attendance/manual-punches/{id}/cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel a pending manual punch request
+      parameters:
+      - description: Manual punch ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manual punch cancelled successfully
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Manual punch not found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Cancel manual punch request
+      tags:
+      - Attendance
+  /attendance/manual-punches/{id}/status:
+    patch:
+      consumes:
+      - application/json
+      description: Approve or reject a manual punch request
+      parameters:
+      - description: Manual punch ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Approval decision
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.ManualPunchApprovalRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manual punch status updated successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ManualPunch'
+              type: object
+        "400":
+          description: Invalid request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "404":
+          description: Manual punch not found
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Approve/Reject manual punch request (Admin/HR)
+      tags:
+      - Attendance
+  /attendance/manual-punches/my:
+    get:
+      consumes:
+      - application/json
+      description: Get all manual punch requests for the authenticated employee
+      parameters:
+      - description: Filter by status (pending, approved, rejected, cancelled)
+        in: query
+        name: status
+        type: string
+      - description: Start date filter (YYYY-MM-DD)
+        in: query
+        name: start_date
+        type: string
+      - description: End date filter (YYYY-MM-DD)
+        in: query
+        name: end_date
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Manual punches retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.ManualPunch'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get my manual punch requests
+      tags:
+      - Attendance
+  /attendance/manual-punches/pending:
+    get:
+      consumes:
+      - application/json
+      description: Get all pending manual punch requests for approval
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Pending manual punches retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.ManualPunch'
+                  type: array
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - ApiKeyAuth: []
+      summary: Get pending manual punch requests (Admin/HR)
+      tags:
+      - Attendance
+  /attendance/reports/employee-comprehensive:
+    get:
+      consumes:
+      - application/json
+      description: Generate a comprehensive report for employees within a date range,
+        combining attendance, timesheet, leave, overtime, and compliance data
+      parameters:
+      - description: Start date (YYYY-MM-DD)
+        in: query
+        name: start_date
+        required: true
+        type: string
+      - description: End date (YYYY-MM-DD)
+        in: query
+        name: end_date
+        required: true
+        type: string
+      - description: Filter by employee ID
+        in: query
+        name: employee_id
+        type: integer
+      - description: Filter by department ID
+        in: query
+        name: department_id
+        type: integer
+      - description: Filter by location ID
+        in: query
+        name: location_id
+        type: integer
+      - description: 'Page number (default: 1)'
+        in: query
+        name: page
+        type: integer
+      - description: 'Items per page (default: 20, max: 100)'
+        in: query
+        name: page_size
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Comprehensive employee report retrieved successfully
+          schema:
+            allOf:
+            - $ref: '#/definitions/response.APIResponse'
+            - properties:
+                data:
+                  items:
+                    $ref: '#/definitions/models.ComprehensiveEmployeeReportResponse'
+                  type: array
+                meta:
+                  $ref: '#/definitions/response.Meta'
+              type: object
+        "400":
+          description: Invalid date range or parameters
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "403":
+          description: Forbidden
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Generate comprehensive employee report
+      tags:
+      - Attendance Reports
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticate user and get access token
+      parameters:
+      - description: Login credentials
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Login user
+      tags:
+      - Authentication
+  /auth/logout:
+    post:
+      description: Logout the current user. Client must discard the access token after
+        calling this.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Logout
+      tags:
+      - Authentication
+  /auth/profile:
+    get:
+      description: Get authenticated user's profile
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: Get user profile
+      tags:
+      - Authentication
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: Exchange a valid refresh token for new access and refresh tokens
+        to stay logged in
+      parameters:
+      - description: Refresh token
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Refresh token
+      tags:
+      - Authentication
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: Create a new user account
+      parameters:
+      - description: Registration data
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+        "422":
+          description: Unprocessable Entity
+          schema:
+            $ref: '#/definitions/response.APIResponse'
+      summary: Register a new user
+      tags:
+      - Authentication
+schemes:
+- http
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

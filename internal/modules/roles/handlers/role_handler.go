@@ -30,7 +30,7 @@ func NewRoleHandler() *RoleHandler {
 // @Param page query int false "Page number" default(1)
 // @Param page_size query int false "Page size" default(20) maximum(100)
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/roles [get]
+// @Router/roles [get]
 func (h *RoleHandler) ListRoles(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 

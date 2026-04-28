@@ -478,7 +478,7 @@ func (h *LeaveRequestHandler) DeleteLeaveRequest(c *gin.Context) {
 // @Param request_id path int true "Leave Request ID"
 // @Param request body models.ReturnForInfoRequest true "Information required"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/leave/requests/{request_id}/return-for-info [post]
+// @Router/leave/requests/{request_id}/return-for-info [post]
 func (h *LeaveRequestHandler) ReturnForInfo(c *gin.Context) {
 	idStr := c.Param("request_id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -515,7 +515,7 @@ func (h *LeaveRequestHandler) ReturnForInfo(c *gin.Context) {
 // @Param from_date query string false "Filter from date (YYYY-MM-DD)"
 // @Param to_date query string false "Filter to date (YYYY-MM-DD)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/leave/admin/requests [get]
+// @Router/leave/admin/requests [get]
 func (h *LeaveRequestHandler) ListAllLeaveRequests(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -616,7 +616,7 @@ func (h *LeaveRequestHandler) ListAllLeaveRequests(c *gin.Context) {
 // @Param page query int false "Page number (default: 1)"
 // @Param page_size query int false "Items per page (default: 20)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/leave/types [get]
+// @Router/leave/types [get]
 func (h *LeaveRequestHandler) GetActiveLeaveTypes(c *gin.Context) {
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
@@ -653,7 +653,7 @@ func (h *LeaveRequestHandler) GetActiveLeaveTypes(c *gin.Context) {
 // @Produce json
 // @Param year query int false "Year (default: current year)"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/leave/holidays [get]
+// @Router/leave/holidays [get]
 func (h *LeaveRequestHandler) GetLeaveHolidays(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 

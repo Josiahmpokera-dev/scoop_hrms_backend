@@ -28,13 +28,13 @@ func NewManualPunchHandler() *ManualPunchHandler {
 // @Tags Attendance
 // @Accept json
 // @Produce json
-// @Security ApiKeyAuth
+// @Security BearerAuth
 // @Param request body models.ManualPunchRequest true "Manual punch request details"
-// @Success 201 {object} response.SuccessResponse{data=models.ManualPunch} "Manual punch created successfully"
-// @Failure 400 {object} response.ErrorResponse "Invalid request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 201 {object} response.APIResponse "Manual punch created successfully"
+// @Failure 400 {object} response.APIResponse "Invalid request"
+// @Failure 401 {object} response.APIResponse "Unauthorized"
+// @Failure 403 {object} response.APIResponse "Forbidden"
+// @Failure 500 {object} response.APIResponse "Internal server error"
 // @Router /attendance/manual-punches [post]
 func (h *ManualPunchHandler) CreateManualPunch(c *gin.Context) {
 	user := getUserFromContext(c)
@@ -70,9 +70,9 @@ func (h *ManualPunchHandler) CreateManualPunch(c *gin.Context) {
 // @Param status query string false "Filter by status (pending, approved, rejected, cancelled)"
 // @Param start_date query string false "Start date filter (YYYY-MM-DD)"
 // @Param end_date query string false "End date filter (YYYY-MM-DD)"
-// @Success 200 {object} response.SuccessResponse{data=[]models.ManualPunch} "Manual punches retrieved successfully"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 200 {object} response.APIResponse{data=[]models.ManualPunch} "Manual punches retrieved successfully"
+// @Failure 401 {object} response.APIResponse "Unauthorized"
+// @Failure 500 {object} response.APIResponse "Internal server error"
 // @Router /attendance/manual-punches/my [get]
 func (h *ManualPunchHandler) GetMyManualPunches(c *gin.Context) {
 	user := getUserFromContext(c)
@@ -115,10 +115,10 @@ func (h *ManualPunchHandler) GetMyManualPunches(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path int true "Manual punch ID"
-// @Success 200 {object} response.SuccessResponse{data=models.ManualPunch} "Manual punch retrieved successfully"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 404 {object} response.ErrorResponse "Manual punch not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 200 {object} response.APIResponse{data=models.ManualPunch} "Manual punch retrieved successfully"
+// @Failure 401 {object} response.APIResponse "Unauthorized"
+// @Failure 404 {object} response.APIResponse "Manual punch not found"
+// @Failure 500 {object} response.APIResponse "Internal server error"
 // @Router /attendance/manual-punches/{id} [get]
 func (h *ManualPunchHandler) GetManualPunchByID(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -150,10 +150,10 @@ func (h *ManualPunchHandler) GetManualPunchByID(c *gin.Context) {
 // @Param end_date query string false "End date filter (YYYY-MM-DD)"
 // @Param page query int false "Page number (default: 1)"
 // @Param limit query int false "Items per page (default: 20, max: 100)"
-// @Success 200 {object} response.SuccessResponse{data=[]models.ManualPunch} "Manual punches retrieved successfully"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 200 {object} response.APIResponse{data=[]models.ManualPunch} "Manual punches retrieved successfully"
+// @Failure 401 {object} response.APIResponse "Unauthorized"
+// @Failure 403 {object} response.APIResponse "Forbidden"
+// @Failure 500 {object} response.APIResponse "Internal server error"
 // @Router /attendance/manual-punches [get]
 func (h *ManualPunchHandler) GetAllManualPunches(c *gin.Context) {
 	page, limit := getPagination(c)
@@ -217,10 +217,10 @@ func (h *ManualPunchHandler) GetAllManualPunches(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Security ApiKeyAuth
-// @Success 200 {object} response.SuccessResponse{data=[]models.ManualPunch} "Pending manual punches retrieved successfully"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 200 {object} response.APIResponse{data=[]models.ManualPunch} "Pending manual punches retrieved successfully"
+// @Failure 401 {object} response.APIResponse "Unauthorized"
+// @Failure 403 {object} response.APIResponse "Forbidden"
+// @Failure 500 {object} response.APIResponse "Internal server error"
 // @Router /attendance/manual-punches/pending [get]
 func (h *ManualPunchHandler) GetPendingManualPunches(c *gin.Context) {
 	punches, err := h.manualPunchService.GetPendingManualPunches()
@@ -241,12 +241,12 @@ func (h *ManualPunchHandler) GetPendingManualPunches(c *gin.Context) {
 // @Security ApiKeyAuth
 // @Param id path int true "Manual punch ID"
 // @Param request body models.ManualPunchApprovalRequest true "Approval decision"
-// @Success 200 {object} response.SuccessResponse{data=models.ManualPunch} "Manual punch status updated successfully"
-// @Failure 400 {object} response.ErrorResponse "Invalid request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden"
-// @Failure 404 {object} response.ErrorResponse "Manual punch not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 200 {object} response.APIResponse{data=models.ManualPunch} "Manual punch status updated successfully"
+// @Failure 400 {object} response.APIResponse "Invalid request"
+// @Failure 401 {object} response.APIResponse "Unauthorized"
+// @Failure 403 {object} response.APIResponse "Forbidden"
+// @Failure 404 {object} response.APIResponse "Manual punch not found"
+// @Failure 500 {object} response.APIResponse "Internal server error"
 // @Router /attendance/manual-punches/{id}/status [patch]
 func (h *ManualPunchHandler) UpdateManualPunchStatus(c *gin.Context) {
 	user := getUserFromContext(c)
@@ -284,12 +284,12 @@ func (h *ManualPunchHandler) UpdateManualPunchStatus(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path int true "Manual punch ID"
-// @Success 200 {object} response.SuccessResponse "Manual punch cancelled successfully"
-// @Failure 400 {object} response.ErrorResponse "Invalid request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden"
-// @Failure 404 {object} response.ErrorResponse "Manual punch not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 200 {object} response.APIResponse "Manual punch cancelled successfully"
+// @Failure 400 {object} response.APIResponse "Invalid request"
+// @Failure 401 {object} response.APIResponse "Unauthorized"
+// @Failure 403 {object} response.APIResponse "Forbidden"
+// @Failure 404 {object} response.APIResponse "Manual punch not found"
+// @Failure 500 {object} response.APIResponse "Internal server error"
 // @Router /attendance/manual-punches/{id}/cancel [post]
 func (h *ManualPunchHandler) CancelManualPunch(c *gin.Context) {
 	user := getUserFromContext(c)
@@ -321,12 +321,12 @@ func (h *ManualPunchHandler) CancelManualPunch(c *gin.Context) {
 // @Produce json
 // @Security ApiKeyAuth
 // @Param id path int true "Manual punch ID"
-// @Success 200 {object} response.SuccessResponse "Manual punch deleted successfully"
-// @Failure 400 {object} response.ErrorResponse "Invalid request"
-// @Failure 401 {object} response.ErrorResponse "Unauthorized"
-// @Failure 403 {object} response.ErrorResponse "Forbidden"
-// @Failure 404 {object} response.ErrorResponse "Manual punch not found"
-// @Failure 500 {object} response.ErrorResponse "Internal server error"
+// @Success 200 {object} response.APIResponse "Manual punch deleted successfully"
+// @Failure 400 {object} response.APIResponse "Invalid request"
+// @Failure 401 {object} response.APIResponse "Unauthorized"
+// @Failure 403 {object} response.APIResponse "Forbidden"
+// @Failure 404 {object} response.APIResponse "Manual punch not found"
+// @Failure 500 {object} response.APIResponse "Internal server error"
 // @Router /attendance/manual-punches/{id} [delete]
 func (h *ManualPunchHandler) DeleteManualPunch(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))

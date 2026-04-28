@@ -9,6 +9,7 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/services"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/pkg/scheduler"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -140,6 +141,107 @@ func (h *AttendanceReportsHandler) GetDepartmentStats(c *gin.Context) {
 	}
 
 	response.Success(c, "Department attendance retrieved successfully", data)
+}
+
+// GetDepartmentStatsByRange returns department-wise attendance for a date range
+// Endpoint: GET /attendance/reports/department-stats
+func (h *AttendanceReportsHandler) GetDepartmentStatsByRange(c *gin.Context) {
+	startDate := c.Query("startDate")
+	endDate := c.Query("endDate")
+
+	if startDate == "" || endDate == "" {
+		errs := map[string]string{}
+		if startDate == "" {
+			errs["startDate"] = "required"
+		}
+		if endDate == "" {
+			errs["endDate"] = "required"
+		}
+		response.BadRequest(c, "Invalid date range", errs)
+		return
+	}
+
+	stats, err := h.service.GetDepartmentAttendanceStats(startDate, endDate)
+	if err != nil {
+		response.InternalServerError(c, "Failed to fetch department stats", err)
+		return
+	}
+
+	data := make([]map[string]interface{}, 0, len(stats))
+	for _, s := range stats {
+		data = append(data, map[string]interface{}{
+			"departmentId":         s.DepartmentID,
+			"departmentName":       s.DepartmentName,
+			"present":              s.Present,
+			"absent":               s.Absent,
+			"late":                 s.Late,
+			"onLeave":              s.OnLeave,
+			"attendancePercentage": s.AttendancePercentage,
+		})
+	}
+
+	response.Success(c, "Department attendance retrieved successfully", data)
+}
+
+// GetEmployeeStats returns detailed attendance for a specific employee
+// Endpoint: GET /attendance/reports/employee-stats
+func (h *AttendanceReportsHandler) GetEmployeeStats(c *gin.Context) {
+	employeeIDStr := c.Query("employeeId")
+	startDate := c.Query("startDate")
+	endDate := c.Query("endDate")
+
+	if employeeIDStr == "" || startDate == "" || endDate == "" {
+		errs := map[string]string{}
+		if employeeIDStr == "" {
+			errs["employeeId"] = "required"
+		}
+		if startDate == "" {
+			errs["startDate"] = "required"
+		}
+		if endDate == "" {
+			errs["endDate"] = "required"
+		}
+		response.BadRequest(c, "Invalid parameters", errs)
+		return
+	}
+
+	employeeID, err := strconv.ParseUint(employeeIDStr, 10, 32)
+	if err != nil {
+		response.BadRequest(c, "Invalid employee ID", nil)
+		return
+	}
+
+	data, err := h.service.GetEmployeeAttendanceStats(uint(employeeID), startDate, endDate)
+	if err != nil {
+		response.InternalServerError(c, "Failed to fetch employee stats", err)
+		return
+	}
+
+	response.Success(c, "Employee attendance report retrieved successfully", data)
+}
+
+// TriggerMonthlyReport manually triggers the end-of-month report generation
+// Endpoint: POST /attendance/reports/trigger-monthly
+func (h *AttendanceReportsHandler) TriggerMonthlyReport(c *gin.Context) {
+	monthStr := c.Query("month") // format YYYY-MM
+	if monthStr == "" {
+		response.BadRequest(c, "Month is required (YYYY-MM)", nil)
+		return
+	}
+
+	t, err := time.Parse("2006-01", monthStr)
+	if err != nil {
+		response.BadRequest(c, "Invalid month format (expected YYYY-MM)", nil)
+		return
+	}
+
+	// Trigger via scheduler package
+	if err := scheduler.ManualTrigger(t.Year(), int(t.Month())); err != nil {
+		response.InternalServerError(c, "Failed to trigger report", err)
+		return
+	}
+
+	response.Success(c, "Report generation triggered successfully. HR will receive an email shortly.", nil)
 }
 
 // GetComplianceViolations returns compliance issues
@@ -664,5 +766,112 @@ func (h *AttendanceReportsHandler) GetEmployeeUtilizationReport(c *gin.Context) 
 			"end_date":   endDate,
 		},
 		"employees": employees,
+	})
+}
+
+// GetComprehensiveEmployeeReport godoc
+// @Summary Generate comprehensive employee report
+// @Description Generate a comprehensive report for employees within a date range, combining attendance, timesheet, leave, overtime, and compliance data
+// @Tags Attendance Reports
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param start_date query string true "Start date (YYYY-MM-DD)"
+// @Param end_date query string true "End date (YYYY-MM-DD)"
+// @Param employee_id query int false "Filter by employee ID"
+// @Param department_id query int false "Filter by department ID"
+// @Param location_id query int false "Filter by location ID"
+// @Param page query int false "Page number (default: 1)"
+// @Param page_size query int false "Items per page (default: 20, max: 100)"
+// @Success 200 {object} response.APIResponse{data=[]models.ComprehensiveEmployeeReportResponse,meta=response.Meta} "Comprehensive employee report retrieved successfully"
+// @Failure 400 {object} response.APIResponse "Invalid date range or parameters"
+// @Failure 401 {object} response.APIResponse "Unauthorized"
+// @Failure 403 {object} response.APIResponse "Forbidden"
+// @Failure 500 {object} response.APIResponse "Internal server error"
+// @Router /attendance/reports/employee-comprehensive [get]
+func (h *AttendanceReportsHandler) GetComprehensiveEmployeeReport(c *gin.Context) {
+	// Parse and validate dates
+	startDate := c.Query("start_date")
+	endDate := c.Query("end_date")
+
+	if startDate == "" || endDate == "" {
+		errs := map[string]string{}
+		if startDate == "" {
+			errs["start_date"] = "required"
+		}
+		if endDate == "" {
+			errs["end_date"] = "required"
+		}
+		response.BadRequest(c, "Invalid date range", errs)
+		return
+	}
+
+	// Validate date format
+	_, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		response.BadRequest(c, "Invalid start_date format (use YYYY-MM-DD)", nil)
+		return
+	}
+	_, err = time.Parse("2006-01-02", endDate)
+	if err != nil {
+		response.BadRequest(c, "Invalid end_date format (use YYYY-MM-DD)", nil)
+		return
+	}
+
+	// Parse optional filters
+	var employeeID, departmentID, locationID *uint
+
+	if eid := c.Query("employee_id"); eid != "" {
+		if id, err := strconv.ParseUint(eid, 10, 32); err == nil {
+			uid := uint(id)
+			employeeID = &uid
+		}
+	}
+
+	if did := c.Query("department_id"); did != "" {
+		if id, err := strconv.ParseUint(did, 10, 32); err == nil {
+			uid := uint(id)
+			departmentID = &uid
+		}
+	}
+
+	if lid := c.Query("location_id"); lid != "" {
+		if id, err := strconv.ParseUint(lid, 10, 32); err == nil {
+			uid := uint(id)
+			locationID = &uid
+		}
+	}
+
+	// Parse pagination
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 20
+	}
+
+	// Call service
+	reports, total, err := h.service.GetComprehensiveEmployeeReport(startDate, endDate, employeeID, departmentID, locationID, page, pageSize)
+	if err != nil {
+		if strings.Contains(err.Error(), "invalid") || strings.Contains(err.Error(), "required") || strings.Contains(err.Error(), "exceed") {
+			response.BadRequest(c, "Validation failed", map[string]string{"error": err.Error()})
+			return
+		}
+		response.InternalServerError(c, "Failed to generate comprehensive employee report", err)
+		return
+	}
+
+	totalPages := int(total) / pageSize
+	if int(total)%pageSize != 0 {
+		totalPages++
+	}
+
+	response.SuccessWithMeta(c, "Comprehensive employee report retrieved successfully", reports, &response.Meta{
+		Page:       page,
+		PerPage:    pageSize,
+		Total:      total,
+		TotalPages: totalPages,
 	})
 }

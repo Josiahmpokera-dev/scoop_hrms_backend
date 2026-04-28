@@ -36,7 +36,7 @@ func NewUserHandler() *UserHandler {
 // @Success 201 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 403 {object} response.APIResponse
-// @Router /api/v1/users [post]
+// @Router/users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -79,7 +79,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Param page_size query int false "Page size" default(20) maximum(100)
 // @Param search query string false "Search by name, employee ID, or email"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/users/available-employees [get]
+// @Router/users/available-employees [get]
 func (h *UserHandler) ListEmployeesWithoutUser(c *gin.Context) {
 	page := 1
 	if p := c.Query("page"); p != "" {
@@ -123,7 +123,7 @@ func (h *UserHandler) ListEmployeesWithoutUser(c *gin.Context) {
 // @Param role query string false "Filter by role: admin, hr, it, user"
 // @Param search query string false "Search by email, first name, last name, username"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/users [get]
+// @Router/users [get]
 func (h *UserHandler) ListUsers(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -168,7 +168,7 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 // @Param page_size query int false "Page size" default(20) maximum(100)
 // @Param search query string false "Search by email, first name, last name, username"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/users/special-roles [get]
+// @Router/users/special-roles [get]
 func (h *UserHandler) ListSpecialRoleUsers(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 
@@ -214,7 +214,7 @@ func (h *UserHandler) ListSpecialRoleUsers(c *gin.Context) {
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 403 {object} response.APIResponse
-// @Router /api/v1/users/transfer-role [post]
+// @Router/users/transfer-role [post]
 func (h *UserHandler) TransferRole(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -255,7 +255,7 @@ func (h *UserHandler) TransferRole(c *gin.Context) {
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 403 {object} response.APIResponse
-// @Router /api/v1/users/assign-role [post]
+// @Router/users/assign-role [post]
 func (h *UserHandler) AssignRole(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -296,7 +296,7 @@ func (h *UserHandler) AssignRole(c *gin.Context) {
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 403 {object} response.APIResponse
-// @Router /api/v1/users/add-role [post]
+// @Router/users/add-role [post]
 func (h *UserHandler) AddRole(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -333,7 +333,7 @@ func (h *UserHandler) AddRole(c *gin.Context) {
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 403 {object} response.APIResponse
-// @Router /api/v1/users/remove-role [post]
+// @Router/users/remove-role [post]
 func (h *UserHandler) RemoveRole(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -370,7 +370,7 @@ func (h *UserHandler) RemoveRole(c *gin.Context) {
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 403 {object} response.APIResponse
-// @Router /api/v1/users/set-roles [post]
+// @Router/users/set-roles [post]
 func (h *UserHandler) SetRoles(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -407,7 +407,7 @@ func (h *UserHandler) SetRoles(c *gin.Context) {
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 403 {object} response.APIResponse
-// @Router /api/v1/users/change-roles [put]
+// @Router/users/change-roles [put]
 func (h *UserHandler) ChangeRoles(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -441,7 +441,7 @@ func (h *UserHandler) ChangeRoles(c *gin.Context) {
 // @Param id path int true "User ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/users/{id} [get]
+// @Router/users/{id} [get]
 func (h *UserHandler) GetUser(c *gin.Context) {
 	targetID, ok := parseUserIDParam(c)
 	if !ok {
@@ -467,7 +467,7 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 // @Param id path int true "User ID"
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
-// @Router /api/v1/users/{id}/roles [get]
+// @Router/users/{id}/roles [get]
 func (h *UserHandler) GetUserRoles(c *gin.Context) {
 	targetID, ok := parseUserIDParam(c)
 	if !ok {
@@ -505,7 +505,7 @@ func parseUserIDParam(c *gin.Context) (uint, bool) {
 // @Produce json
 // @Param id path int true "User ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/users/{id}/suspend [post]
+// @Router/users/{id}/suspend [post]
 func (h *UserHandler) SuspendUser(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -534,7 +534,7 @@ func (h *UserHandler) SuspendUser(c *gin.Context) {
 // @Produce json
 // @Param id path int true "User ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/users/{id}/block [post]
+// @Router/users/{id}/block [post]
 func (h *UserHandler) BlockUser(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -563,7 +563,7 @@ func (h *UserHandler) BlockUser(c *gin.Context) {
 // @Produce json
 // @Param id path int true "User ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/users/{id}/unblock [post]
+// @Router/users/{id}/unblock [post]
 func (h *UserHandler) UnblockUser(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -592,7 +592,7 @@ func (h *UserHandler) UnblockUser(c *gin.Context) {
 // @Produce json
 // @Param id path int true "User ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/users/{id}/unsuspend [post]
+// @Router/users/{id}/unsuspend [post]
 func (h *UserHandler) UnsuspendUser(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -623,7 +623,7 @@ func (h *UserHandler) UnsuspendUser(c *gin.Context) {
 // @Param page_size query int false "Page size" default(20) maximum(100)
 // @Param include_suspended query bool false "Include suspended users" default(false)
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/security/blocked-users [get]
+// @Router/security/blocked-users [get]
 func (h *UserHandler) ListBlockedUsers(c *gin.Context) {
 	tenantID := middleware.GetTenantID(c)
 	page := 1
@@ -674,7 +674,7 @@ func (h *UserHandler) ListBlockedUsers(c *gin.Context) {
 // @Produce json
 // @Param email query string true "User email"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/security/rate-limit/status [get]
+// @Router/security/rate-limit/status [get]
 func (h *UserHandler) GetRateLimitStatus(c *gin.Context) {
 	email := c.Query("email")
 	if email == "" {
@@ -701,7 +701,7 @@ func (h *UserHandler) GetRateLimitStatus(c *gin.Context) {
 // @Success 200 {object} response.APIResponse
 // @Failure 400 {object} response.APIResponse
 // @Failure 403 {object} response.APIResponse
-// @Router /api/v1/users/reset-password [post]
+// @Router/users/reset-password [post]
 func (h *UserHandler) ResetPassword(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {

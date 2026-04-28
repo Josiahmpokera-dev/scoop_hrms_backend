@@ -422,7 +422,7 @@ func (h *DepartmentHandler) HandleAction(c *gin.Context) {
 // @Param id path int true "Department ID"
 // @Param body body object true "Request body" example({"employee_id": 5})
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/departments/{id}/assign-head [post]
+// @Router/departments/{id}/assign-head [post]
 func (h *DepartmentHandler) AssignDepartmentHead(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -462,7 +462,7 @@ func (h *DepartmentHandler) AssignDepartmentHead(c *gin.Context) {
 // @Produce json
 // @Param id path int true "Department ID"
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/departments/{id}/remove-head [post]
+// @Router/departments/{id}/remove-head [post]
 func (h *DepartmentHandler) RemoveDepartmentHead(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)
@@ -497,7 +497,7 @@ func (h *DepartmentHandler) RemoveDepartmentHead(c *gin.Context) {
 // @Param body body object true "Request body" example({"employee_id": 5, "reason": "Promotion to department head"})
 // @Security ApiKeyAuth
 // @Success 200 {object} response.APIResponse
-// @Router /api/v1/departments/{id}/change-head [post]
+// @Router/departments/{id}/change-head [post]
 func (h *DepartmentHandler) ChangeDepartmentHeadWithRole(c *gin.Context) {
 	idStr := c.Param("id")
 	id, err := strconv.ParseUint(idStr, 10, 32)

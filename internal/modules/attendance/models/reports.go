@@ -123,3 +123,123 @@ type AttendanceOverviewData struct {
 	Totals  AttendanceOverviewTotals  `json:"totals"`
 	Meta    AttendanceOverviewMeta    `json:"meta"`
 }
+
+// --- Comprehensive Employee Report Models ---
+
+type ComprehensiveEmployeeReportRequest struct {
+	StartDate    string `json:"startDate" binding:"required"` // YYYY-MM-DD
+	EndDate      string `json:"endDate" binding:"required"`   // YYYY-MM-DD
+	EmployeeID   *uint  `json:"employeeId,omitempty"`
+	DepartmentID *uint  `json:"departmentId,omitempty"`
+	LocationID   *uint  `json:"locationId,omitempty"`
+	Page         int    `json:"page,omitempty"`
+	PageSize     int    `json:"pageSize,omitempty"`
+}
+
+type ComprehensiveEmployeeReportResponse struct {
+	EmployeeID       string                             `json:"employee_id"`
+	EmployeeName     string                             `json:"employee_name"`
+	Department       string                             `json:"department"`
+	Position         string                             `json:"position,omitempty"`
+	Period           EmployeeReportPeriod               `json:"period"`
+	Attendance       EmployeeAttendanceStats            `json:"attendance"`
+	Timesheet        EmployeeTimesheetStats             `json:"timesheet"`
+	Leave            EmployeeLeaveStats                 `json:"leave"`
+	Overtime         EmployeeOvertimeStats              `json:"overtime"`
+	Compliance       EmployeeComplianceStats            `json:"compliance"`
+}
+
+type EmployeeReportPeriod struct {
+	StartDate string `json:"start_date"`
+	EndDate   string `json:"end_date"`
+}
+
+type EmployeeAttendanceStats struct {
+	TotalWorkingDays     int     `json:"total_working_days"`
+	PresentDays          int     `json:"present_days"`
+	AbsentDays           int     `json:"absent_days"`
+	LateDays             int     `json:"late_days"`
+	EarlyDepartureDays   int     `json:"early_departure_days"`
+	PresentPercentage    float64 `json:"present_percentage"`
+	AverageWorkingHours  float64 `json:"average_working_hours"`
+	TotalWorkingHours    float64 `json:"total_working_hours"`
+}
+
+type EmployeeTimesheetStats struct {
+	TotalHours       float64 `json:"total_hours"`
+	RegularHours     float64 `json:"regular_hours"`
+	OvertimeHours    float64 `json:"overtime_hours"`
+	BillableHours    float64 `json:"billable_hours"`
+	NonBillableHours float64 `json:"non_billable_hours"`
+}
+
+type EmployeeLeaveStats struct {
+	TotalLeaveDays   int                        `json:"total_leave_days"`
+	LeaveBreakdown   []LeaveTypeBreakdown       `json:"leave_breakdown"`
+	PendingRequests  int                        `json:"pending_requests"`
+	ApprovedRequests int                        `json:"approved_requests"`
+	RejectedRequests int                        `json:"rejected_requests"`
+}
+
+type LeaveTypeBreakdown struct {
+	LeaveType string  `json:"leave_type"`
+	Days      float64 `json:"days"`
+}
+
+type EmployeeOvertimeStats struct {
+	TotalRequests   int     `json:"total_requests"`
+	ApprovedHours   float64 `json:"approved_hours"`
+	PendingHours    float64 `json:"pending_hours"`
+	RejectedHours   float64 `json:"rejected_hours"`
+	TotalPayout     float64 `json:"total_payout,omitempty"`
+	CompOffHours    float64 `json:"comp_off_hours,omitempty"`
+}
+
+type EmployeeComplianceStats struct {
+	ViolationsCount int                         `json:"violations_count"`
+	Violations      []ComplianceViolationDetail `json:"violations"`
+}
+
+type ComplianceViolationDetail struct {
+	Date     string `json:"date"`
+	Type     string `json:"type"`
+	Details  string `json:"details"`
+	Severity string `json:"severity"`
+}
+
+// --- Employee Attendance Report Models ---
+
+type EmployeeAttendanceReportResponse struct {
+	Summary      EmployeeAttendanceSummary      `json:"summary"`
+	Distribution EmployeeAttendanceDistribution `json:"distribution"`
+	Trends       []EmployeeAttendanceTrend      `json:"trends"`
+	Logs         []EmployeeAttendanceLog        `json:"logs"`
+}
+
+type EmployeeAttendanceSummary struct {
+	DaysPresent        int     `json:"daysPresent"`
+	TotalDays          int     `json:"totalDays"`
+	AvgWorkHours       float64 `json:"avgWorkHours"`
+	TotalOvertimeHours float64 `json:"totalOvertimeHours"`
+	LateArrivalsCount  int     `json:"lateArrivalsCount"`
+}
+
+type EmployeeAttendanceDistribution struct {
+	Present int `json:"present"`
+	Absent  int `json:"absent"`
+	OnLeave int `json:"onLeave"`
+}
+
+type EmployeeAttendanceTrend struct {
+	Date      string  `json:"date"`
+	WorkHours float64 `json:"workHours"`
+}
+
+type EmployeeAttendanceLog struct {
+	Date      string  `json:"date"`
+	Status    string  `json:"status"`
+	CheckIn   *string `json:"checkIn"`
+	CheckOut  *string `json:"checkOut"`
+	WorkHours string  `json:"workHours"`
+	Overtime  string  `json:"overtime"`
+}
