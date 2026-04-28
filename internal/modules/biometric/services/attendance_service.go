@@ -23,20 +23,21 @@ func NewAttendanceService() *AttendanceService {
 
 // DailyAttendanceResponse represents the response for daily attendance
 type DailyAttendanceResponse struct {
-	Name        string  `json:"name"`         // Full name (FirstName + LastName)
-	EmpCode     string  `json:"emp_code"`     // Employee code
-	Date        string  `json:"date"`         // Date in YYYY-MM-DD format
-	CheckIn     *string `json:"checkin"`      // Check-in time in HH:MM:SS format (nullable)
-	CheckOut    *string `json:"checkout"`     // Check-out time in HH:MM:SS format (nullable)
+	Name         string  `json:"name"`          // Full name (FirstName + LastName)
+	EmpCode      string  `json:"emp_code"`      // Employee code
+	Department   string  `json:"department"`    // Department
+	Date         string  `json:"date"`          // Date in YYYY-MM-DD format
+	CheckIn      *string `json:"checkin"`       // Check-in time in HH:MM:SS format (nullable)
+	CheckOut     *string `json:"checkout"`      // Check-out time in HH:MM:SS format (nullable)
 	WorkingHours *string `json:"working_hours"` // Working hours in HH:MM format (nullable)
-	PunchCount  int     `json:"punch_count"`  // Number of punches for the day
+	PunchCount   int     `json:"punch_count"`   // Number of punches for the day
 }
 
 // GetDailyAttendanceParams represents query parameters for getting daily attendance
 type GetDailyAttendanceParams struct {
 	StartTime string  `json:"start_time"` // Format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
 	EndTime   string  `json:"end_time"`   // Format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
-	EmpCode   *string `json:"emp_code"`  // Optional employee code filter
+	EmpCode   *string `json:"emp_code"`   // Optional employee code filter
 	Page      int     `json:"page"`       // Page number (default: 1)
 	PageSize  int     `json:"page_size"`  // Page size (default: 50)
 }
@@ -158,11 +159,12 @@ func (s *AttendanceService) GetDailyAttendance(tenantID *uint, params GetDailyAt
 		response[i] = DailyAttendanceResponse{
 			Name:         name,
 			EmpCode:      record.EmpCode,
+			Department:   record.Department,
 			Date:         dateStr,
 			CheckIn:      checkInStr,
 			CheckOut:     checkOutStr,
 			WorkingHours: workingHoursStr,
-			PunchCount:    record.PunchCount,
+			PunchCount:   record.PunchCount,
 		}
 	}
 
@@ -219,6 +221,7 @@ func (s *AttendanceService) GetDailyAttendanceFromBioTime(tenantID *uint, params
 		empCode    string
 		firstName  string
 		lastName   string
+		department string
 		date       string // YYYY-MM-DD
 		checkIn    *time.Time
 		checkOut   *time.Time
@@ -267,10 +270,11 @@ func (s *AttendanceService) GetDailyAttendanceFromBioTime(tenantID *uint, params
 			a, ok := aggs[key]
 			if !ok {
 				a = &agg{
-					empCode:   t.EmpCode,
-					firstName: t.FirstName,
-					lastName:  lastName,
-					date:      dateKey,
+					empCode:    t.EmpCode,
+					firstName:  t.FirstName,
+					lastName:   lastName,
+					department: t.Department,
+					date:       dateKey,
 				}
 				aggs[key] = a
 			}
@@ -295,6 +299,11 @@ func (s *AttendanceService) GetDailyAttendanceFromBioTime(tenantID *uint, params
 	// Convert map to slice
 	all := make([]DailyAttendanceResponse, 0, len(aggs))
 	for _, a := range aggs {
+		// Filter out records where check-in is the same as check-out (no valid checkout)
+		if a.checkIn != nil && a.checkOut != nil && a.checkIn.Equal(*a.checkOut) {
+			continue
+		}
+
 		name := strings.TrimSpace(strings.TrimSpace(a.firstName) + " " + strings.TrimSpace(a.lastName))
 		if name == "" {
 			name = a.empCode
@@ -325,6 +334,7 @@ func (s *AttendanceService) GetDailyAttendanceFromBioTime(tenantID *uint, params
 		all = append(all, DailyAttendanceResponse{
 			Name:         name,
 			EmpCode:      a.empCode,
+			Department:   a.department,
 			Date:         a.date,
 			CheckIn:      checkInStr,
 			CheckOut:     checkOutStr,
@@ -360,18 +370,19 @@ func (s *AttendanceService) GetDailyAttendanceFromBioTime(tenantID *uint, params
 type LateArrivalResponse struct {
 	Name        string  `json:"name"`         // Full name (FirstName + LastName)
 	EmpCode     string  `json:"emp_code"`     // Employee code
-	Date        string  `json:"date"`          // Date in YYYY-MM-DD format
-	CheckIn     *string `json:"checkin"`     // Check-in time in HH:MM:SS format (nullable)
+	Department  string  `json:"department"`   // Department
+	Date        string  `json:"date"`         // Date in YYYY-MM-DD format
+	CheckIn     *string `json:"checkin"`      // Check-in time in HH:MM:SS format (nullable)
 	MinutesLate int     `json:"minutes_late"` // Minutes late (after 08:30)
 }
 
 // GetLateArrivalsParams represents query parameters for getting late arrivals
 type GetLateArrivalsParams struct {
 	StartTime string  `json:"start_time"` // Format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
-	EndTime   string  `json:"end_time"`  // Format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
+	EndTime   string  `json:"end_time"`   // Format: YYYY-MM-DD or YYYY-MM-DD HH:MM:SS
 	EmpCode   *string `json:"emp_code"`   // Optional employee code filter
-	Page      int     `json:"page"`      // Page number (default: 1)
-	PageSize  int     `json:"page_size"` // Page size (default: 50)
+	Page      int     `json:"page"`       // Page number (default: 1)
+	PageSize  int     `json:"page_size"`  // Page size (default: 50)
 }
 
 // GetLateArrivals gets employees who checked in more than 30 minutes after 08:00 (after 08:30)
@@ -445,6 +456,7 @@ func (s *AttendanceService) GetLateArrivals(tenantID *uint, params GetLateArriva
 		response[i] = LateArrivalResponse{
 			Name:        name,
 			EmpCode:     record.EmpCode,
+			Department:  record.Department,
 			Date:        dateStr,
 			CheckIn:     checkInStr,
 			MinutesLate: record.MinutesLate,

@@ -95,6 +95,7 @@ type DailyAttendanceRecord struct {
 	EmpCode    string     `json:"emp_code"`
 	FirstName  string     `json:"first_name"`
 	LastName   string     `json:"last_name"`
+	Department string     `json:"department"`
 	Date       time.Time  `json:"date"`
 	CheckIn    *time.Time `json:"check_in"`
 	CheckOut   *time.Time `json:"check_out"`
@@ -113,13 +114,15 @@ func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startT
 			emp_code,
 			first_name,
 			last_name,
+			department,
 			DATE(punch_time)::date as date,
 			MIN(punch_time)::timestamp as check_in,
 			MAX(punch_time)::timestamp as check_out,
 			COUNT(*) as punch_count
 		`).
 		Where("punch_time >= ? AND punch_time <= ?", startTime, endTime).
-		Group("emp_code, first_name, last_name, DATE(punch_time)")
+		Group("emp_code, first_name, last_name, department, DATE(punch_time)").
+		Having("MIN(punch_time) < MAX(punch_time)")
 
 	// Apply tenant filter
 	if tenantID != nil {
@@ -141,7 +144,7 @@ func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startT
 	// Build count query with all filters - filter by datetime but count distinct date groups
 	countSQL := `
 		SELECT COUNT(*) as count FROM (
-			SELECT DISTINCT emp_code, DATE(punch_time)
+			SELECT emp_code, DATE(punch_time)
 			FROM biotime_transactions
 			WHERE punch_time >= ? AND punch_time <= ?
 	`
@@ -159,6 +162,7 @@ func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startT
 		countArgs = append(countArgs, *empCode)
 	}
 
+	countSQL += " GROUP BY emp_code, DATE(punch_time) HAVING MIN(punch_time) < MAX(punch_time)"
 	countSQL += ") as distinct_records"
 
 	if err := r.db.Raw(countSQL, countArgs...).Scan(&countResult).Error; err != nil {
@@ -181,6 +185,7 @@ type LateArrivalRecord struct {
 	EmpCode     string     `json:"emp_code"`
 	FirstName   string     `json:"first_name"`
 	LastName    string     `json:"last_name"`
+	Department  string     `json:"department"`
 	Date        time.Time  `json:"date"`
 	CheckIn     *time.Time `json:"check_in"`
 	MinutesLate int        `json:"minutes_late"`
@@ -202,6 +207,7 @@ func (r *BioTimeTransactionRepository) GetLateArrivals(tenantID *uint, startTime
 				emp_code,
 				first_name,
 				last_name,
+				department,
 				DATE(punch_time)::date as date,
 				MIN(punch_time)::timestamp as check_in
 			FROM biotime_transactions
@@ -224,13 +230,14 @@ func (r *BioTimeTransactionRepository) GetLateArrivals(tenantID *uint, startTime
 	}
 
 	baseSQL += `
-			GROUP BY emp_code, first_name, last_name, DATE(punch_time)
+			GROUP BY emp_code, first_name, last_name, department, DATE(punch_time)
 			HAVING MIN(punch_time)::time > TIME '09:00:00'
 		)
 		SELECT 
 			emp_code,
 			first_name,
 			last_name,
+			department,
 			date,
 			check_in,
 			(EXTRACT(EPOCH FROM (check_in - (date::timestamp + INTERVAL '9 hours'))) / 60)::integer as minutes_late

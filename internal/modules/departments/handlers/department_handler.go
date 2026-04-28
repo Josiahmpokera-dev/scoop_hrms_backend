@@ -29,6 +29,15 @@ type HeadOfDepartmentInfo struct {
 	Position   *string `json:"position,omitempty"`
 }
 
+// ShiftInfo represents simplified shift data for department response
+type ShiftInfo struct {
+	ID        uint   `json:"id"`
+	ShiftName string `json:"shift_name"`
+	ShiftCode string `json:"shift_code"`
+	StartTime string `json:"start_time"`
+	EndTime   string `json:"end_time"`
+}
+
 // DepartmentResponse represents the department response with location name and enriched head-of-department info
 type DepartmentResponse struct {
 	ID                 uint                  `json:"id"`
@@ -45,6 +54,7 @@ type DepartmentResponse struct {
 	EmployeeCapacity   *int                  `json:"employee_capacity,omitempty"`
 	Location           *string               `json:"location,omitempty"` // Location name instead of location_id
 	LocationID         *uint                 `json:"location_id,omitempty"`
+	Shifts             []ShiftInfo           `json:"shifts,omitempty"` // Associated shifts
 	IsActive           bool                  `json:"is_active"`
 	CreatedAt          string                `json:"created_at"`
 	UpdatedAt          string                `json:"updated_at"`
@@ -118,6 +128,21 @@ func (h *DepartmentHandler) toDepartmentResponse(dept *models.Department) *Depar
 		if err == nil && location != nil {
 			resp.Location = &location.Name
 		}
+	}
+
+	// Map shifts
+	if len(dept.Shifts) > 0 {
+		shifts := make([]ShiftInfo, 0, len(dept.Shifts))
+		for _, s := range dept.Shifts {
+			shifts = append(shifts, ShiftInfo{
+				ID:        s.ID,
+				ShiftName: s.ShiftName,
+				ShiftCode: s.ShiftCode,
+				StartTime: s.StartTime,
+				EndTime:   s.EndTime,
+			})
+		}
+		resp.Shifts = shifts
 	}
 
 	return resp

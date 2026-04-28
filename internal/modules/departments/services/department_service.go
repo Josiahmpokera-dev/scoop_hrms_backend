@@ -9,21 +9,25 @@ import (
 	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
 	organizationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/repositories"
+	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
+	shiftRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/repositories"
 )
 
 type DepartmentService struct {
-	repo            *repositories.DepartmentRepository
+	repo             *repositories.DepartmentRepository
 	organizationRepo *organizationRepos.OrganizationRepository
-	locationRepo    *locationRepos.LocationRepository
-	employeeRepo    *employeeRepos.EmployeeRepository
+	locationRepo     *locationRepos.LocationRepository
+	employeeRepo     *employeeRepos.EmployeeRepository
+	shiftRepo        *shiftRepos.ShiftRepository
 }
 
 func NewDepartmentService() *DepartmentService {
 	return &DepartmentService{
-		repo:            repositories.NewDepartmentRepository(),
+		repo:             repositories.NewDepartmentRepository(),
 		organizationRepo: organizationRepos.NewOrganizationRepository(),
-		locationRepo:    locationRepos.NewLocationRepository(),
-		employeeRepo:    employeeRepos.NewEmployeeRepository(),
+		locationRepo:     locationRepos.NewLocationRepository(),
+		employeeRepo:     employeeRepos.NewEmployeeRepository(),
+		shiftRepo:        shiftRepos.NewShiftRepository(),
 	}
 }
 
@@ -89,6 +93,18 @@ func (s *DepartmentService) CreateDepartment(req *models.CreateDepartmentRequest
 		}
 	}
 
+	// Validate and fetch shifts if provided
+	var shifts []shiftModels.Shift
+	if len(req.ShiftIDs) > 0 {
+		for _, shiftID := range req.ShiftIDs {
+			shift, err := s.shiftRepo.FindByID(shiftID)
+			if err != nil {
+				return nil, fmt.Errorf("shift with ID '%d' not found", shiftID)
+			}
+			shifts = append(shifts, *shift)
+		}
+	}
+
 	// Deputy manager is stored as a string (not a reference)
 	// No lookup needed - just use the string value directly
 
@@ -125,25 +141,26 @@ func (s *DepartmentService) CreateDepartment(req *models.CreateDepartmentRequest
 	}
 
 	department := &models.Department{
-		OrganizationID:    req.OrganizationID,
+		OrganizationID:     req.OrganizationID,
 		OrganizationUnitID: req.OrganizationUnitID,
-		Code:              req.Code,
-		Name:              req.Name,
-		Description:       req.Description,
-		Level:             level,
-		DepartmentType:    req.DepartmentType,
+		Code:               req.Code,
+		Name:               req.Name,
+		Description:        req.Description,
+		Level:              level,
+		DepartmentType:     req.DepartmentType,
 		ParentDepartmentID: parentDepartmentID,
-		ManagerID:         req.ManagerID,
-		DeputyManager:     req.DeputyManager, // Store as string directly
-		BudgetAllocated:   req.BudgetAllocated,
-		BudgetCurrency:   req.BudgetCurrency,
-		EmployeeCapacity:  req.EmployeeCapacity,
-		LocationID:       locationID,
-		CostCenter:       req.CostCenter, // Store as string directly
-		IsActive:         true,
-		UpdatedBy:        updatedBy,
+		ManagerID:          req.ManagerID,
+		DeputyManager:      req.DeputyManager, // Store as string directly
+		BudgetAllocated:    req.BudgetAllocated,
+		BudgetCurrency:     req.BudgetCurrency,
+		EmployeeCapacity:   req.EmployeeCapacity,
+		LocationID:         locationID,
+		CostCenter:         req.CostCenter, // Store as string directly
+		IsActive:           true,
+		Shifts:             shifts,
+		UpdatedBy:          updatedBy,
 	}
-	
+
 	// Set default budget currency if not provided
 	if department.BudgetCurrency == nil && department.BudgetAllocated != nil {
 		defaultCurrency := "TZS"
@@ -276,6 +293,19 @@ func (s *DepartmentService) UpdateDepartment(id uint, req *models.UpdateDepartme
 	}
 	if req.IsActive != nil {
 		department.IsActive = *req.IsActive
+	}
+
+	// Update shifts if provided
+	if req.ShiftIDs != nil {
+		var shifts []shiftModels.Shift
+		for _, shiftID := range req.ShiftIDs {
+			shift, err := s.shiftRepo.FindByID(shiftID)
+			if err != nil {
+				return nil, fmt.Errorf("shift with ID '%d' not found", shiftID)
+			}
+			shifts = append(shifts, *shift)
+		}
+		department.Shifts = shifts
 	}
 
 	department.UpdatedBy = updatedBy

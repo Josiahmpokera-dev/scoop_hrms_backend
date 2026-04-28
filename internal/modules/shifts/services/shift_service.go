@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
-	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/repositories"
 	locationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/models"
 	locationRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/repositories"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/repositories"
 )
 
 type ShiftService struct {
@@ -39,6 +39,13 @@ func (s *ShiftService) CreateShift(req *models.CreateShiftRequest, tenantID *uin
 		return nil, errors.New("invalid end_time format. Use HH:MM:SS")
 	}
 
+	// Validate late threshold time format if provided
+	if req.LateThresholdTime != "" {
+		if _, err := time.Parse("15:04:05", req.LateThresholdTime); err != nil {
+			return nil, errors.New("invalid late_threshold_time format. Use HH:MM:SS")
+		}
+	}
+
 	// Calculate working hours
 	startTime, _ := time.Parse("15:04:05", req.StartTime)
 	endTime, _ := time.Parse("15:04:05", req.EndTime)
@@ -59,6 +66,7 @@ func (s *ShiftService) CreateShift(req *models.CreateShiftRequest, tenantID *uin
 		ShiftType:         req.ShiftType,
 		StartTime:         req.StartTime,
 		EndTime:           req.EndTime,
+		LateThresholdTime: req.LateThresholdTime,
 		WorkingHours:      workingHours,
 		BreakDuration:     getIntValue(req.BreakDuration, 0),
 		GraceMinutes:      getIntValue(req.GraceMinutes, 0),
@@ -133,6 +141,16 @@ func (s *ShiftService) UpdateShift(id uint, req *models.UpdateShiftRequest, upda
 			return nil, errors.New("invalid end_time format. Use HH:MM:SS")
 		}
 		shift.EndTime = *req.EndTime
+	}
+
+	// Update late threshold time if provided
+	if req.LateThresholdTime != nil {
+		if *req.LateThresholdTime != "" {
+			if _, err := time.Parse("15:04:05", *req.LateThresholdTime); err != nil {
+				return nil, errors.New("invalid late_threshold_time format. Use HH:MM:SS")
+			}
+		}
+		shift.LateThresholdTime = *req.LateThresholdTime
 	}
 
 	// Recalculate working hours if times changed
@@ -249,6 +267,7 @@ func (s *ShiftService) DuplicateShift(id uint, req *models.DuplicateShiftRequest
 		ShiftType:         original.ShiftType,
 		StartTime:         original.StartTime,
 		EndTime:           original.EndTime,
+		LateThresholdTime: original.LateThresholdTime,
 		BreakDuration:     &original.BreakDuration,
 		GraceMinutes:      &original.GraceMinutes,
 		LateMarkAfter:     &original.LateMarkAfter,
@@ -297,8 +316,8 @@ func (s *ShiftService) GetStatistics(tenantID *uint) (map[string]interface{}, er
 	}
 
 	return map[string]interface{}{
-		"total_shifts":   totalShifts,
-		"active_shifts":  activeShifts,
+		"total_shifts":    totalShifts,
+		"active_shifts":   activeShifts,
 		"inactive_shifts": inactiveShifts,
 	}, nil
 }

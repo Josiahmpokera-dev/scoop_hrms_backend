@@ -85,8 +85,16 @@ WITH first_punch AS (
 	}
 	lateSQL += `
 	GROUP BY e.employee_id, DATE(bt.punch_time)
+),
+late_checks AS (
+	SELECT 
+		fp.first_checkin,
+		COALESCE(s.late_threshold_time, s.start_time, ?) AS threshold
+	FROM first_punch fp
+	LEFT JOIN roster_assignments ra ON ra.employee_id = fp.employee_id AND ra.date = fp.day
+	LEFT JOIN shifts s ON s.id = ra.shift_id
 )
-SELECT COUNT(*) FROM first_punch WHERE first_checkin::time > ?::time
+SELECT COUNT(*) FROM late_checks WHERE first_checkin::time > threshold::time
 `
 	lateArgs = append(lateArgs, lateThreshold)
 	if err := r.db.Raw(lateSQL, lateArgs...).Scan(&lateEmployeeDays).Error; err != nil {
@@ -453,12 +461,15 @@ active_employee_days AS (
 ),
 punches AS (
 	SELECT 
-		emp_code,
-		DATE(punch_time) as punch_date,
-		MIN(punch_time) as first_punch
-	FROM biotime_transactions
-	WHERE punch_time BETWEEN ? AND ?
-	GROUP BY emp_code, DATE(punch_time)
+		bt.emp_code,
+		DATE(bt.punch_time) as punch_date,
+		MIN(bt.punch_time) as first_punch,
+		COALESCE(s.late_threshold_time, s.start_time, ?) as threshold
+	FROM biotime_transactions bt
+	LEFT JOIN roster_assignments ra ON ra.employee_id = bt.emp_code AND ra.date = DATE(bt.punch_time)
+	LEFT JOIN shifts s ON s.id = ra.shift_id
+	WHERE bt.punch_time BETWEEN ? AND ?
+	GROUP BY bt.emp_code, DATE(bt.punch_time), s.late_threshold_time, s.start_time
 ),
 on_leave AS (
 	SELECT 
@@ -473,7 +484,7 @@ SELECT
 	d.name as department_name,
 	COUNT(DISTINCT aed.employee_id) as total_employees,
 	COUNT(p.punch_date) as present,
-	COUNT(CASE WHEN p.first_punch::time > ?::time THEN 1 END) as late,
+	COUNT(CASE WHEN p.first_punch::time > p.threshold::time THEN 1 END) as late,
 	COUNT(ol.day) as on_leave,
 	COUNT(aed.day) as total_scheduled
 FROM departments d
@@ -495,7 +506,7 @@ ORDER BY d.name
 	}
 
 	var rows []row
-	if err := r.db.Raw(sql, startDate, endDate, startDate, endDate, lateThreshold).Scan(&rows).Error; err != nil {
+	if err := r.db.Raw(sql, startDate, endDate, lateThreshold, startDate, endDate).Scan(&rows).Error; err != nil {
 		return nil, err
 	}
 
@@ -639,13 +650,14 @@ ORDER BY DATE(te.date)
 
 func (r *AttendanceReportRepository) ExportDailyAttendanceRows(startTime, endTime time.Time, departmentID *uint) ([][]string, error) {
 	type row struct {
-		EmpCode    string
-		FirstName  string
-		LastName   string
-		Day        time.Time
-		CheckIn    *time.Time
-		CheckOut   *time.Time
-		PunchCount int
+		EmpCode        string
+		FirstName      string
+		LastName       string
+		DepartmentName string
+		Day            time.Time
+		CheckIn        *time.Time
+		CheckOut       *time.Time
+		PunchCount     int
 	}
 
 	sql := `
@@ -653,12 +665,14 @@ SELECT
 	bt.emp_code AS emp_code,
 	bt.first_name AS first_name,
 	bt.last_name AS last_name,
+	COALESCE(d.name, 'Unassigned') AS department_name,
 	DATE(bt.punch_time)::date AS day,
 	MIN(bt.punch_time)::timestamp AS check_in,
 	MAX(bt.punch_time)::timestamp AS check_out,
 	COUNT(*) AS punch_count
 FROM biotime_transactions bt
 JOIN employees e ON e.employee_id = bt.emp_code
+LEFT JOIN departments d ON d.id = e.department_id
 WHERE bt.punch_time BETWEEN ? AND ?
   AND e.status = 'active'
   AND e.is_active = true
@@ -669,7 +683,7 @@ WHERE bt.punch_time BETWEEN ? AND ?
 		args = append(args, *departmentID)
 	}
 	sql += `
-GROUP BY bt.emp_code, bt.first_name, bt.last_name, DATE(bt.punch_time)
+GROUP BY bt.emp_code, bt.first_name, bt.last_name, d.name, DATE(bt.punch_time)
 ORDER BY day DESC, emp_code ASC
 `
 
@@ -679,7 +693,7 @@ ORDER BY day DESC, emp_code ASC
 	}
 
 	out := make([][]string, 0, len(dbRows)+1)
-	out = append(out, []string{"emp_code", "name", "date", "checkin", "checkout", "working_hours", "punch_count"})
+	out = append(out, []string{"emp_code", "name", "department", "date", "checkin", "checkout", "working_hours", "punch_count"})
 
 	for _, rrow := range dbRows {
 		name := strings.TrimSpace(strings.TrimSpace(rrow.FirstName + " " + rrow.LastName))
@@ -705,6 +719,7 @@ ORDER BY day DESC, emp_code ASC
 		out = append(out, []string{
 			rrow.EmpCode,
 			name,
+			rrow.DepartmentName,
 			dateStr,
 			checkIn,
 			checkOut,
@@ -805,8 +820,16 @@ WITH first_punch AS (
 
 	sql += `
 	GROUP BY employees.employee_id, DATE(biotime_transactions.punch_time)
+),
+late_checks AS (
+	SELECT 
+		fp.first_checkin,
+		COALESCE(s.late_threshold_time, s.start_time, ?) AS threshold
+	FROM first_punch fp
+	LEFT JOIN roster_assignments ra ON ra.employee_id = fp.employee_id AND ra.date = fp.day
+	LEFT JOIN shifts s ON s.id = ra.shift_id
 )
-SELECT COUNT(*) FROM first_punch WHERE first_checkin::time > ?::time
+SELECT COUNT(*) FROM late_checks WHERE first_checkin::time > threshold::time
 `
 	args = append(args, lateThreshold)
 
@@ -926,10 +949,10 @@ func (r *AttendanceReportRepository) GetComprehensiveEmployeeReport(startDate, e
 	`
 
 	type attendanceRow struct {
-		EmployeeID        uint
-		PresentDays       int
-		LateDays          int
-		AvgWorkingHours   float64
+		EmployeeID      uint
+		PresentDays     int
+		LateDays        int
+		AvgWorkingHours float64
 	}
 
 	var attendanceRows []attendanceRow
@@ -1033,8 +1056,8 @@ func (r *AttendanceReportRepository) GetComprehensiveEmployeeReport(startDate, e
 		startDate, endDate, // CASE 1
 		startDate, endDate, endDate, startDate, // CASE 2
 		startDate, startDate, // CASE 3
-		endDate, // ELSE
-		employeeIDs, // WHERE IN
+		endDate,            // ELSE
+		employeeIDs,        // WHERE IN
 		endDate, startDate, // WHERE dates
 	}
 
@@ -1073,13 +1096,13 @@ func (r *AttendanceReportRepository) GetComprehensiveEmployeeReport(startDate, e
 	`
 
 	type overtimeRow struct {
-		EmployeeID     uint
-		TotalRequests  int
-		ApprovedHours  float64
-		PendingHours   float64
-		RejectedHours  float64
-		TotalPayout    float64
-		CompOffHours   float64
+		EmployeeID    uint
+		TotalRequests int
+		ApprovedHours float64
+		PendingHours  float64
+		RejectedHours float64
+		TotalPayout   float64
+		CompOffHours  float64
 	}
 
 	var overtimeRows []overtimeRow
@@ -1133,11 +1156,11 @@ func (r *AttendanceReportRepository) GetComprehensiveEmployeeReport(startDate, e
 	`
 
 	type complianceRow struct {
-		EmployeeID     uint
-		ViolationDate  time.Time
-		ViolationType  string
-		Details        string
-		Severity       string
+		EmployeeID    uint
+		ViolationDate time.Time
+		ViolationType string
+		Details       string
+		Severity      string
 	}
 
 	var complianceRows []complianceRow
@@ -1228,7 +1251,7 @@ ORDER BY d.day
 		if rrow.Status == "Present" {
 			response.Summary.DaysPresent++
 			response.Distribution.Present++
-			
+
 			if rrow.FirstPunch != nil {
 				if rrow.FirstPunch.Format("15:04:05") > lateThreshold {
 					response.Summary.LateArrivalsCount++

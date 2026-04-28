@@ -24,7 +24,7 @@ func (r *DepartmentRepository) Create(department *models.Department) error {
 // FindByID finds a department by ID
 func (r *DepartmentRepository) FindByID(id uint) (*models.Department, error) {
 	var department models.Department
-	err := r.db.Preload("ParentDepartment").Preload("SubDepartments").First(&department, id).Error
+	err := r.db.Preload("ParentDepartment").Preload("SubDepartments").Preload("Shifts").First(&department, id).Error
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,7 @@ func (r *DepartmentRepository) FindByCode(code string) (*models.Department, erro
 
 // Update updates a department
 func (r *DepartmentRepository) Update(department *models.Department) error {
-	return r.db.Save(department).Error
+	return r.db.Session(&gorm.Session{FullSaveAssociations: true}).Save(department).Error
 }
 
 // Delete soft deletes a department
@@ -82,7 +82,7 @@ func (r *DepartmentRepository) List(tenantID *uint, page, pageSize int, filters 
 	}
 
 	// Get paginated results
-	err := query.Preload("ParentDepartment").Offset(offset).Limit(pageSize).Find(&departments).Error
+	err := query.Preload("ParentDepartment").Preload("Shifts").Offset(offset).Limit(pageSize).Find(&departments).Error
 	return departments, total, err
 }
 
