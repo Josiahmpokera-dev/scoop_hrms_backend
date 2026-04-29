@@ -305,13 +305,8 @@ func (s *TimesheetService) SubmitTimesheet(user *userModels.User, timesheetID ui
 	return week, nil
 }
 
-// ApproveTimesheet approves or rejects a timesheet (manager/HR action)
+// ApproveTimesheet approves or rejects a timesheet (manager/HR/Admin action)
 func (s *TimesheetService) ApproveTimesheet(user *userModels.User, timesheetID uint, req models.ApproveTimesheetRequest) (*models.TimesheetWeek, error) {
-	// Only admin/HR/manager can approve
-	if user.Role != userModels.RoleAdmin && user.Role != userModels.RoleHR {
-		return nil, errors.New("only Admin or HR can approve timesheets")
-	}
-
 	week, err := s.timesheetRepo.FindWeekByID(timesheetID)
 	if err != nil {
 		return nil, errors.New("timesheet not found")
@@ -321,12 +316,29 @@ func (s *TimesheetService) ApproveTimesheet(user *userModels.User, timesheetID u
 		return nil, fmt.Errorf("timesheet is not in 'submitted' status (current: %s)", week.Status)
 	}
 
-	now := time.Now()
+	// Permission check
+	canApprove := false
 	approverEmployee, _ := s.employeeRepo.FindByUserID(user.ID)
 	var approverID uint
 	if approverEmployee != nil {
 		approverID = approverEmployee.ID
 	}
+
+	if user.Role == userModels.RoleAdmin || user.Role == userModels.RoleSuperAdmin || user.Role == userModels.RoleHR {
+		canApprove = true
+	} else if user.Role == userModels.RoleManager {
+		// Check if the employee reports to this manager
+		targetEmployee, _ := s.employeeRepo.FindByID(week.EmployeeID)
+		if approverEmployee != nil && targetEmployee != nil && targetEmployee.ReportsToID != nil && *targetEmployee.ReportsToID == approverEmployee.ID {
+			canApprove = true
+		}
+	}
+
+	if !canApprove {
+		return nil, errors.New("only Admin, HR, or the reporting manager can approve this timesheet")
+	}
+
+	now := time.Now()
 
 	if req.Status == "approved" {
 		week.Status = models.TimesheetStatusApproved
@@ -412,9 +424,34 @@ func (s *TimesheetService) GetTimesheetByID(user *userModels.User, timesheetID u
 	return week, nil
 }
 
-// GetPendingApprovals returns submitted timesheets awaiting approval (HR/Admin)
-func (s *TimesheetService) GetPendingApprovals(page, pageSize int) ([]models.TimesheetWeek, int64, error) {
-	return s.timesheetRepo.ListPendingApprovals(page, pageSize)
+// GetPendingApprovals returns submitted timesheets awaiting approval (HR/Admin/Manager)
+func (s *TimesheetService) GetPendingApprovals(user *userModels.User, page, pageSize int) ([]models.TimesheetWeek, int64, error) {
+	// If HR or Admin, see everything
+	if user.Role == userModels.RoleAdmin || user.Role == userModels.RoleSuperAdmin || user.Role == userModels.RoleHR {
+		return s.timesheetRepo.ListPendingApprovals(nil, page, pageSize)
+	}
+
+	// If Manager, see team only
+	employee, err := s.employeeRepo.FindByUserID(user.ID)
+	if err != nil || employee == nil {
+		return nil, 0, errors.New("employee record not found")
+	}
+
+	directReports, _, err := s.employeeRepo.ListByManagerID(employee.ID, 1, 1000)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get team members: %w", err)
+	}
+
+	var teamIDs []uint
+	for _, dr := range directReports {
+		teamIDs = append(teamIDs, dr.ID)
+	}
+
+	if len(teamIDs) == 0 {
+		return []models.TimesheetWeek{}, 0, nil
+	}
+
+	return s.timesheetRepo.ListPendingApprovals(teamIDs, page, pageSize)
 }
 
 // GetTeamTimesheets returns timesheets for a manager's team

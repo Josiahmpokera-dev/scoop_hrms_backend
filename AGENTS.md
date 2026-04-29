@@ -4,3 +4,4 @@
 - Make sure you follow the project structure, and not break any rules
 - Make a good plan before you start anything (show me the plan)
 - Auto Save the work for me please.
+- Skip Dumentation

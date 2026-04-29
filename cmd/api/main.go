@@ -12,8 +12,8 @@ import (
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	assetModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/models"
 	attendanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/models"
-	auditModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/models"
 	attendanceWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/workers"
+	auditModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/models"
 	biometricModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/models"
 	biometricWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/workers"
 	costCenterModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/models"
@@ -26,46 +26,46 @@ import (
 	organizationUnitModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/models"
 	organizationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/models"
 	payrollModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
-	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
 	performanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/performance/models"
-	settingsModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/models"
+	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
 	projectModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/models"
 	recruitmentModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/recruitment/models"
 	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
+	settingsModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/models"
 	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
 	teamModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/models"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/pkg/scheduler"
 	appRouter "github.com/Josiahmpokera-dev/hrms-backend/internal/router"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/seed"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/types"
-	"github.com/Josiahmpokera-dev/hrms-backend/internal/pkg/scheduler"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 
-// Swagger documentation
-// @title HRMS Backend API
-// @version 1.0
-// @description Human Resource Management System - REST API
+	// Swagger documentation
+	// @title HRMS Backend API
+	// @version 1.0
+	// @description Human Resource Management System - REST API
 
-// @contact.name API Support
-// @contact.url https://github.com/Josiahmpokera-dev/hrms-backend
-// @contact.email support@hrms.com
+	// @contact.name API Support
+	// @contact.url https://github.com/Josiahmpokera-dev/hrms-backend
+	// @contact.email support@hrms.com
 
-// @license.name MIT
-// @license.url https://opensource.org/licenses/MIT
+	// @license.name MIT
+	// @license.url https://opensource.org/licenses/MIT
 
-// @host localhost:8080
-// @BasePath /api/v1
-// @schemes http
-// @securityDefinitions.apikey BearerAuth
-// @in header
-// @name Authorization
-// @security BearerAuth
+	// @host localhost:8080
+	// @BasePath /api/v1
+	// @schemes http
+	// @securityDefinitions.apikey BearerAuth
+	// @in header
+	// @name Authorization
+	// @security BearerAuth
 
-_ "github.com/Josiahmpokera-dev/hrms-backend/docs/swagger"
-ginSwagger "github.com/swaggo/gin-swagger"
-swaggerFiles "github.com/swaggo/files"
+	_ "github.com/Josiahmpokera-dev/hrms-backend/docs/swagger"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 func main() {
@@ -75,7 +75,7 @@ func main() {
 	}
 
 	// Run database migrations for all models
-	if err := database.Migrate(
+	modelsToMigrate := []interface{}{
 		// Core models
 		&roleModels.Role{},
 		&roleModels.Permission{},
@@ -201,8 +201,14 @@ func main() {
 		&recruitmentModels.TalentPoolCandidate{},
 		// Attendance: Manual Punch models
 		&attendanceModels.ManualPunch{},
-	); err != nil {
-		log.Fatalf("Failed to run migrations: %v", err)
+	}
+
+	for _, model := range modelsToMigrate {
+		log.Printf("MIGRATING MODEL: %T", model)
+		if err := database.Migrate(model); err != nil {
+			log.Fatalf("Failed to migrate %T: %v", model, err)
+		}
+
 	}
 
 	// Seed initial data (only in development)

@@ -1,0 +1,67 @@
+import (
+	"log"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
+
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/app"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/config"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
+	assetModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/models"
+	attendanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/models"
+	auditModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/models"
+	attendanceWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/workers"
+	biometricModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/models"
+	biometricWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/workers"
+	costCenterModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/models"
+	dashboardModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/dashboard/models"
+	departmentModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/models"
+	employeeModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
+	helpdeskModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/models"
+	leaveModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
+	locationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/models"
+	organizationUnitModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/models"
+	organizationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/models"
+	payrollModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
+	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
+	performanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/performance/models"
+	settingsModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/models"
+	projectModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/models"
+	recruitmentModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/recruitment/models"
+	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
+	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
+	teamModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/models"
+	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
+	appRouter "github.com/Josiahmpokera-dev/hrms-backend/internal/router"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/seed"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/types"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/pkg/scheduler"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+
+// Swagger documentation
+// @title HRMS Backend API
+// @version 1.0
+// @description Human Resource Management System - REST API
+
+// @contact.name API Support
+// @contact.url https://github.com/Josiahmpokera-dev/hrms-backend
+// @contact.email support@hrms.com
+
+// @license.name MIT
+// @license.url https://opensource.org/licenses/MIT
+
+// @host localhost:8080
+// @BasePath /api/v1
+// @schemes http
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @security BearerAuth
+
+_ "github.com/Josiahmpokera-dev/hrms-backend/docs/swagger"
+ginSwagger "github.com/swaggo/gin-swagger"
+swaggerFiles "github.com/swaggo/files"
+)

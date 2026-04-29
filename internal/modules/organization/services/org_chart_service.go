@@ -103,7 +103,7 @@ func (s *OrgChartService) GetOrganizationChart(tenantID *uint) (*models.OrgChart
 			errorMsg += ". No positions found in database. Create at least one position first."
 		}
 
-		return nil, fmt.Errorf(errorMsg)
+		return nil, fmt.Errorf("%s", errorMsg)
 	}
 
 	// For now, use the first root position as the CEO/top level

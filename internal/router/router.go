@@ -569,6 +569,7 @@ func SetupRoutes(r *gin.Engine) {
 			biometric.GET("/biotime/transactions/:id", biotimeHandler.GetTransaction)
 			biometric.POST("/biotime/backfill", biotimeHandler.BackfillTransactions)
 			biometric.GET("/attendance/daily", biotimeHandler.GetDailyAttendance)
+			biometric.GET("/attendance/calendar", biotimeHandler.GetAttendanceCalendar)
 			biometric.GET("/attendance/exceptional", biotimeHandler.GetExceptional)
 
 			// Enrollment — link employees to biometric device users
@@ -990,6 +991,8 @@ func SetupRoutes(r *gin.Engine) {
 			attendanceReports.GET("/overtime", attendanceReportsHandler.GetOvertimeAnalysis)          // Replaces previous overtime endpoint
 			attendanceReports.GET("/overtime-analysis", attendanceReportsHandler.GetOvertimeAnalysis) // Alias for frontend compatibility
 			attendanceReports.POST("/export", attendanceReportsHandler.ExportReport)
+			attendanceReports.GET("/employee-attendance-download", attendanceReportsHandler.DownloadEmployeeAttendanceReport)
+			attendanceReports.GET("/email-logs", attendanceReportsHandler.GetEmailLogs)
 
 			// Legacy/Other endpoints
 			attendanceReports.GET("/timesheets", attendanceReportsHandler.GetTimesheetSummaryReport)              // Timesheet summary

@@ -389,9 +389,9 @@ func (s *RecruitmentService) ScheduleInterview(reqData models.ScheduleInterviewR
 	// Send email to candidate
 	candidate, _ := s.repo.GetCandidateByID(reqData.CandidateID)
 	if candidate != nil {
-		subject := fmt.Sprintf("Interview Scheduled: %s", reqData.Round)
+		subject := fmt.Sprintf("Interview Scheduled: Round %d", reqData.Round)
 		body := fmt.Sprintf("Dear %s,\n\nYour interview for %s is scheduled on %s at %s.\nMode: %s\n\nBest regards,\nRecruitment Team",
-			candidate.FirstName, reqData.Round, reqData.ScheduledDate, reqData.ScheduledTime, reqData.Mode)
+			candidate.FirstName, fmt.Sprintf("round %d", reqData.Round), reqData.ScheduledDate, reqData.ScheduledTime, reqData.Mode)
 		s.email.SendEmail(candidate.Email, subject, body)
 	}
 

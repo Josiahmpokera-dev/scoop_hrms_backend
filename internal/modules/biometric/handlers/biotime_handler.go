@@ -153,6 +153,120 @@ func (h *BioTimeHandler) GetDeviceStatus(c *gin.Context) {
 // @Failure 500 {object} response.APIResponse
 // @Router/biometric/biotime/transactions [get]
 func (h *BioTimeHandler) GetTransactions(c *gin.Context) {
+	if strings.EqualFold(c.Query("view"), "daily") {
+		tenantID := middleware.GetTenantID(c)
+		attendanceService := services.NewAttendanceService()
+		source := strings.ToLower(strings.TrimSpace(c.DefaultQuery("source", "db")))
+
+		page := 1
+		if pageStr := c.Query("page"); pageStr != "" {
+			if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+				page = p
+			}
+		}
+		pageSize := 20
+		if pageSizeStr := c.Query("page_size"); pageSizeStr != "" {
+			if ps, err := strconv.Atoi(pageSizeStr); err == nil && ps > 0 {
+				pageSize = ps
+			}
+		}
+
+		now := time.Now()
+		defaultStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).Format("2006-01-02 15:04:05")
+		defaultEnd := now.Format("2006-01-02 15:04:05")
+
+		startTime := c.DefaultQuery("start_time", c.DefaultQuery("start_date", defaultStart))
+		endTime := c.DefaultQuery("end_time", c.DefaultQuery("end_date", defaultEnd))
+
+		params := services.GetDailyAttendanceParams{
+			StartTime: startTime,
+			EndTime:   endTime,
+			Page:      page,
+			PageSize:  pageSize,
+		}
+		if empCode := c.Query("emp_code"); empCode != "" {
+			params.EmpCode = &empCode
+		}
+
+		var dailyRows []services.DailyAttendanceResponse
+		var total int64
+		var err error
+		if source == "biotime" {
+			dailyRows, total, err = attendanceService.GetDailyAttendanceFromBioTime(tenantID, params)
+		} else {
+			dailyRows, total, err = attendanceService.GetDailyAttendance(tenantID, params)
+		}
+		if err != nil {
+			response.BadRequest(c, err.Error(), nil)
+			return
+		}
+
+		daily := make([]DailyAttendanceSummary, 0, len(dailyRows))
+		for _, row := range dailyRows {
+			firstName, lastName := splitName(row.Name)
+			checkIn := ""
+			if row.CheckIn != nil {
+				checkIn = *row.CheckIn
+			}
+			checkOut := ""
+			if row.CheckOut != nil {
+				checkOut = *row.CheckOut
+			}
+
+			workingHours := 0.0
+			if row.WorkingHours != nil {
+				var hh, mm int
+				if _, scanErr := fmt.Sscanf(*row.WorkingHours, "%d:%d", &hh, &mm); scanErr == nil {
+					workingHours = roundTo2DP(float64(hh) + float64(mm)/60.0)
+				}
+			}
+
+			daily = append(daily, DailyAttendanceSummary{
+				EmpCode:      row.EmpCode,
+				FirstName:    firstName,
+				LastName:     lastName,
+				Department:   row.Department,
+				Date:         row.Date,
+				CheckIn:      checkIn,
+				CheckOut:     checkOut,
+				WorkingHours: workingHours,
+				Transactions: row.PunchCount,
+			})
+		}
+
+		totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+		if totalPages == 0 {
+			totalPages = 1
+		}
+
+		dailyResp := &DailyTransactionsResponse{
+			Count:    len(daily),
+			Next:     nil,
+			Previous: nil,
+			Message:  "Success",
+			Code:     0,
+			Data:     daily,
+		}
+		response.Success(c, "Daily transactions retrieved successfully", map[string]interface{}{
+			"count":      dailyResp.Count,
+			"next":       dailyResp.Next,
+			"previous":   dailyResp.Previous,
+			"msg":        dailyResp.Message,
+			"code":       dailyResp.Code,
+			"data":       dailyResp.Data,
+			"start_time": startTime,
+			"end_time":   endTime,
+			"source":     source,
+			"pagination": map[string]interface{}{
+				"page":        page,
+				"page_size":   pageSize,
+				"total":       total,
+				"total_pages": totalPages,
+			},
+		})
+		return
+	}
+
 	service := h.getService(c)
 
 	// Parse query parameters
@@ -222,21 +336,19 @@ func (h *BioTimeHandler) GetTransactions(c *gin.Context) {
 		}
 	}()
 
-	if strings.EqualFold(c.Query("view"), "daily") {
-		daily := buildDailyAttendanceSummaries(transactionsResp)
-		dailyResp := &DailyTransactionsResponse{
-			Count:    len(daily),
-			Next:     nil,
-			Previous: nil,
-			Message:  "Success",
-			Code:     0,
-			Data:     daily,
-		}
-		response.Success(c, "Transactions retrieved successfully", dailyResp)
-		return
-	}
-
 	response.Success(c, "Transactions retrieved successfully", transactionsResp)
+}
+
+func splitName(fullName string) (string, *string) {
+	parts := strings.Fields(strings.TrimSpace(fullName))
+	if len(parts) == 0 {
+		return "", nil
+	}
+	if len(parts) == 1 {
+		return parts[0], nil
+	}
+	last := strings.Join(parts[1:], " ")
+	return parts[0], &last
 }
 
 func buildDailyAttendanceSummaries(transactionsResp *services.TransactionsResponse) []DailyAttendanceSummary {
@@ -663,4 +775,58 @@ func (h *BioTimeHandler) GetExceptional(c *gin.Context) {
 			"total_pages": totalPages,
 		},
 	})
+}
+
+// GetAttendanceCalendar handles monthly attendance calendar data for one employee.
+// @Summary Get monthly attendance calendar
+// @Description Returns calendar-ready daily attendance events for an employee in a given month
+// @Tags Biometric
+// @Produce json
+// @Param emp_code query string true "Employee code"
+// @Param month query string true "Month in YYYY-MM format"
+// @Success 200 {object} response.APIResponse{data=services.AttendanceCalendarResponse}
+// @Failure 400 {object} response.APIResponse
+// @Failure 404 {object} response.APIResponse
+// @Failure 500 {object} response.APIResponse
+// @Router /biometric/attendance/calendar [get]
+func (h *BioTimeHandler) GetAttendanceCalendar(c *gin.Context) {
+	empCode := strings.TrimSpace(c.Query("emp_code"))
+	month := strings.TrimSpace(c.Query("month"))
+
+	if empCode == "" {
+		response.BadRequest(c, "emp_code is required", map[string]string{"emp_code": "required"})
+		return
+	}
+	if month == "" {
+		response.BadRequest(c, "month is required", map[string]string{"month": "required"})
+		return
+	}
+	if _, err := time.Parse("2006-01", month); err != nil {
+		response.BadRequest(c, "month must be in YYYY-MM format", map[string]string{"month": "invalid_format"})
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+	attendanceService := services.NewAttendanceService()
+
+	data, err := attendanceService.GetAttendanceCalendar(tenantID, empCode, month)
+	if err != nil {
+		errMsg := strings.ToLower(err.Error())
+		if strings.Contains(errMsg, "employee not found") {
+			c.JSON(404, response.APIResponse{
+				Success: false,
+				Message: "Employee not found",
+				Error:   map[string]string{"emp_code": "not_found"},
+			})
+			return
+		}
+		if strings.Contains(errMsg, "month must be in yyyy-mm format") {
+			response.BadRequest(c, "month must be in YYYY-MM format", map[string]string{"month": "invalid_format"})
+			return
+		}
+		response.InternalServerError(c, "Failed to retrieve attendance calendar", err.Error())
+		return
+	}
+
+	response.Success(c, "Attendance calendar retrieved successfully", data)
 }

@@ -1,0 +1,127 @@
+	if err := database.Migrate(
+		// Core models
+		&roleModels.Role{},
+		&roleModels.Permission{},
+		&roleModels.UserRole{},
+		&roleModels.RolePermission{},
+		// User model
+		&userModels.User{},
+		// Organizational models
+		&organizationModels.Organization{},
+		&organizationUnitModels.OrganizationUnit{},
+		&departmentModels.Department{},
+		&teamModels.Team{},
+		&positionModels.JobPosition{},
+		&locationModels.Location{},
+		&costCenterModels.CostCenter{},
+		// Asset models
+		&assetModels.Asset{},
+		// Employee models
+		&employeeModels.Employee{},
+		&employeeModels.EmployeeOnboardingDraft{},
+		&employeeModels.EmployeeBasicInformation{},
+		&employeeModels.EmployeeEmploymentDetails{},
+		&employeeModels.EmployeeAddress{},
+		&employeeModels.EmployeeSalaryComponent{},
+		&employeeModels.EmployeeBankAccount{},
+		&employeeModels.EmployeeStatutoryInfo{},
+		&employeeModels.EmployeeDocument{},
+		&employeeModels.EmployeeAsset{},
+		&employeeModels.EmployeeEmergencyContact{},
+		&employeeModels.EmployeePolicy{},
+		&employeeModels.PostOnboardingTask{},
+		// Offboarding models
+		&employeeModels.OffboardingWorkflow{},
+		&employeeModels.OffboardingClearance{},
+		&employeeModels.OffboardingAssetReturn{},
+		&employeeModels.FinalSettlement{},
+		// Self-Service models
+		&employeeModels.ServiceRequest{},
+		&employeeModels.ProfileUpdateRequest{},
+		// Asset self-service models
+		&assetModels.AssetRequest{},
+		&assetModels.AssetIssue{},
+		// Helpdesk models
+		&helpdeskModels.Ticket{},
+		&helpdeskModels.Comment{},
+		&helpdeskModels.Attachment{},
+		&helpdeskModels.RoutingRule{},
+		&helpdeskModels.KnowledgeBaseArticle{},
+		&helpdeskModels.KBArticleFeedback{},
+		&helpdeskModels.TicketCategory{},
+		// Biometric models
+		&biometricModels.BioTimeConfig{},
+		&biometricModels.BioTimeTransaction{},
+		&biometricModels.BiometricEnrollment{},
+		// Shifts & Rosters models
+		&shiftModels.Shift{},
+		&shiftModels.ShiftLocation{}, // Join table for shifts and locations
+		&shiftModels.RosterAssignment{},
+		&shiftModels.SwapRequest{},
+		&shiftModels.RosterChangeRequest{},
+		// Leave Management models
+		&leaveModels.LeaveType{},
+		&leaveModels.LeavePolicy{},
+		&leaveModels.LeaveRequest{},
+		&leaveModels.LeaveApproval{},
+		&leaveModels.LeaveDocument{},
+		&leaveModels.LeaveBalance{},
+		&leaveModels.Holiday{},
+		// Security & Audit
+		&auditModels.AuditLog{},
+		// Payroll models
+		&payrollModels.PayrollRun{},
+		&payrollModels.PayrollRunEmployee{},
+		&payrollModels.SalaryStructure{},
+		&payrollModels.SalaryComponent{},
+		&payrollModels.Payslip{},
+		&payrollModels.PayslipItem{},
+		&payrollModels.Loan{},
+		&payrollModels.LoanRepayment{},
+		&payrollModels.TaxSlab{},
+		&payrollModels.StatutoryRule{},
+		&payrollModels.NHIFSchedule{},
+		&payrollModels.CompliancePayment{},
+		// Dashboard models
+		&dashboardModels.Announcement{},
+		&dashboardModels.AnnouncementAttachment{},
+		&dashboardModels.AnnouncementRead{},
+		// Attendance: Timesheets & Overtime models
+		&attendanceModels.TimesheetWeek{},
+		&attendanceModels.TimesheetEntry{},
+		&attendanceModels.TimesheetApproval{},
+		&attendanceModels.OvertimePolicy{},
+		&attendanceModels.OvertimeRequest{},
+		&attendanceModels.OvertimeApproval{},
+		// Project & Daily Task models
+		&projectModels.Project{},
+		&projectModels.ProjectMember{},
+		&projectModels.DailyTask{},
+		// Performance Management models
+		&performanceModels.Goal{},
+		&performanceModels.KeyResult{},
+		&performanceModels.GoalCheckIn{},
+		&performanceModels.DepartmentTarget{},
+		&performanceModels.DepartmentTargetMilestone{},
+		&performanceModels.EmployeeTarget{},
+		&performanceModels.AppraisalCycle{},
+		&performanceModels.AppraisalWorkflowStep{},
+		&performanceModels.Appraisal{},
+		&performanceModels.Feedback360Campaign{},
+		&performanceModels.Feedback360RaterGroup{},
+		&performanceModels.TalentReview{},
+		&performanceModels.CalibrationSession{},
+		&performanceModels.SuccessionPlan{},
+		// Settings models
+		&settingsModels.MenuVisibilitySetting{},
+		// Recruitment models
+		&recruitmentModels.JobRequisition{},
+		&recruitmentModels.JobOpening{},
+		&recruitmentModels.Candidate{},
+		&recruitmentModels.JobApplication{},
+		&recruitmentModels.Interview{},
+		&recruitmentModels.Offer{},
+		&recruitmentModels.TalentPoolCandidate{},
+		// Attendance: Manual Punch models
+		&attendanceModels.ManualPunch{},
+	); err != nil {

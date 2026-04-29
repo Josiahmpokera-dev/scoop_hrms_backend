@@ -1,31 +1,42 @@
 package handlers
 
 import (
+	"bytes"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/models"
+	attendanceRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/services"
+	biometricRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/repositories"
+	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/pkg/scheduler"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/encryption"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/storage"
 	"github.com/gin-gonic/gin"
+	"github.com/xuri/excelize/v2"
 	"gorm.io/gorm"
 )
 
 // AttendanceReportsHandler handles attendance module reports
 type AttendanceReportsHandler struct {
-	db      *gorm.DB
-	service *services.AttendanceReportService
+	db           *gorm.DB
+	service      *services.AttendanceReportService
+	emailLogRepo *attendanceRepos.EmailLogRepository
 }
 
 // NewAttendanceReportsHandler creates a new reports handler
 func NewAttendanceReportsHandler() *AttendanceReportsHandler {
 	return &AttendanceReportsHandler{
-		db:      database.GetDB(),
-		service: services.NewAttendanceReportService(),
+		db:           database.GetDB(),
+		service:      services.NewAttendanceReportService(),
+		emailLogRepo: attendanceRepos.NewEmailLogRepository(),
 	}
 }
 
@@ -438,6 +449,258 @@ func (h *AttendanceReportsHandler) GetOverview(c *gin.Context) {
 	response.Success(c, "Attendance overview retrieved successfully", data)
 }
 
+// DownloadEmployeeAttendanceReport generates an employee attendance report (default current month),
+// uploads to storage (S3 when configured), and returns an encrypted download link.
+// The same endpoint also handles token-based secure download redirect.
+// Endpoint: GET /attendance/reports/employee-attendance-download
+func (h *AttendanceReportsHandler) DownloadEmployeeAttendanceReport(c *gin.Context) {
+	empCode := strings.TrimSpace(c.Query("emp_code"))
+	if empCode == "" {
+		response.BadRequest(c, "emp_code is required", map[string]string{"emp_code": "required"})
+		return
+	}
+
+	employeeRepo := employeeRepos.NewEmployeeRepository()
+	lookupDebug := map[string]interface{}{
+		"input_emp_code":              empCode,
+		"matched_by_employee_code":    false,
+		"matched_by_numeric_employee_id": false,
+		"matched_by_biometric_enrollment": false,
+		"biometric_transactions_found_for_month": false,
+	}
+	employee, err := employeeRepo.FindByEmployeeID(empCode)
+	if err == nil && employee != nil {
+		lookupDebug["matched_by_employee_code"] = true
+	}
+	if err != nil || employee == nil {
+		// Backward-compatible fallback:
+		// some UIs send numeric employee DB id in emp_code (e.g. "10132").
+		if parsedID, parseErr := strconv.ParseUint(empCode, 10, 32); parseErr == nil {
+			employee, err = employeeRepo.FindByID(uint(parsedID))
+			if err == nil && employee != nil {
+				lookupDebug["matched_by_numeric_employee_id"] = true
+			}
+		}
+		// Biometric-link fallback:
+		// when UI sends device emp_code, resolve linked employee first.
+		if err != nil || employee == nil {
+			enrollmentRepo := biometricRepos.NewEnrollmentRepository()
+			if enrollment, enrollErr := enrollmentRepo.FindByEmpCode(empCode); enrollErr == nil && enrollment != nil {
+				employee, err = employeeRepo.FindByID(enrollment.EmployeeID)
+				if err == nil && employee != nil {
+					lookupDebug["matched_by_biometric_enrollment"] = true
+					lookupDebug["linked_employee_id"] = enrollment.EmployeeID
+				}
+			}
+		}
+		if err != nil || employee == nil {
+			// Helpful diagnostics to quickly identify why this emp_code cannot resolve.
+			month := strings.TrimSpace(c.Query("month"))
+			if month == "" {
+				month = time.Now().UTC().Format("2006-01")
+			}
+			if monthStart, parseErr := time.Parse("2006-01", month); parseErr == nil {
+				startTime := time.Date(monthStart.Year(), monthStart.Month(), 1, 0, 0, 0, 0, time.UTC)
+				endTime := startTime.AddDate(0, 1, 0).Add(-time.Nanosecond)
+				tenantID := middleware.GetTenantID(c)
+				txRepo := biometricRepos.NewBioTimeTransactionRepository()
+				if exists, txErr := txRepo.HasTransactionsForEmpCode(tenantID, empCode, startTime, endTime); txErr == nil {
+					lookupDebug["biometric_transactions_found_for_month"] = exists
+				}
+			}
+			c.JSON(404, response.APIResponse{
+				Success: false,
+				Message: "Employee not found",
+				Error:   lookupDebug,
+			})
+			return
+		}
+	}
+
+	// Token flow: decrypt and redirect to stored report URL.
+	if token := strings.TrimSpace(c.Query("token")); token != "" {
+		enc, err := encryption.NewEncryptionService()
+		if err != nil {
+			response.InternalServerError(c, "Failed to initialize encryption service", err.Error())
+			return
+		}
+		decryptedURL, err := enc.DecryptField(employee.ID, token)
+		if err != nil || decryptedURL == "" {
+			response.BadRequest(c, "Invalid or expired download token", map[string]string{"token": "invalid"})
+			return
+		}
+		c.Redirect(302, decryptedURL)
+		return
+	}
+
+	month := strings.TrimSpace(c.Query("month"))
+	now := time.Now().UTC()
+	var monthStart time.Time
+	if month == "" {
+		monthStart = time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, time.UTC)
+		month = monthStart.Format("2006-01")
+	} else {
+		parsed, err := time.Parse("2006-01", month)
+		if err != nil {
+			response.BadRequest(c, "month must be in YYYY-MM format", map[string]string{"month": "invalid_format"})
+			return
+		}
+		monthStart = time.Date(parsed.Year(), parsed.Month(), 1, 0, 0, 0, 0, time.UTC)
+	}
+	monthEnd := monthStart.AddDate(0, 1, 0).Add(-time.Nanosecond)
+
+	stats, err := h.service.GetEmployeeAttendanceStats(employee.ID, monthStart.Format("2006-01-02"), monthEnd.Format("2006-01-02"))
+	if err != nil {
+		response.InternalServerError(c, "Failed to build employee attendance report", err.Error())
+		return
+	}
+
+	fileBytes, err := buildEmployeeAttendanceExcel(employee.EmployeeID, employee.FirstName, employee.LastName, month, stats)
+	if err != nil {
+		response.InternalServerError(c, "Failed to generate Excel report", err.Error())
+		return
+	}
+
+	store := storage.NewStorageService()
+	fileName := fmt.Sprintf("attendance_%s_%s.xlsx", employee.EmployeeID, strings.ReplaceAll(month, "-", ""))
+	fileURL, err := store.UploadReader(bytes.NewReader(fileBytes), fileName, "reports/attendance", employee.EmployeeID)
+	if err != nil {
+		response.InternalServerError(c, "Failed to upload attendance report", err.Error())
+		return
+	}
+
+	enc, err := encryption.NewEncryptionService()
+	if err != nil {
+		response.InternalServerError(c, "Failed to initialize encryption service", err.Error())
+		return
+	}
+	token, err := enc.EncryptField(employee.ID, fileURL)
+	if err != nil {
+		response.InternalServerError(c, "Failed to secure download link", err.Error())
+		return
+	}
+
+	scheme := "http"
+	if c.Request.TLS != nil {
+		scheme = "https"
+	}
+	if proto := c.GetHeader("X-Forwarded-Proto"); proto != "" {
+		scheme = proto
+	}
+	host := c.Request.Host
+	if forwardedHost := c.GetHeader("X-Forwarded-Host"); forwardedHost != "" {
+		host = forwardedHost
+	}
+
+	// UI-safe relative path (works with frontend baseURL="/api/v1")
+	downloadPath := fmt.Sprintf("/attendance/reports/employee-attendance-download?emp_code=%s&token=%s",
+		url.QueryEscape(employee.EmployeeID), url.QueryEscape(token))
+	// Absolute link for direct browser usage
+	downloadLink := fmt.Sprintf("%s://%s/api/v1%s", scheme, host, downloadPath)
+
+	response.Success(c, "Employee attendance report generated successfully", gin.H{
+		"employee_id":          employee.EmployeeID,
+		"month":                month,
+		"format":               "xlsx",
+		"storage":              map[string]bool{"s3": store.IsS3()},
+		"download_path":        downloadPath,
+		"download_link":        downloadLink,
+		"encrypted_token":      token,
+		"report_file_url":      fileURL,
+	})
+}
+
+// GetEmailLogs returns monthly report email logs with pagination.
+// Endpoint: GET /attendance/reports/email-logs
+func (h *AttendanceReportsHandler) GetEmailLogs(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "15"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 100 {
+		pageSize = 15
+	}
+
+	logs, total, err := h.emailLogRepo.GetLogs(page, pageSize)
+	if err != nil {
+		response.InternalServerError(c, "Failed to fetch email logs", err.Error())
+		return
+	}
+
+	items := make([]models.EmailLogResponse, 0, len(logs))
+	for _, l := range logs {
+		items = append(items, models.EmailLogResponse{
+			ID:          l.ID,
+			Recipient:   l.Recipient,
+			Subject:     l.Subject,
+			ReportMonth: l.ReportMonth,
+			Status:      l.Status,
+			DownloadURL: l.DownloadURL,
+			FileType:    l.FileType,
+			FileSize:    l.FileSize,
+			Date:        l.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	response.SuccessWithMeta(c, "Email logs retrieved successfully", items, &response.Meta{
+		Page:       page,
+		PerPage:    pageSize,
+		Total:      total,
+		TotalPages: totalPages,
+	})
+}
+
+func buildEmployeeAttendanceExcel(employeeID, firstName, lastName, month string, data *models.EmployeeAttendanceReportResponse) ([]byte, error) {
+	f := excelize.NewFile()
+	sheet := "Attendance"
+	f.SetSheetName("Sheet1", sheet)
+
+	headers := []string{"Date", "Status", "Check In", "Check Out", "Work Hours", "Overtime"}
+	for i, h := range headers {
+		cell, _ := excelize.CoordinatesToCellName(i+1, 1)
+		f.SetCellValue(sheet, cell, h)
+	}
+
+	title := fmt.Sprintf("Employee: %s - %s %s | Month: %s", employeeID, firstName, lastName, month)
+	f.SetCellValue(sheet, "A3", title)
+
+	rowIdx := 5
+	for _, log := range data.Logs {
+		f.SetCellValue(sheet, fmt.Sprintf("A%d", rowIdx), log.Date)
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", rowIdx), log.Status)
+		if log.CheckIn != nil {
+			f.SetCellValue(sheet, fmt.Sprintf("C%d", rowIdx), *log.CheckIn)
+		}
+		if log.CheckOut != nil {
+			f.SetCellValue(sheet, fmt.Sprintf("D%d", rowIdx), *log.CheckOut)
+		}
+		f.SetCellValue(sheet, fmt.Sprintf("E%d", rowIdx), log.WorkHours)
+		f.SetCellValue(sheet, fmt.Sprintf("F%d", rowIdx), log.Overtime)
+		rowIdx++
+	}
+
+	f.SetCellValue(sheet, "H1", "Summary")
+	f.SetCellValue(sheet, "H2", "Days Present")
+	f.SetCellValue(sheet, "I2", data.Summary.DaysPresent)
+	f.SetCellValue(sheet, "H3", "Total Days")
+	f.SetCellValue(sheet, "I3", data.Summary.TotalDays)
+	f.SetCellValue(sheet, "H4", "Avg Work Hours")
+	f.SetCellValue(sheet, "I4", data.Summary.AvgWorkHours)
+	f.SetCellValue(sheet, "H5", "Total Overtime Hours")
+	f.SetCellValue(sheet, "I5", data.Summary.TotalOvertimeHours)
+	f.SetCellValue(sheet, "H6", "Late Arrivals")
+	f.SetCellValue(sheet, "I6", data.Summary.LateArrivalsCount)
+
+	f.SetColWidth(sheet, "A", "I", 18)
+	buf, err := f.WriteToBuffer()
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
 func parseOverviewDateTime(value string, isStart bool) (time.Time, error) {
 	layouts := []string{
 		"2006-01-02 15:04:05",
@@ -793,6 +1056,13 @@ func (h *AttendanceReportsHandler) GetComprehensiveEmployeeReport(c *gin.Context
 	// Parse and validate dates
 	startDate := c.Query("start_date")
 	endDate := c.Query("end_date")
+	// Backward compatibility with frontend camelCase params
+	if startDate == "" {
+		startDate = c.Query("startDate")
+	}
+	if endDate == "" {
+		endDate = c.Query("endDate")
+	}
 
 	if startDate == "" || endDate == "" {
 		errs := map[string]string{}
@@ -821,21 +1091,33 @@ func (h *AttendanceReportsHandler) GetComprehensiveEmployeeReport(c *gin.Context
 	// Parse optional filters
 	var employeeID, departmentID, locationID *uint
 
-	if eid := c.Query("employee_id"); eid != "" {
+	eid := c.Query("employee_id")
+	if eid == "" {
+		eid = c.Query("employeeId")
+	}
+	if eid != "" {
 		if id, err := strconv.ParseUint(eid, 10, 32); err == nil {
 			uid := uint(id)
 			employeeID = &uid
 		}
 	}
 
-	if did := c.Query("department_id"); did != "" {
+	did := c.Query("department_id")
+	if did == "" {
+		did = c.Query("departmentId")
+	}
+	if did != "" {
 		if id, err := strconv.ParseUint(did, 10, 32); err == nil {
 			uid := uint(id)
 			departmentID = &uid
 		}
 	}
 
-	if lid := c.Query("location_id"); lid != "" {
+	lid := c.Query("location_id")
+	if lid == "" {
+		lid = c.Query("locationId")
+	}
+	if lid != "" {
 		if id, err := strconv.ParseUint(lid, 10, 32); err == nil {
 			uid := uint(id)
 			locationID = &uid
@@ -844,7 +1126,11 @@ func (h *AttendanceReportsHandler) GetComprehensiveEmployeeReport(c *gin.Context
 
 	// Parse pagination
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
-	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
+	pageSizeStr := c.Query("page_size")
+	if pageSizeStr == "" {
+		pageSizeStr = c.DefaultQuery("pageSize", "20")
+	}
+	pageSize, _ := strconv.Atoi(pageSizeStr)
 	if page < 1 {
 		page = 1
 	}

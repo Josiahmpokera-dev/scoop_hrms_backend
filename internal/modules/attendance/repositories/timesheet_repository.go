@@ -89,18 +89,22 @@ func (r *TimesheetRepository) ListWeeksByEmployee(employeeID uint, status string
 }
 
 // ListPendingApprovals lists timesheets pending approval for a manager
-func (r *TimesheetRepository) ListPendingApprovals(page, pageSize int) ([]models.TimesheetWeek, int64, error) {
+func (r *TimesheetRepository) ListPendingApprovals(employeeIDs []uint, page, pageSize int) ([]models.TimesheetWeek, int64, error) {
 	var weeks []models.TimesheetWeek
 	var total int64
 
 	query := r.db.Model(&models.TimesheetWeek{}).Where("status = ?", models.TimesheetStatusSubmitted)
+
+	if employeeIDs != nil {
+		query = query.Where("employee_id IN ?", employeeIDs)
+	}
 
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
 	offset := (page - 1) * pageSize
-	err := query.Preload("Entries", func(db *gorm.DB) *gorm.DB {
+	err := query.Preload("Employee").Preload("Entries", func(db *gorm.DB) *gorm.DB {
 		return db.Order("date ASC")
 	}).Preload("Approvals").Order("submitted_at ASC").Offset(offset).Limit(pageSize).Find(&weeks).Error
 	return weeks, total, err

@@ -102,6 +102,14 @@ type DailyAttendanceRecord struct {
 	PunchCount int        `json:"punch_count"`
 }
 
+// CalendarAttendanceRecord represents one employee-day attendance aggregation.
+type CalendarAttendanceRecord struct {
+	Date       time.Time  `json:"date"`
+	CheckIn    *time.Time `json:"check_in"`
+	CheckOut   *time.Time `json:"check_out"`
+	PunchCount int        `json:"punch_count"`
+}
+
 // GetDailyAttendance gets daily attendance records grouped by employee and date
 // Filters by datetime range but groups by date for daily summaries
 func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startTime, endTime time.Time, empCode *string, page, pageSize int) ([]DailyAttendanceRecord, int64, error) {
@@ -121,8 +129,7 @@ func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startT
 			COUNT(*) as punch_count
 		`).
 		Where("punch_time >= ? AND punch_time <= ?", startTime, endTime).
-		Group("emp_code, first_name, last_name, department, DATE(punch_time)").
-		Having("MIN(punch_time) < MAX(punch_time)")
+		Group("emp_code, first_name, last_name, department, DATE(punch_time)")
 
 	// Apply tenant filter
 	if tenantID != nil {
@@ -162,7 +169,7 @@ func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startT
 		countArgs = append(countArgs, *empCode)
 	}
 
-	countSQL += " GROUP BY emp_code, DATE(punch_time) HAVING MIN(punch_time) < MAX(punch_time)"
+	countSQL += " GROUP BY emp_code, DATE(punch_time)"
 	countSQL += ") as distinct_records"
 
 	if err := r.db.Raw(countSQL, countArgs...).Scan(&countResult).Error; err != nil {
@@ -178,6 +185,54 @@ func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startT
 	}
 
 	return records, total, nil
+}
+
+// GetEmployeeDailyAttendanceForMonth returns one-day aggregates for a single employee in a date range.
+func (r *BioTimeTransactionRepository) GetEmployeeDailyAttendanceForMonth(tenantID *uint, empCode string, startTime, endTime time.Time) ([]CalendarAttendanceRecord, error) {
+	var records []CalendarAttendanceRecord
+
+	query := r.db.Model(&models.BioTimeTransaction{}).
+		Select(`
+			DATE(punch_time)::date as date,
+			MIN(punch_time)::timestamp as check_in,
+			MAX(punch_time)::timestamp as check_out,
+			COUNT(*) as punch_count
+		`).
+		Where("emp_code = ?", empCode).
+		Where("punch_time >= ? AND punch_time <= ?", startTime, endTime).
+		Group("DATE(punch_time)").
+		Order("DATE(punch_time) ASC")
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	} else {
+		query = query.Where("tenant_id IS NULL")
+	}
+
+	if err := query.Scan(&records).Error; err != nil {
+		return nil, err
+	}
+
+	return records, nil
+}
+
+// HasTransactionsForEmpCode checks whether biometric transactions exist for the emp_code in the range.
+func (r *BioTimeTransactionRepository) HasTransactionsForEmpCode(tenantID *uint, empCode string, startTime, endTime time.Time) (bool, error) {
+	var count int64
+	query := r.db.Model(&models.BioTimeTransaction{}).
+		Where("emp_code = ?", empCode).
+		Where("punch_time >= ? AND punch_time <= ?", startTime, endTime)
+
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	} else {
+		query = query.Where("tenant_id IS NULL")
+	}
+
+	if err := query.Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // LateArrivalRecord represents a late arrival record for an employee

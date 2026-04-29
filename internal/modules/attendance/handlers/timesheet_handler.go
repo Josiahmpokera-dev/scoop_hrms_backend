@@ -292,7 +292,7 @@ func (h *TimesheetHandler) GetPendingApprovals(c *gin.Context) {
 
 	page, pageSize := getPagination(c)
 
-	weeks, total, err := h.timesheetService.GetPendingApprovals(page, pageSize)
+	weeks, total, err := h.timesheetService.GetPendingApprovals(user, page, pageSize)
 	if err != nil {
 		response.BadRequest(c, err.Error(), nil)
 		return
