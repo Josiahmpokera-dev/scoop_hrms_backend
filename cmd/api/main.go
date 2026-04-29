@@ -63,7 +63,6 @@ import (
 	// @name Authorization
 	// @security BearerAuth
 
-	_ "github.com/Josiahmpokera-dev/hrms-backend/docs/swagger"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
