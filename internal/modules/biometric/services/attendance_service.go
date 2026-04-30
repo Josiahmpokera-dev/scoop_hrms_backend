@@ -198,24 +198,7 @@ type GetDailyAttendanceParams struct {
 
 // parseDateTime parses a datetime string supporting multiple formats
 func parseDateTime(dateTimeStr string) (time.Time, error) {
-	// Try parsing as full datetime first (YYYY-MM-DD HH:MM:SS)
-	if t, err := time.Parse("2006-01-02 15:04:05", dateTimeStr); err == nil {
-		return t, nil
-	}
-	// Try parsing as datetime with seconds (YYYY-MM-DD HH:MM:SS)
-	if t, err := time.Parse("2006-01-02T15:04:05", dateTimeStr); err == nil {
-		return t, nil
-	}
-	// Try parsing as datetime without seconds (YYYY-MM-DD HH:MM)
-	if t, err := time.Parse("2006-01-02 15:04", dateTimeStr); err == nil {
-		return t, nil
-	}
-	// Try parsing as date only (YYYY-MM-DD) - set to start of day
-	if t, err := time.Parse("2006-01-02", dateTimeStr); err == nil {
-		return t, nil
-	}
-	// Try parsing as date with timezone
-	if t, err := time.Parse(time.RFC3339, dateTimeStr); err == nil {
+	if t, err := parseBiometricDateTime(dateTimeStr); err == nil {
 		return t, nil
 	}
 	return time.Time{}, fmt.Errorf("invalid datetime format. Supported formats: YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, YYYY-MM-DD HH:MM, or RFC3339")

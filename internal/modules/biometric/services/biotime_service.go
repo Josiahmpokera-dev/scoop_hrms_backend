@@ -661,23 +661,7 @@ func (s *BioTimeService) GetTransactions(params *GetTransactionsParams) (*Transa
 // parsePunchTime parses the punch_time string from BioTime API
 // Supports multiple formats that BioTime might return
 func parsePunchTime(timeStr string) (time.Time, error) {
-	// Common formats from BioTime API
-	layouts := []string{
-		"2006-01-02 15:04:05",
-		"2006-01-02T15:04:05Z",
-		"2006-01-02T15:04:05",
-		"2006-01-02 15:04:05.000000",
-		time.RFC3339,
-		time.RFC3339Nano,
-	}
-
-	for _, layout := range layouts {
-		if t, err := time.Parse(layout, timeStr); err == nil {
-			return t, nil
-		}
-	}
-
-	return time.Time{}, fmt.Errorf("unable to parse time: %s", timeStr)
+	return parseBiometricDateTime(timeStr)
 }
 
 // GetTransactionByID fetches a single transaction by ID from BioTime API

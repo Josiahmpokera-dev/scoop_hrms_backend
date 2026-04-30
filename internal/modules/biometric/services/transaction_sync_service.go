@@ -110,20 +110,9 @@ func (s *TransactionSyncService) SyncTransactions(tenantID *uint, transactions [
 
 // parsePunchTime parses the punch time string from BioTime API
 func (s *TransactionSyncService) parsePunchTime(timeStr string) time.Time {
-	// BioTime format: "2020-06-05 00:00:00"
-	layouts := []string{
-		"2006-01-02 15:04:05",
-		"2006-01-02T15:04:05Z",
-		"2006-01-02T15:04:05",
-		time.RFC3339,
+	t, err := parseBiometricDateTime(timeStr)
+	if err != nil {
+		return time.Time{}
 	}
-
-	for _, layout := range layouts {
-		if t, err := time.Parse(layout, timeStr); err == nil {
-			return t
-		}
-	}
-
-	// Return zero time if parsing fails
-	return time.Time{}
+	return t
 }
