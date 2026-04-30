@@ -124,8 +124,34 @@ func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startT
 			last_name,
 			department,
 			DATE(punch_time)::date as date,
-			MIN(punch_time)::timestamp as check_in,
-			MAX(punch_time)::timestamp as check_out,
+			COALESCE(
+				MIN(CASE
+					WHEN lower(COALESCE(punch_state_display, '')) LIKE '%in%'
+					  OR lower(COALESCE(punch_state, '')) IN ('0', 'in', 'check in', 'checkin')
+					THEN punch_time
+				END),
+				MIN(punch_time)
+			)::timestamp as check_in,
+			CASE
+				WHEN MAX(CASE
+					WHEN lower(COALESCE(punch_state_display, '')) LIKE '%out%'
+					  OR lower(COALESCE(punch_state, '')) IN ('1', 'out', 'check out', 'checkout')
+					THEN punch_time
+				END) IS NOT NULL
+				THEN MAX(CASE
+					WHEN lower(COALESCE(punch_state_display, '')) LIKE '%out%'
+					  OR lower(COALESCE(punch_state, '')) IN ('1', 'out', 'check out', 'checkout')
+					THEN punch_time
+				END)::timestamp
+				WHEN MIN(CASE
+					WHEN lower(COALESCE(punch_state_display, '')) LIKE '%in%'
+					  OR lower(COALESCE(punch_state, '')) IN ('0', 'in', 'check in', 'checkin')
+					THEN punch_time
+				END) IS NULL
+				  AND MAX(punch_time) > MIN(punch_time)
+				THEN MAX(punch_time)::timestamp
+				ELSE NULL
+			END as check_out,
 			COUNT(*) as punch_count
 		`).
 		Where("punch_time >= ? AND punch_time <= ?", startTime, endTime).
@@ -194,8 +220,34 @@ func (r *BioTimeTransactionRepository) GetEmployeeDailyAttendanceForMonth(tenant
 	query := r.db.Model(&models.BioTimeTransaction{}).
 		Select(`
 			DATE(punch_time)::date as date,
-			MIN(punch_time)::timestamp as check_in,
-			MAX(punch_time)::timestamp as check_out,
+			COALESCE(
+				MIN(CASE
+					WHEN lower(COALESCE(punch_state_display, '')) LIKE '%in%'
+					  OR lower(COALESCE(punch_state, '')) IN ('0', 'in', 'check in', 'checkin')
+					THEN punch_time
+				END),
+				MIN(punch_time)
+			)::timestamp as check_in,
+			CASE
+				WHEN MAX(CASE
+					WHEN lower(COALESCE(punch_state_display, '')) LIKE '%out%'
+					  OR lower(COALESCE(punch_state, '')) IN ('1', 'out', 'check out', 'checkout')
+					THEN punch_time
+				END) IS NOT NULL
+				THEN MAX(CASE
+					WHEN lower(COALESCE(punch_state_display, '')) LIKE '%out%'
+					  OR lower(COALESCE(punch_state, '')) IN ('1', 'out', 'check out', 'checkout')
+					THEN punch_time
+				END)::timestamp
+				WHEN MIN(CASE
+					WHEN lower(COALESCE(punch_state_display, '')) LIKE '%in%'
+					  OR lower(COALESCE(punch_state, '')) IN ('0', 'in', 'check in', 'checkin')
+					THEN punch_time
+				END) IS NULL
+				  AND MAX(punch_time) > MIN(punch_time)
+				THEN MAX(punch_time)::timestamp
+				ELSE NULL
+			END as check_out,
 			COUNT(*) as punch_count
 		`).
 		Where("emp_code = ?", empCode).
