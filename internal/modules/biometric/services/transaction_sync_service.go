@@ -23,10 +23,24 @@ func NewTransactionSyncService() *TransactionSyncService {
 	}
 }
 
+// SyncTransactionsStats is returned by manual or batch sync for observability.
+type SyncTransactionsStats struct {
+	Inserted          int `json:"inserted"`
+	SkippedDuplicates int `json:"skipped_duplicates"`
+	ScanErrors        int `json:"scan_errors"`
+}
+
 // SyncTransactions syncs BioTime transactions to the database
 func (s *TransactionSyncService) SyncTransactions(tenantID *uint, transactions []Transaction) error {
+	_, err := s.SyncTransactionsDetailed(tenantID, transactions)
+	return err
+}
+
+// SyncTransactionsDetailed syncs transactions and returns per-batch stats.
+func (s *TransactionSyncService) SyncTransactionsDetailed(tenantID *uint, transactions []Transaction) (SyncTransactionsStats, error) {
+	var stats SyncTransactionsStats
 	if len(transactions) == 0 {
-		return nil
+		return stats, nil
 	}
 
 	var dbTransactions []models.BioTimeTransaction
@@ -38,11 +52,12 @@ func (s *TransactionSyncService) SyncTransactions(tenantID *uint, transactions [
 		if err != nil {
 			// Log error but continue with other transactions
 			fmt.Printf("Error checking transaction existence: %v\n", err)
+			stats.ScanErrors++
 			continue
 		}
 
 		if exists {
-			// Skip if already exists
+			stats.SkippedDuplicates++
 			continue
 		}
 
@@ -98,14 +113,15 @@ func (s *TransactionSyncService) SyncTransactions(tenantID *uint, transactions [
 	// Bulk insert new transactions
 	if len(dbTransactions) > 0 {
 		if err := s.transactionRepo.BulkCreate(dbTransactions); err != nil {
-			return fmt.Errorf("failed to bulk create transactions: %w", err)
+			return stats, fmt.Errorf("failed to bulk create transactions: %w", err)
 		}
+		stats.Inserted = len(dbTransactions)
 		fmt.Printf("Successfully synced %d new transactions to database\n", len(dbTransactions))
 	} else {
 		fmt.Printf("No new transactions to sync (all %d already exist)\n", len(transactions))
 	}
 
-	return nil
+	return stats, nil
 }
 
 // parsePunchTime parses the punch time string from BioTime API

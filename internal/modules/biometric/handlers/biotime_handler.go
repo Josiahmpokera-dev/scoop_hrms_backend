@@ -520,6 +520,33 @@ func (h *BioTimeHandler) RefreshToken(c *gin.Context) {
 	})
 }
 
+// ManualSyncToDatabase pulls transactions from the BioTime API and inserts new rows into biotime_transactions (no RabbitMQ).
+// Defaults when start_time and end_time are omitted: today 00:00 through now in BIOMETRIC_TIMEZONE / APP_TIMEZONE.
+func (h *BioTimeHandler) ManualSyncToDatabase(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+
+	var req struct {
+		StartTime string `json:"start_time" form:"start_time"`
+		EndTime   string `json:"end_time" form:"end_time"`
+	}
+	_ = c.ShouldBind(&req)
+
+	start, end, err := services.ResolveManualSyncWindow(req.StartTime, req.EndTime)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	syncSvc := services.NewManualBioTimeSyncService(tenantID)
+	result, err := syncSvc.SyncWindow(start, end)
+	if err != nil {
+		response.InternalServerError(c, "Manual biometric sync failed", err.Error())
+		return
+	}
+
+	response.Success(c, "Biometric transactions synced to database", result)
+}
+
 // BackfillTransactions handles backfilling historical transactions from BioTime
 // @Summary Backfill historical BioTime transactions
 // @Description Pulls all transactions from 2025-01-01 to now and queues them for database storage

@@ -563,6 +563,7 @@ func SetupRoutes(r *gin.Engine) {
 			biometric.GET("/biotime/test-connection", biotimeHandler.TestConnection)
 			biometric.GET("/biotime/token", biotimeHandler.GetToken)
 			biometric.POST("/biotime/refresh-token", biotimeHandler.RefreshToken)
+			biometric.POST("/biotime/sync", biotimeHandler.ManualSyncToDatabase)
 			biometric.GET("/biotime/terminals", biotimeHandler.GetTerminals)
 			biometric.GET("/biotime/device-status", biotimeHandler.GetDeviceStatus)
 			biometric.GET("/biotime/transactions", biotimeHandler.GetTransactions)
