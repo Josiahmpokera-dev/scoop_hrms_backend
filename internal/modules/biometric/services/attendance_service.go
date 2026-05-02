@@ -100,7 +100,8 @@ func (s *AttendanceService) GetAttendanceCalendar(tenantID *uint, empCode, month
 				s := rec.CheckIn.Format("15:04:05")
 				checkInStr = &s
 			}
-			if rec.CheckOut != nil && rec.PunchCount > 1 && (rec.CheckIn == nil || rec.CheckOut.After(*rec.CheckIn)) {
+			// Checkout comes from explicit OUT timestamps or last punch when multiple rows exist (see repository SQL).
+			if rec.CheckOut != nil && rec.CheckIn != nil && rec.CheckOut.After(*rec.CheckIn) {
 				s := rec.CheckOut.Format("15:04:05")
 				checkOutStr = &s
 			}
@@ -271,10 +272,9 @@ func (s *AttendanceService) GetDailyAttendance(tenantID *uint, params GetDailyAt
 			checkInStr = &formatted
 		}
 
-		// Format check-out time.
-		// For single-punch days (check-in only), return checkout as null.
+		// Format check-out: repository leaves it null for true single-punch days.
 		var checkOutStr *string
-		if record.CheckOut != nil && record.PunchCount > 1 && (record.CheckIn == nil || record.CheckOut.After(*record.CheckIn)) {
+		if record.CheckOut != nil && record.CheckIn != nil && record.CheckOut.After(*record.CheckIn) {
 			formatted := record.CheckOut.Format("15:04:05")
 			checkOutStr = &formatted
 		}
@@ -450,7 +450,7 @@ func (s *AttendanceService) GetDailyAttendanceFromBioTime(tenantID *uint, params
 			s := a.checkIn.Format("15:04:05")
 			checkInStr = &s
 		}
-		if a.checkOut != nil && a.punchCount > 1 && (a.checkIn == nil || a.checkOut.After(*a.checkIn)) {
+		if a.checkOut != nil && a.checkIn != nil && a.checkOut.After(*a.checkIn) {
 			s := a.checkOut.Format("15:04:05")
 			checkOutStr = &s
 		}

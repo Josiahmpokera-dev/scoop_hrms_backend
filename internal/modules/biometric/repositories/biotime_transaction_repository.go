@@ -120,9 +120,9 @@ func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startT
 	query := r.db.Model(&models.BioTimeTransaction{}).
 		Select(`
 			emp_code,
-			first_name,
-			last_name,
-			department,
+			(ARRAY_AGG(first_name ORDER BY punch_time ASC))[1] as first_name,
+			(ARRAY_AGG(last_name ORDER BY punch_time ASC))[1] as last_name,
+			(ARRAY_AGG(department ORDER BY punch_time ASC))[1] as department,
 			DATE(punch_time)::date as date,
 			COALESCE(
 				MIN(CASE
@@ -143,19 +143,14 @@ func (r *BioTimeTransactionRepository) GetDailyAttendance(tenantID *uint, startT
 					  OR lower(COALESCE(punch_state, '')) IN ('1', 'out', 'check out', 'checkout')
 					THEN punch_time
 				END)::timestamp
-				WHEN MIN(CASE
-					WHEN lower(COALESCE(punch_state_display, '')) LIKE '%in%'
-					  OR lower(COALESCE(punch_state, '')) IN ('0', 'in', 'check in', 'checkin')
-					THEN punch_time
-				END) IS NULL
-				  AND MAX(punch_time) > MIN(punch_time)
+				WHEN COUNT(*) > 1 AND MAX(punch_time) > MIN(punch_time)
 				THEN MAX(punch_time)::timestamp
 				ELSE NULL
 			END as check_out,
 			COUNT(*) as punch_count
 		`).
 		Where("punch_time >= ? AND punch_time <= ?", startTime, endTime).
-		Group("emp_code, first_name, last_name, department, DATE(punch_time)")
+		Group("emp_code, DATE(punch_time)")
 
 	// Apply tenant filter
 	if tenantID != nil {
@@ -239,12 +234,7 @@ func (r *BioTimeTransactionRepository) GetEmployeeDailyAttendanceForMonth(tenant
 					  OR lower(COALESCE(punch_state, '')) IN ('1', 'out', 'check out', 'checkout')
 					THEN punch_time
 				END)::timestamp
-				WHEN MIN(CASE
-					WHEN lower(COALESCE(punch_state_display, '')) LIKE '%in%'
-					  OR lower(COALESCE(punch_state, '')) IN ('0', 'in', 'check in', 'checkin')
-					THEN punch_time
-				END) IS NULL
-				  AND MAX(punch_time) > MIN(punch_time)
+				WHEN COUNT(*) > 1 AND MAX(punch_time) > MIN(punch_time)
 				THEN MAX(punch_time)::timestamp
 				ELSE NULL
 			END as check_out,
