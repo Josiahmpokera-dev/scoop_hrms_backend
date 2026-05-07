@@ -2,8 +2,12 @@ package handlers
 
 import (
 	"strconv"
+	"strings"
+	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
+	assetRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/repositories"
+	departmentRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/services"
 	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
@@ -455,4 +459,174 @@ func (h *AssetHRHandler) ReassignAsset(c *gin.Context) {
 	}
 
 	response.Success(c, "Asset reassigned successfully", responseData)
+}
+
+// GetAssignmentHistory handles listing assignment/reassignment/return history.
+// @Summary Get assets assignment history
+// @Description Retrieve assignment timeline with filters for asset, employee, action, and date range
+// @Tags Assets (HR/Admin)
+// @Produce json
+// @Param page query int false "Page number (default: 1)"
+// @Param page_size query int false "Items per page (default: 20, max: 100)"
+// @Param asset_id query int false "Filter by asset ID"
+// @Param employee_id query string false "Filter by employee ID (from/to)"
+// @Param action query string false "assign | reassign | return"
+// @Param start_date query string false "YYYY-MM-DD"
+// @Param end_date query string false "YYYY-MM-DD"
+// @Success 200 {object} response.APIResponse
+// @Router /assets/assignment-history [get]
+func (h *AssetHRHandler) GetAssignmentHistory(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+
+	page := 1
+	if p := c.Query("page"); p != "" {
+		if parsed, err := strconv.Atoi(p); err == nil && parsed > 0 {
+			page = parsed
+		}
+	}
+
+	pageSize := 20
+	if ps := c.Query("page_size"); ps != "" {
+		if parsed, err := strconv.Atoi(ps); err == nil && parsed > 0 && parsed <= 100 {
+			pageSize = parsed
+		}
+	}
+
+	var assetID *uint
+	if rawAssetID := strings.TrimSpace(c.Query("asset_id")); rawAssetID != "" {
+		parsed, err := strconv.ParseUint(rawAssetID, 10, 32)
+		if err != nil {
+			response.BadRequest(c, "Invalid asset_id", nil)
+			return
+		}
+		id := uint(parsed)
+		assetID = &id
+	}
+
+	var employeeID *string
+	if rawEmployeeID := strings.TrimSpace(c.Query("employee_id")); rawEmployeeID != "" {
+		employeeID = &rawEmployeeID
+	}
+
+	var action *string
+	if rawAction := strings.TrimSpace(c.Query("action")); rawAction != "" {
+		lc := strings.ToLower(rawAction)
+		action = &lc
+	}
+
+	var startDate *time.Time
+	if rawStart := strings.TrimSpace(c.Query("start_date")); rawStart != "" {
+		t, err := time.Parse("2006-01-02", rawStart)
+		if err != nil {
+			response.BadRequest(c, "Invalid start_date format. Use YYYY-MM-DD", nil)
+			return
+		}
+		startDate = &t
+	}
+
+	var endDate *time.Time
+	if rawEnd := strings.TrimSpace(c.Query("end_date")); rawEnd != "" {
+		t, err := time.Parse("2006-01-02", rawEnd)
+		if err != nil {
+			response.BadRequest(c, "Invalid end_date format. Use YYYY-MM-DD", nil)
+			return
+		}
+		dayEnd := time.Date(t.Year(), t.Month(), t.Day(), 23, 59, 59, int(time.Second-time.Nanosecond), t.Location())
+		endDate = &dayEnd
+	}
+
+	rows, total, err := h.service.ListAssignmentHistory(tenantID, page, pageSize, assetID, employeeID, action, startDate, endDate)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	assetRepo := assetRepos.NewAssetRepository()
+	deptRepo := departmentRepos.NewDepartmentRepository()
+	modelCache := map[uint]string{}
+	deptCache := map[string]string{}
+
+	formatted := make([]map[string]interface{}, 0, len(rows))
+	for _, row := range rows {
+		assetModel := ""
+		if cached, ok := modelCache[row.AssetID]; ok {
+			assetModel = cached
+		} else if asset, assetErr := assetRepo.FindByID(row.AssetID); assetErr == nil && asset != nil {
+			assetModel = asset.Model
+			modelCache[row.AssetID] = assetModel
+		}
+
+		departmentName := ""
+		if row.Department != nil && strings.TrimSpace(*row.Department) != "" {
+			rawDept := strings.TrimSpace(*row.Department)
+			if cached, ok := deptCache[rawDept]; ok {
+				departmentName = cached
+			} else {
+				departmentName = rawDept
+				if deptID, parseErr := strconv.ParseUint(rawDept, 10, 32); parseErr == nil {
+					if dept, deptErr := deptRepo.FindByID(uint(deptID)); deptErr == nil && dept != nil && strings.TrimSpace(dept.Name) != "" {
+						departmentName = dept.Name
+					}
+				}
+				deptCache[rawDept] = departmentName
+			}
+		}
+
+		formatted = append(formatted, map[string]interface{}{
+			"id":               row.ID,
+			"asset_code":       row.AssetCode,
+			"asset_model":      assetModel,
+			"action":           string(row.Action),
+			"from_employee_id": row.FromEmployeeID,
+			"to_employee_id":   row.ToEmployeeID,
+			"from_employee":    row.FromEmployee,
+			"to_employee":      row.ToEmployee,
+			"department":       departmentName,
+			"notes":            row.Notes,
+			"occurred_at":      row.OccurredAt,
+			"actor_user_id":    row.ActorUserID,
+			"created_at":       row.CreatedAt,
+		})
+	}
+
+	totalPages := int((total + int64(pageSize) - 1) / int64(pageSize))
+	meta := &response.Meta{
+		Page:       page,
+		PerPage:    pageSize,
+		Total:      total,
+		TotalPages: totalPages,
+	}
+	response.SuccessWithMeta(c, "Asset assignment history retrieved successfully", formatted, meta)
+}
+
+// GetAssetAssignmentHistory handles listing assignment history for one asset.
+// @Summary Get assignment history by asset
+// @Description Retrieve assignment timeline for a specific asset id
+// @Tags Assets (HR/Admin)
+// @Produce json
+// @Param asset_id path int true "Asset ID"
+// @Param page query int false "Page number (default: 1)"
+// @Param page_size query int false "Items per page (default: 20, max: 100)"
+// @Param employee_id query string false "Filter by employee ID (from/to)"
+// @Param action query string false "assign | reassign | return"
+// @Param start_date query string false "YYYY-MM-DD"
+// @Param end_date query string false "YYYY-MM-DD"
+// @Success 200 {object} response.APIResponse
+// @Router /assets/{asset_id}/assignment-history [get]
+func (h *AssetHRHandler) GetAssetAssignmentHistory(c *gin.Context) {
+	assetIDStr := strings.TrimSpace(c.Param("asset_id"))
+	if assetIDStr == "" {
+		response.BadRequest(c, "asset_id is required", nil)
+		return
+	}
+	if _, err := strconv.ParseUint(assetIDStr, 10, 32); err != nil {
+		response.BadRequest(c, "Invalid asset_id", nil)
+		return
+	}
+
+	// Reuse shared history endpoint behavior by injecting asset_id filter.
+	q := c.Request.URL.Query()
+	q.Set("asset_id", assetIDStr)
+	c.Request.URL.RawQuery = q.Encode()
+	h.GetAssignmentHistory(c)
 }

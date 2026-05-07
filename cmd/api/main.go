@@ -9,35 +9,11 @@ import (
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/app"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/config"
-	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
-	assetModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/models"
-	attendanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/models"
 	attendanceWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/attendance/workers"
-	auditModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/audit/models"
-	biometricModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/models"
 	biometricWorkers "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/workers"
-	costCenterModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/cost_centers/models"
-	dashboardModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/dashboard/models"
-	departmentModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/models"
-	employeeModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
-	helpdeskModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/helpdesk/models"
-	leaveModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/leave/models"
-	locationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/locations/models"
-	organizationUnitModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organization_units/models"
-	organizationModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/organizations/models"
-	payrollModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/payroll/models"
-	performanceModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/performance/models"
-	positionModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/models"
-	projectModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/projects/models"
-	recruitmentModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/recruitment/models"
-	roleModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/models"
-	settingsModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/settings/models"
-	shiftModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/shifts/models"
-	teamModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/teams/models"
-	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/pkg/scheduler"
 	appRouter "github.com/Josiahmpokera-dev/hrms-backend/internal/router"
-	"github.com/Josiahmpokera-dev/hrms-backend/internal/seed"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/types"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-contrib/cors"
@@ -72,146 +48,6 @@ func main() {
 	if err := app.Initialize(); err != nil {
 		log.Fatalf("Failed to initialize application: %v", err)
 	}
-
-	// Run database migrations for all models
-	modelsToMigrate := []interface{}{
-		// Core models
-		&roleModels.Role{},
-		&roleModels.Permission{},
-		&roleModels.UserRole{},
-		&roleModels.RolePermission{},
-		// User model
-		&userModels.User{},
-		// Organizational models
-		&organizationModels.Organization{},
-		&organizationUnitModels.OrganizationUnit{},
-		&departmentModels.Department{},
-		&teamModels.Team{},
-		&positionModels.JobPosition{},
-		&locationModels.Location{},
-		&costCenterModels.CostCenter{},
-		// Asset models
-		&assetModels.Asset{},
-		// Employee models
-		&employeeModels.Employee{},
-		&employeeModels.EmployeeOnboardingDraft{},
-		&employeeModels.EmployeeBasicInformation{},
-		&employeeModels.EmployeeEmploymentDetails{},
-		&employeeModels.EmployeeAddress{},
-		&employeeModels.EmployeeSalaryComponent{},
-		&employeeModels.EmployeeBankAccount{},
-		&employeeModels.EmployeeStatutoryInfo{},
-		&employeeModels.EmployeeDocument{},
-		&employeeModels.EmployeeAsset{},
-		&employeeModels.EmployeeEmergencyContact{},
-		&employeeModels.EmployeePolicy{},
-		&employeeModels.PostOnboardingTask{},
-		// Offboarding models
-		&employeeModels.OffboardingWorkflow{},
-		&employeeModels.OffboardingClearance{},
-		&employeeModels.OffboardingAssetReturn{},
-		&employeeModels.FinalSettlement{},
-		// Self-Service models
-		&employeeModels.ServiceRequest{},
-		&employeeModels.ProfileUpdateRequest{},
-		// Asset self-service models
-		&assetModels.AssetRequest{},
-		&assetModels.AssetIssue{},
-		// Helpdesk models
-		&helpdeskModels.Ticket{},
-		&helpdeskModels.Comment{},
-		&helpdeskModels.Attachment{},
-		&helpdeskModels.RoutingRule{},
-		&helpdeskModels.KnowledgeBaseArticle{},
-		&helpdeskModels.KBArticleFeedback{},
-		&helpdeskModels.TicketCategory{},
-		// Biometric models
-		&biometricModels.BioTimeConfig{},
-		&biometricModels.BioTimeTransaction{},
-		&biometricModels.BiometricEnrollment{},
-		// Shifts & Rosters models
-		&shiftModels.Shift{},
-		&shiftModels.ShiftLocation{}, // Join table for shifts and locations
-		&shiftModels.RosterAssignment{},
-		&shiftModels.SwapRequest{},
-		&shiftModels.RosterChangeRequest{},
-		// Leave Management models
-		&leaveModels.LeaveType{},
-		&leaveModels.LeavePolicy{},
-		&leaveModels.LeaveRequest{},
-		&leaveModels.LeaveApproval{},
-		&leaveModels.LeaveDocument{},
-		&leaveModels.LeaveBalance{},
-		&leaveModels.Holiday{},
-		// Security & Audit
-		&auditModels.AuditLog{},
-		// Payroll models
-		&payrollModels.PayrollRun{},
-		&payrollModels.PayrollRunEmployee{},
-		&payrollModels.SalaryStructure{},
-		&payrollModels.SalaryComponent{},
-		&payrollModels.Payslip{},
-		&payrollModels.PayslipItem{},
-		&payrollModels.Loan{},
-		&payrollModels.LoanRepayment{},
-		&payrollModels.TaxSlab{},
-		&payrollModels.StatutoryRule{},
-		&payrollModels.NHIFSchedule{},
-		&payrollModels.CompliancePayment{},
-		// Dashboard models
-		&dashboardModels.Announcement{},
-		&dashboardModels.AnnouncementAttachment{},
-		&dashboardModels.AnnouncementRead{},
-		// Attendance: Timesheets & Overtime models
-		&attendanceModels.TimesheetWeek{},
-		&attendanceModels.TimesheetEntry{},
-		&attendanceModels.TimesheetApproval{},
-		&attendanceModels.OvertimePolicy{},
-		&attendanceModels.OvertimeRequest{},
-		&attendanceModels.OvertimeApproval{},
-		// Project & Daily Task models
-		&projectModels.Project{},
-		&projectModels.ProjectMember{},
-		&projectModels.DailyTask{},
-		// Performance Management models
-		&performanceModels.Goal{},
-		&performanceModels.KeyResult{},
-		&performanceModels.GoalCheckIn{},
-		&performanceModels.DepartmentTarget{},
-		&performanceModels.DepartmentTargetMilestone{},
-		&performanceModels.EmployeeTarget{},
-		&performanceModels.AppraisalCycle{},
-		&performanceModels.AppraisalWorkflowStep{},
-		&performanceModels.Appraisal{},
-		&performanceModels.Feedback360Campaign{},
-		&performanceModels.Feedback360RaterGroup{},
-		&performanceModels.TalentReview{},
-		&performanceModels.CalibrationSession{},
-		&performanceModels.SuccessionPlan{},
-		// Settings models
-		&settingsModels.MenuVisibilitySetting{},
-		// Recruitment models
-		&recruitmentModels.JobRequisition{},
-		&recruitmentModels.JobOpening{},
-		&recruitmentModels.Candidate{},
-		&recruitmentModels.JobApplication{},
-		&recruitmentModels.Interview{},
-		&recruitmentModels.Offer{},
-		&recruitmentModels.TalentPoolCandidate{},
-		// Attendance: Manual Punch models
-		&attendanceModels.ManualPunch{},
-	}
-
-	for _, model := range modelsToMigrate {
-		log.Printf("MIGRATING MODEL: %T", model)
-		if err := database.Migrate(model); err != nil {
-			log.Fatalf("Failed to migrate %T: %v", model, err)
-		}
-
-	}
-
-	// Seed initial data (only in development)
-	seed.Run()
 
 	// Setup graceful shutdown
 	setupGracefulShutdown()

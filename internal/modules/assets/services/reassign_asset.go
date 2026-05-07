@@ -17,10 +17,10 @@ func (s *AssetService) ReassignAsset(req *models.ReassignAssetRequest, tenantID 
 		return nil, errors.New("asset not found")
 	}
 
-
-	// Check if asset is currently assigned
-	if !asset.IsAssigned() {
-		return nil, errors.New("asset is not currently assigned to any employee")
+	wasAssigned := asset.IsAssigned()
+	// Allow using reassign endpoint for available assets as direct assignment.
+	if !wasAssigned && !asset.CanBeAssigned() {
+		return nil, errors.New("asset is not available for assignment")
 	}
 
 	// Check if reassigning to the same employee
@@ -50,6 +50,7 @@ func (s *AssetService) ReassignAsset(req *models.ReassignAssetRequest, tenantID 
 
 	// Store previous assignment info for history
 	previousEmployeeID := asset.EmployeeID
+	previousEmployeeName := asset.AssignedTo
 
 	// Update condition if provided
 	if req.Condition != nil && *req.Condition != "" {
@@ -97,14 +98,17 @@ func (s *AssetService) ReassignAsset(req *models.ReassignAssetRequest, tenantID 
 		if asset.Notes != nil {
 			existingNotes = *asset.Notes + "\n"
 		}
-		previousEmpID := "Unknown"
+		newNote := ""
 		if previousEmployeeID != nil {
-			previousEmpID = *previousEmployeeID
+			newNote = fmt.Sprintf("Reassigned from %s to %s on %s",
+				*previousEmployeeID,
+				req.NewEmployeeID,
+				reassignDate.Format("2006-01-02"))
+		} else {
+			newNote = fmt.Sprintf("Assigned to %s on %s",
+				req.NewEmployeeID,
+				reassignDate.Format("2006-01-02"))
 		}
-		newNote := fmt.Sprintf("Reassigned from %s to %s on %s", 
-			previousEmpID,
-			req.NewEmployeeID,
-			reassignDate.Format("2006-01-02"))
 		if *req.Notes != "" {
 			newNote += fmt.Sprintf(" - %s", *req.Notes)
 		}
@@ -117,6 +121,27 @@ func (s *AssetService) ReassignAsset(req *models.ReassignAssetRequest, tenantID 
 
 	if err := s.repo.Update(asset); err != nil {
 		return nil, fmt.Errorf("failed to reassign asset: %w", err)
+	}
+	toEmployeeName := ""
+	if asset.AssignedTo != nil {
+		toEmployeeName = *asset.AssignedTo
+	}
+	notes := req.Notes
+	if err := s.assignmentRepo.Create(&models.AssetAssignmentHistory{
+		TenantID:       tenantID,
+		AssetID:        asset.ID,
+		AssetCode:      asset.AssetCode,
+		Action:         models.AssetAssignmentActionReassign,
+		FromEmployeeID: previousEmployeeID,
+		ToEmployeeID:   asset.EmployeeID,
+		FromEmployee:   previousEmployeeName,
+		ToEmployee:     &toEmployeeName,
+		Department:     asset.Department,
+		Notes:          notes,
+		OccurredAt:     reassignDate,
+		ActorUserID:    updatedBy,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to write reassignment history: %w", err)
 	}
 
 	return asset, nil

@@ -14,14 +14,16 @@ import (
 )
 
 type AssetService struct {
-	repo         *repositories.AssetRepository
-	employeeRepo *employeeRepos.EmployeeRepository
+	repo            *repositories.AssetRepository
+	employeeRepo    *employeeRepos.EmployeeRepository
+	assignmentRepo  *repositories.AssetAssignmentHistoryRepository
 }
 
 func NewAssetService() *AssetService {
 	return &AssetService{
-		repo:         repositories.NewAssetRepository(),
-		employeeRepo: employeeRepos.NewEmployeeRepository(),
+		repo:           repositories.NewAssetRepository(),
+		employeeRepo:   employeeRepos.NewEmployeeRepository(),
+		assignmentRepo: repositories.NewAssetAssignmentHistoryRepository(),
 	}
 }
 
@@ -384,6 +386,27 @@ func (s *AssetService) AssignAsset(req *models.AssignAssetRequest, tenantID *uin
 	if err := s.repo.Update(asset); err != nil {
 		return nil, fmt.Errorf("failed to assign asset: %w", err)
 	}
+	fromEmployeeName := ""
+	toEmployeeName := ""
+	if asset.AssignedTo != nil {
+		toEmployeeName = *asset.AssignedTo
+	}
+	if err := s.assignmentRepo.Create(&models.AssetAssignmentHistory{
+		TenantID:       tenantID,
+		AssetID:        asset.ID,
+		AssetCode:      asset.AssetCode,
+		Action:         models.AssetAssignmentActionAssign,
+		FromEmployeeID: nil,
+		ToEmployeeID:   asset.EmployeeID,
+		FromEmployee:   &fromEmployeeName,
+		ToEmployee:     &toEmployeeName,
+		Department:     asset.Department,
+		Notes:          req.Notes,
+		OccurredAt:     assignedDate,
+		ActorUserID:    updatedBy,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to write assignment history: %w", err)
+	}
 
 	return asset, nil
 }
@@ -412,6 +435,8 @@ func (s *AssetService) ReturnAsset(req *models.ReturnAssetRequest, tenantID *uin
 	}
 
 	// Return asset
+	prevEmployeeID := asset.EmployeeID
+	prevEmployeeName := asset.AssignedTo
 	asset.ReturnDate = &returnDate
 	asset.AssignedTo = nil
 	asset.EmployeeID = nil
@@ -442,6 +467,23 @@ func (s *AssetService) ReturnAsset(req *models.ReturnAssetRequest, tenantID *uin
 
 	if err := s.repo.Update(asset); err != nil {
 		return nil, fmt.Errorf("failed to return asset: %w", err)
+	}
+	blankName := ""
+	if err := s.assignmentRepo.Create(&models.AssetAssignmentHistory{
+		TenantID:       tenantID,
+		AssetID:        asset.ID,
+		AssetCode:      asset.AssetCode,
+		Action:         models.AssetAssignmentActionReturn,
+		FromEmployeeID: prevEmployeeID,
+		ToEmployeeID:   nil,
+		FromEmployee:   prevEmployeeName,
+		ToEmployee:     &blankName,
+		Department:     nil,
+		Notes:          req.Notes,
+		OccurredAt:     returnDate,
+		ActorUserID:    updatedBy,
+	}); err != nil {
+		return nil, fmt.Errorf("failed to write return history: %w", err)
 	}
 
 	return asset, nil

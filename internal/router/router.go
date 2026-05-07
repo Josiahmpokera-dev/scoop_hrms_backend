@@ -502,6 +502,8 @@ func SetupRoutes(r *gin.Engine) {
 			assets.POST("/requests/:request_id/reject", assetHRHandler.RejectAssetRequest)
 			assets.POST("/requests/:request_id/fulfill", assetHRHandler.FulfillAssetRequest)
 			assets.POST("/:asset_id/reassign", assetHRHandler.ReassignAsset)
+			assets.GET("/assignment-history", assetHRHandler.GetAssignmentHistory)
+			assets.GET("/:asset_id/assignment-history", assetHRHandler.GetAssetAssignmentHistory)
 		}
 
 		// Helpdesk routes

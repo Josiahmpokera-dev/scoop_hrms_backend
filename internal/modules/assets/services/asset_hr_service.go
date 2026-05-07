@@ -3,6 +3,7 @@ package services
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/models"
@@ -13,6 +14,7 @@ import (
 // AssetHRService handles HR/Admin asset management operations
 type AssetHRService struct {
 	assetRepo        *assetRepos.AssetRepository
+	assignmentRepo   *assetRepos.AssetAssignmentHistoryRepository
 	assetRequestRepo *assetRepos.AssetRequestRepository
 	assetIssueRepo   *assetRepos.AssetIssueRepository
 	employeeRepo     *employeeRepos.EmployeeRepository
@@ -23,11 +25,38 @@ type AssetHRService struct {
 func NewAssetHRService() *AssetHRService {
 	return &AssetHRService{
 		assetRepo:        assetRepos.NewAssetRepository(),
+		assignmentRepo:   assetRepos.NewAssetAssignmentHistoryRepository(),
 		assetRequestRepo: assetRepos.NewAssetRequestRepository(),
 		assetIssueRepo:   assetRepos.NewAssetIssueRepository(),
 		employeeRepo:     employeeRepos.NewEmployeeRepository(),
 		assetService:     NewAssetService(),
 	}
+}
+
+// ListAssignmentHistory lists assignment/reassignment/return history with filters.
+func (s *AssetHRService) ListAssignmentHistory(
+	tenantID *uint,
+	page, pageSize int,
+	assetID *uint,
+	employeeID *string,
+	action *string,
+	startDate, endDate *time.Time,
+) ([]models.AssetAssignmentHistory, int64, error) {
+	if action != nil && *action != "" {
+		a := strings.ToLower(strings.TrimSpace(*action))
+		if a != string(models.AssetAssignmentActionAssign) &&
+			a != string(models.AssetAssignmentActionReassign) &&
+			a != string(models.AssetAssignmentActionReturn) {
+			return nil, 0, errors.New("invalid action filter, allowed: assign, reassign, return")
+		}
+		*action = a
+	}
+
+	rows, total, err := s.assignmentRepo.List(tenantID, page, pageSize, assetID, employeeID, action, startDate, endDate)
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to get assignment history: %w", err)
+	}
+	return rows, total, nil
 }
 
 // ListAssetRequests lists all asset requests (for HR/Admin)
@@ -154,6 +183,26 @@ func (s *AssetHRService) FulfillAssetRequest(requestID uint, assetID uint, tenan
 	if err := s.assetRepo.Update(asset); err != nil {
 		return nil, nil, fmt.Errorf("failed to assign asset: %w", err)
 	}
+	toEmployeeName := ""
+	if asset.AssignedTo != nil {
+		toEmployeeName = *asset.AssignedTo
+	}
+	emptyName := ""
+	if err := s.assignmentRepo.Create(&models.AssetAssignmentHistory{
+		TenantID:       tenantID,
+		AssetID:        asset.ID,
+		AssetCode:      asset.AssetCode,
+		Action:         models.AssetAssignmentActionAssign,
+		FromEmployeeID: nil,
+		ToEmployeeID:   asset.EmployeeID,
+		FromEmployee:   &emptyName,
+		ToEmployee:     &toEmployeeName,
+		Department:     asset.Department,
+		OccurredAt:     assignedDate,
+		ActorUserID:    fulfilledBy,
+	}); err != nil {
+		return nil, nil, fmt.Errorf("failed to write assignment history: %w", err)
+	}
 
 	// Mark request as fulfilled
 	now := time.Now()
@@ -179,12 +228,13 @@ func (s *AssetHRService) ReassignAsset(assetID uint, newEmployeeID string, tenan
 		return nil, errors.New("asset not found")
 	}
 
-	// Check if asset is currently assigned
-	if !asset.IsAssigned() {
-		return nil, errors.New("asset is not currently assigned to any employee")
+	wasAssigned := asset.IsAssigned()
+	// If asset is not assigned, allow assigning via this endpoint only when it is available.
+	if !wasAssigned && !asset.CanBeAssigned() {
+		return nil, errors.New("asset is not available for assignment")
 	}
 
-	// Check if reassigning to the same employee
+	// Check if assigning/reassigning to the same employee
 	if asset.EmployeeID != nil && *asset.EmployeeID == newEmployeeID {
 		return nil, errors.New("asset is already assigned to this employee")
 	}
@@ -199,7 +249,9 @@ func (s *AssetHRService) ReassignAsset(assetID uint, newEmployeeID string, tenan
 		return nil, errors.New("new employee is not active")
 	}
 
-	// Reassign asset
+	// Assign/reassign asset
+	prevEmployeeID := asset.EmployeeID
+	prevEmployeeName := asset.AssignedTo
 	reassignDate := time.Now()
 	fullName := fmt.Sprintf("%s %s", newEmployee.FirstName, newEmployee.LastName)
 	asset.AssignedTo = &fullName
@@ -209,6 +261,8 @@ func (s *AssetHRService) ReassignAsset(assetID uint, newEmployeeID string, tenan
 		asset.Department = &deptIDStr
 	}
 	asset.AssignedDate = &reassignDate
+	asset.ReturnDate = nil
+	asset.Status = string(models.AssetStatusInUse)
 	asset.UpdatedBy = reassignedBy
 	asset.UpdatedAt = time.Now()
 	if notes != nil {
@@ -217,6 +271,46 @@ func (s *AssetHRService) ReassignAsset(assetID uint, newEmployeeID string, tenan
 
 	if err := s.assetRepo.Update(asset); err != nil {
 		return nil, fmt.Errorf("failed to reassign asset: %w", err)
+	}
+	toEmployeeName := ""
+	if asset.AssignedTo != nil {
+		toEmployeeName = *asset.AssignedTo
+	}
+	if !wasAssigned {
+		emptyName := ""
+		if err := s.assignmentRepo.Create(&models.AssetAssignmentHistory{
+			TenantID:       tenantID,
+			AssetID:        asset.ID,
+			AssetCode:      asset.AssetCode,
+			Action:         models.AssetAssignmentActionAssign,
+			FromEmployeeID: nil,
+			ToEmployeeID:   asset.EmployeeID,
+			FromEmployee:   &emptyName,
+			ToEmployee:     &toEmployeeName,
+			Department:     asset.Department,
+			Notes:          notes,
+			OccurredAt:     reassignDate,
+			ActorUserID:    reassignedBy,
+		}); err != nil {
+			return nil, fmt.Errorf("failed to write assignment history: %w", err)
+		}
+	} else {
+		if err := s.assignmentRepo.Create(&models.AssetAssignmentHistory{
+			TenantID:       tenantID,
+			AssetID:        asset.ID,
+			AssetCode:      asset.AssetCode,
+			Action:         models.AssetAssignmentActionReassign,
+			FromEmployeeID: prevEmployeeID,
+			ToEmployeeID:   asset.EmployeeID,
+			FromEmployee:   prevEmployeeName,
+			ToEmployee:     &toEmployeeName,
+			Department:     asset.Department,
+			Notes:          notes,
+			OccurredAt:     reassignDate,
+			ActorUserID:    reassignedBy,
+		}); err != nil {
+			return nil, fmt.Errorf("failed to write reassignment history: %w", err)
+		}
 	}
 
 	return asset, nil
