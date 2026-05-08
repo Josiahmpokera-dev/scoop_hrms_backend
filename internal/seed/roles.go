@@ -28,6 +28,18 @@ func RunRoles() {
 			Permissions: allPerms, // Admin gets everything
 		},
 		{
+			Code:        "ceo",
+			Name:        "Chief Executive Officer",
+			Description: "Executive role with final authority including offboarding final approvals",
+			Permissions: allPerms,
+		},
+		{
+			Code:        "managing_director",
+			Name:        "Managing Director",
+			Description: "Executive role with final authority including offboarding final approvals",
+			Permissions: allPerms,
+		},
+		{
 			Code:        "hr",
 			Name:        "HR Manager",
 			Description: "HR management with employee, leave, attendance, and organizational access",

@@ -14,6 +14,7 @@ type InitiateSeparationRequest struct {
 	Reason                string     `json:"reason" binding:"required"`
 	ReasonCode            *string    `json:"reason_code,omitempty"` // Better Opportunity, Higher Studies, etc.
 	ExitInterviewRequired *bool      `json:"exit_interview_required,omitempty"`
+	RequireExecutiveApproval *bool   `json:"require_executive_approval,omitempty"` // true => CEO/MD/Director final approval required
 	AdditionalNotes       *string    `json:"additional_notes,omitempty"`
 	InitiatedBy           *string    `json:"initiated_by,omitempty"` // Employee ID of person initiating
 }
@@ -47,6 +48,17 @@ type RecordAssetIssueRequest struct {
 	IssueType        string `json:"issue_type" binding:"required,oneof='Not Returned' Damaged Missing Stolen Other"`
 	IssueDescription string `json:"issue_description" binding:"required"`
 	ReportedByID     string `json:"reported_by_id" binding:"required"` // Employee ID
+}
+
+// ManageAssetClearanceRequest manages asset clearance status in a single API.
+type ManageAssetClearanceRequest struct {
+	Status            string  `json:"status" binding:"required,oneof=cleared issues pending"` // cleared, issues, pending
+	ActedByEmployeeID *string `json:"acted_by_employee_id,omitempty"`                          // optional employee_id of actor
+	ReturnDate        *string `json:"return_date,omitempty"`                                   // YYYY-MM-DD (for cleared)
+	ReturnCondition   *string `json:"return_condition,omitempty"`                              // Excellent, Good, Fair, Poor, Damaged
+	IssueType         *string `json:"issue_type,omitempty"`                                    // Not Returned, Damaged, Missing, Stolen, Other
+	IssueDescription  *string `json:"issue_description,omitempty"`                             // required when status=issues
+	Notes             *string `json:"notes,omitempty"`
 }
 
 // ScheduleExitInterviewRequest represents the request to schedule exit interview
@@ -107,6 +119,29 @@ type PaySettlementRequest struct {
 // CompleteOffboardingRequest represents the request to complete offboarding
 type CompleteOffboardingRequest struct {
 	CompletedByID *string `json:"completed_by_id,omitempty"` // Employee ID
+}
+
+// ApproveOffboardingLevelOneRequest represents manager/hr level-one approval.
+type ApproveOffboardingLevelOneRequest struct {
+	Department *string `json:"department,omitempty"` // Optional when approver is admin; allowed: Manager, HR
+	Notes      *string `json:"notes,omitempty"`
+}
+
+// ApproveOffboardingFinalRequest represents CEO/Director final approval.
+type ApproveOffboardingFinalRequest struct {
+	Notes *string `json:"notes,omitempty"`
+}
+
+// CancelOffboardingRequest represents cancellation/hold of offboarding workflow.
+type CancelOffboardingRequest struct {
+	Reason string  `json:"reason" binding:"required"`
+	Notes  *string `json:"notes,omitempty"`
+}
+
+// ResumeOffboardingRequest represents request to resume an on-hold workflow.
+type ResumeOffboardingRequest struct {
+	Reason string  `json:"reason" binding:"required"`
+	Notes  *string `json:"notes,omitempty"`
 }
 
 // SettlementBreakdown represents the breakdown of final settlement

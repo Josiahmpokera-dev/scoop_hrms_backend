@@ -52,6 +52,10 @@ func (h *OffboardingHandler) InitiateSeparation(c *gin.Context) {
 	user, _ := c.Get("user")
 	var createdBy *uint
 	if userObj, ok := user.(*userModels.User); ok {
+		if !userObj.IsManager() && !userObj.IsHR() && !userObj.IsAdmin() && !userObj.IsSuperAdmin() {
+			response.Forbidden(c, "Only Manager or HR can initiate offboarding")
+			return
+		}
 		createdBy = &userObj.ID
 	}
 
@@ -72,8 +76,21 @@ func (h *OffboardingHandler) InitiateSeparation(c *gin.Context) {
 	// Build response with employee details
 	employee, _ := h.employeeRepo.FindByEmployeeID(req.EmployeeID)
 	responseData := h.buildWorkflowResponse(workflow, employee, nil, nil, nil)
+	responseDataMap := gin.H{
+		"workflow": responseData,
+	}
+	if clearances, clrErr := h.offboardingService.GetClearances(workflow.OffboardingID, tenantID); clrErr == nil {
+		requireExecutive := false
+		for _, clr := range clearances {
+			if clr.Department == "Executive Approval" {
+				requireExecutive = true
+				break
+			}
+		}
+		responseDataMap["require_executive_approval"] = requireExecutive
+	}
 
-	response.Success(c, "Offboarding workflow initiated successfully", responseData)
+	response.Success(c, "Offboarding workflow initiated successfully", responseDataMap)
 }
 
 // ListWorkflows lists offboarding workflows with pagination and filters
@@ -639,6 +656,56 @@ func (h *OffboardingHandler) RecordAssetIssue(c *gin.Context) {
 	response.Success(c, "Asset issue recorded successfully", responseData)
 }
 
+// ManageAssetClearance manages asset clearance status (cleared/issues/pending) in a unified endpoint.
+// @Summary Manage offboarding asset clearance
+// @Description HR/HOD/Manager/Admin can set asset clearance status to cleared, issues, or pending
+// @Tags Employee Offboarding
+// @Accept json
+// @Produce json
+// @Param offboarding_id path string true "Offboarding ID"
+// @Param asset_id path int true "Asset ID"
+// @Param request body models.ManageAssetClearanceRequest true "Asset clearance request"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Router/employees/offboarding/workflows/{offboarding_id}/assets/{asset_id}/clearance [post]
+func (h *OffboardingHandler) ManageAssetClearance(c *gin.Context) {
+	offboardingID := c.Param("offboarding_id")
+	assetIDStr := c.Param("asset_id")
+	assetID, err := strconv.ParseUint(assetIDStr, 10, 32)
+	if err != nil {
+		response.ValidationError(c, "Validation failed", "invalid asset_id")
+		return
+	}
+
+	var req models.ManageAssetClearanceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+	assetReturn, err := h.offboardingService.ManageAssetClearance(offboardingID, uint(assetID), &req, tenantID)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	asset, _ := h.assetRepo.FindByID(uint(assetID))
+	response.Success(c, "Asset clearance updated successfully", gin.H{
+		"asset_id":          assetReturn.AssetID,
+		"asset_code":        asset.AssetCode,
+		"return_status":     assetReturn.ReturnStatus,
+		"return_date":       assetReturn.ReturnDate,
+		"return_condition":  assetReturn.ReturnCondition,
+		"return_notes":      assetReturn.ReturnNotes,
+		"issue_type":        assetReturn.IssueType,
+		"issue_description": assetReturn.IssueDescription,
+		"reported_by_id":    assetReturn.ReportedByID,
+		"returned_by_id":    assetReturn.ReturnedByID,
+		"updated_at":        assetReturn.UpdatedAt,
+	})
+}
+
 // ScheduleExitInterview schedules an exit interview
 // @Summary Schedule exit interview
 // @Description Schedules an exit interview for the offboarding employee
@@ -1039,6 +1106,168 @@ func (h *OffboardingHandler) CompleteOffboarding(c *gin.Context) {
 	}
 
 	response.Success(c, "Offboarding workflow completed successfully", responseData)
+}
+
+// ApproveLevelOne approves manager/hr level on offboarding workflow.
+// @Summary Approve offboarding level one
+// @Description Manager/HR/Admin approval at level one. Admin can specify department as Manager or HR.
+// @Tags Employee Offboarding
+// @Accept json
+// @Produce json
+// @Param offboarding_id path string true "Offboarding ID"
+// @Param request body models.ApproveOffboardingLevelOneRequest false "Approval request"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Router/employees/offboarding/workflows/{offboarding_id}/approvals/level-one [post]
+func (h *OffboardingHandler) ApproveLevelOne(c *gin.Context) {
+	offboardingID := c.Param("offboarding_id")
+	var req models.ApproveOffboardingLevelOneRequest
+	_ = c.ShouldBindJSON(&req)
+
+	tenantID := middleware.GetTenantID(c)
+	user, _ := c.Get("user")
+	userObj, ok := user.(*userModels.User)
+	if !ok || userObj == nil {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	workflow, err := h.offboardingService.ApproveLevelOne(offboardingID, &req, tenantID, userObj)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Level-one approval recorded successfully", gin.H{
+		"offboarding_id":    workflow.OffboardingID,
+		"status":            workflow.Status,
+		"clearance_status":  workflow.ClearanceStatus,
+		"clearance_progress": workflow.ClearanceProgress,
+		"requires_executive_approval": workflow.TotalClearances != nil && *workflow.TotalClearances >= 6,
+		"finalized_at_hr_level": workflow.Status == "Completed",
+		"updated_at":        workflow.UpdatedAt,
+	})
+}
+
+// ApproveFinal approves offboarding at CEO/Director level and deactivates employee/login.
+// @Summary Final approve offboarding
+// @Description CEO/Managing Director/Director/Admin final approval. This deactivates employee and blocks login.
+// @Tags Employee Offboarding
+// @Accept json
+// @Produce json
+// @Param offboarding_id path string true "Offboarding ID"
+// @Param request body models.ApproveOffboardingFinalRequest false "Approval request"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Router/employees/offboarding/workflows/{offboarding_id}/approvals/final [post]
+func (h *OffboardingHandler) ApproveFinal(c *gin.Context) {
+	offboardingID := c.Param("offboarding_id")
+	var req models.ApproveOffboardingFinalRequest
+	_ = c.ShouldBindJSON(&req)
+
+	tenantID := middleware.GetTenantID(c)
+	user, _ := c.Get("user")
+	userObj, ok := user.(*userModels.User)
+	if !ok || userObj == nil {
+		response.Unauthorized(c, "User not authenticated")
+		return
+	}
+
+	workflow, err := h.offboardingService.ApproveFinal(offboardingID, &req, tenantID, userObj)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Final approval completed. Employee access has been revoked", gin.H{
+		"offboarding_id":      workflow.OffboardingID,
+		"status":              workflow.Status,
+		"completed_at":        workflow.CompletedAt,
+		"access_revoked_date": workflow.AccessRevokedDate,
+		"employee_active":     false,
+		"user_login_allowed":  false,
+		"updated_at":          workflow.UpdatedAt,
+	})
+}
+
+// CancelOffboarding places an offboarding workflow on hold with a cancellation reason.
+// @Summary Cancel offboarding process
+// @Description Cancels (puts on hold) an in-progress offboarding workflow
+// @Tags Employee Offboarding
+// @Accept json
+// @Produce json
+// @Param offboarding_id path string true "Offboarding ID"
+// @Param request body models.CancelOffboardingRequest true "Cancel request"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Router/employees/offboarding/workflows/{offboarding_id}/cancel [post]
+func (h *OffboardingHandler) CancelOffboarding(c *gin.Context) {
+	offboardingID := c.Param("offboarding_id")
+	var req models.CancelOffboardingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+	user, _ := c.Get("user")
+	var updatedBy *uint
+	if userObj, ok := user.(*userModels.User); ok {
+		updatedBy = &userObj.ID
+	}
+
+	workflow, err := h.offboardingService.CancelOffboarding(offboardingID, &req, tenantID, updatedBy)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Offboarding process cancelled successfully", gin.H{
+		"offboarding_id": workflow.OffboardingID,
+		"status":         workflow.Status,
+		"notes":          workflow.AdditionalNotes,
+		"updated_at":     workflow.UpdatedAt,
+	})
+}
+
+// ResumeOffboarding resumes a previously cancelled/on-hold workflow.
+// @Summary Resume offboarding process
+// @Description Resumes an on-hold offboarding workflow back to in progress
+// @Tags Employee Offboarding
+// @Accept json
+// @Produce json
+// @Param offboarding_id path string true "Offboarding ID"
+// @Param request body models.ResumeOffboardingRequest true "Resume request"
+// @Success 200 {object} response.APIResponse
+// @Failure 400 {object} response.APIResponse
+// @Router/employees/offboarding/workflows/{offboarding_id}/resume [post]
+func (h *OffboardingHandler) ResumeOffboarding(c *gin.Context) {
+	offboardingID := c.Param("offboarding_id")
+	var req models.ResumeOffboardingRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.ValidationError(c, "Validation failed", err.Error())
+		return
+	}
+
+	tenantID := middleware.GetTenantID(c)
+	user, _ := c.Get("user")
+	var updatedBy *uint
+	if userObj, ok := user.(*userModels.User); ok {
+		updatedBy = &userObj.ID
+	}
+
+	workflow, err := h.offboardingService.ResumeOffboarding(offboardingID, &req, tenantID, updatedBy)
+	if err != nil {
+		response.BadRequest(c, err.Error(), nil)
+		return
+	}
+
+	response.Success(c, "Offboarding process resumed successfully", gin.H{
+		"offboarding_id": workflow.OffboardingID,
+		"status":         workflow.Status,
+		"notes":          workflow.AdditionalNotes,
+		"updated_at":     workflow.UpdatedAt,
+	})
 }
 
 // GetStatistics retrieves offboarding statistics

@@ -153,7 +153,7 @@ func HRMiddleware() gin.HandlerFunc {
 	}
 }
 
-// ManagerMiddleware ensures the user is a Manager, HR, or Admin.
+// ManagerMiddleware ensures the user is a Manager, HOD, HR, or Admin.
 // Managers can approve leave, attendance, and oversee their team.
 func ManagerMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -162,8 +162,8 @@ func ManagerMiddleware() gin.HandlerFunc {
 			c.Abort()
 			return
 		}
-		if !containsRole(c, "admin") && !containsRole(c, "super_admin") && !containsRole(c, "hr") && !containsRole(c, "manager") {
-			response.Forbidden(c, "Manager, HR, or Admin access required")
+		if !containsRole(c, "admin") && !containsRole(c, "super_admin") && !containsRole(c, "hr") && !containsRole(c, "manager") && !containsRole(c, "hod") {
+			response.Forbidden(c, "Manager, HOD, HR, or Admin access required")
 			c.Abort()
 			return
 		}

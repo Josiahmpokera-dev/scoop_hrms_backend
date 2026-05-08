@@ -4,12 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	assetRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/assets/repositories"
 	departmentRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/departments/repositories"
 	employeeModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/models"
 	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
+	positionRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/positions/repositories"
+	roleRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/roles/repositories"
+	userModels "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/models"
+	userRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/users/repositories"
 	"gorm.io/gorm"
 )
 
@@ -22,7 +27,12 @@ type OffboardingService struct {
 	employeeRepo    *employeeRepos.EmployeeRepository
 	assetRepo        *assetRepos.AssetRepository
 	departmentRepo   *departmentRepos.DepartmentRepository
+	positionRepo     *positionRepos.JobPositionRepository
+	userRepo         *userRepos.UserRepository
+	roleRepo         *roleRepos.RoleRepository
 }
+
+const executiveApprovalDepartment = "Executive Approval"
 
 // NewOffboardingService creates a new offboarding service
 func NewOffboardingService() *OffboardingService {
@@ -34,6 +44,9 @@ func NewOffboardingService() *OffboardingService {
 		employeeRepo:    employeeRepos.NewEmployeeRepository(),
 		assetRepo:        assetRepos.NewAssetRepository(),
 		departmentRepo:   departmentRepos.NewDepartmentRepository(),
+		positionRepo:     positionRepos.NewJobPositionRepository(),
+		userRepo:         userRepos.NewUserRepository(),
+		roleRepo:         roleRepos.NewRoleRepository(),
 	}
 }
 
@@ -94,6 +107,16 @@ func (s *OffboardingService) InitiateSeparation(req *employeeModels.InitiateSepa
 	}
 
 	// Create workflow
+	requireExecutiveApproval := true
+	if req.RequireExecutiveApproval != nil {
+		requireExecutiveApproval = *req.RequireExecutiveApproval
+	}
+
+	totalClearances := 5
+	if requireExecutiveApproval {
+		totalClearances = 6
+	}
+
 	workflow := &employeeModels.OffboardingWorkflow{
 		OffboardingID:         offboardingID,
 		EmployeeID:            req.EmployeeID,
@@ -112,7 +135,7 @@ func (s *OffboardingService) InitiateSeparation(req *employeeModels.InitiateSepa
 		Status:                "In Progress",
 		ClearanceProgress:     new(float64), // 0
 		CompletedClearances:   new(int),      // 0
-		TotalClearances:       intPtr(5),     // 5 default clearances
+		TotalClearances:       intPtr(totalClearances),
 		CreatedBy:             createdBy,
 		UpdatedBy:             createdBy,
 	}
@@ -136,6 +159,13 @@ func (s *OffboardingService) InitiateSeparation(req *employeeModels.InitiateSepa
 		{OffboardingID: offboardingID, Department: "Finance", Status: "Pending"},
 		{OffboardingID: offboardingID, Department: "Assets", Status: "Pending"},
 	}
+	if requireExecutiveApproval {
+		clearances = append(clearances, employeeModels.OffboardingClearance{
+			OffboardingID: offboardingID,
+			Department:    executiveApprovalDepartment,
+			Status:        "Pending",
+		})
+	}
 
 	// Generate unique clearance IDs for each clearance
 	// Get the base count first, then increment for each clearance
@@ -156,6 +186,10 @@ func (s *OffboardingService) InitiateSeparation(req *employeeModels.InitiateSepa
 	if err := s.createAssetReturnRecords(offboardingID, req.EmployeeID, tenantID, &lastWorkingDate); err != nil {
 		// Log error but don't fail the workflow creation
 		fmt.Printf("Warning: Failed to create asset return records: %v\n", err)
+	}
+	// Ensure Assets clearance is updated immediately, including "no assets assigned" case.
+	if err := s.updateAssetsClearanceStatus(offboardingID, tenantID); err != nil {
+		fmt.Printf("Warning: Failed to update assets clearance status: %v\n", err)
 	}
 
 	return workflow, nil
@@ -432,6 +466,95 @@ func (s *OffboardingService) RecordAssetIssue(offboardingID string, assetID uint
 	return assetReturn, nil
 }
 
+// ManageAssetClearance sets asset clearance status via a unified action API.
+func (s *OffboardingService) ManageAssetClearance(
+	offboardingID string,
+	assetID uint,
+	req *employeeModels.ManageAssetClearanceRequest,
+	tenantID *uint,
+) (*employeeModels.OffboardingAssetReturn, error) {
+	assetReturn, err := s.assetReturnRepo.FindByAssetIDAndOffboardingID(assetID, offboardingID, tenantID)
+	if err != nil {
+		return nil, errors.New("asset return record not found")
+	}
+
+	status := strings.ToLower(strings.TrimSpace(req.Status))
+	switch status {
+	case "cleared":
+		returnDate := time.Now()
+		if req.ReturnDate != nil && strings.TrimSpace(*req.ReturnDate) != "" {
+			parsed, parseErr := time.Parse("2006-01-02", strings.TrimSpace(*req.ReturnDate))
+			if parseErr != nil {
+				return nil, errors.New("invalid return_date format, expected YYYY-MM-DD")
+			}
+			returnDate = parsed
+		}
+		cond := "Good"
+		if req.ReturnCondition != nil && strings.TrimSpace(*req.ReturnCondition) != "" {
+			cond = strings.TrimSpace(*req.ReturnCondition)
+		}
+		assetReturn.ReturnStatus = "Returned"
+		assetReturn.ReturnDate = &returnDate
+		assetReturn.ReturnCondition = &cond
+		if req.Notes != nil {
+			assetReturn.ReturnNotes = req.Notes
+		}
+		if req.ActedByEmployeeID != nil && strings.TrimSpace(*req.ActedByEmployeeID) != "" {
+			actor := strings.TrimSpace(*req.ActedByEmployeeID)
+			assetReturn.ReturnedByID = &actor
+		}
+
+		asset, assetErr := s.assetRepo.FindByID(assetID)
+		if assetErr == nil && asset != nil {
+			asset.Status = "available"
+			asset.EmployeeID = nil
+			asset.AssignedTo = nil
+			asset.ReturnDate = &returnDate
+			_ = s.assetRepo.Update(asset)
+		}
+
+	case "issues":
+		if req.IssueDescription == nil || strings.TrimSpace(*req.IssueDescription) == "" {
+			return nil, errors.New("issue_description is required when status=issues")
+		}
+		issueType := "Other"
+		if req.IssueType != nil && strings.TrimSpace(*req.IssueType) != "" {
+			issueType = strings.TrimSpace(*req.IssueType)
+		}
+		issueDescription := strings.TrimSpace(*req.IssueDescription)
+		assetReturn.ReturnStatus = "Issue"
+		assetReturn.IssueType = &issueType
+		assetReturn.IssueDescription = &issueDescription
+		if req.ActedByEmployeeID != nil && strings.TrimSpace(*req.ActedByEmployeeID) != "" {
+			actor := strings.TrimSpace(*req.ActedByEmployeeID)
+			assetReturn.ReportedByID = &actor
+		}
+		if req.Notes != nil {
+			assetReturn.ReturnNotes = req.Notes
+		}
+
+	case "pending":
+		assetReturn.ReturnStatus = "Pending"
+		assetReturn.ReturnDate = nil
+		assetReturn.ReturnCondition = nil
+		assetReturn.ReturnedByID = nil
+		assetReturn.IssueType = nil
+		assetReturn.IssueDescription = nil
+		assetReturn.ReportedByID = nil
+		assetReturn.ReturnNotes = req.Notes
+	default:
+		return nil, errors.New("invalid status, use: cleared, issues, pending")
+	}
+
+	if err := s.assetReturnRepo.Update(assetReturn); err != nil {
+		return nil, err
+	}
+	if err := s.updateAssetsClearanceStatus(offboardingID, tenantID); err != nil {
+		return nil, err
+	}
+	return assetReturn, nil
+}
+
 // updateAssetsClearanceStatus updates the Assets clearance status based on asset returns
 func (s *OffboardingService) updateAssetsClearanceStatus(offboardingID string, tenantID *uint) error {
 	assetReturns, err := s.assetReturnRepo.FindByOffboardingID(offboardingID, tenantID)
@@ -473,7 +596,14 @@ func (s *OffboardingService) updateAssetsClearanceStatus(offboardingID string, t
 	}
 
 	// Update clearance status
-	if hasIssues {
+	if len(assetReturns) == 0 {
+		// If employee has no assigned assets, assets clearance is auto-cleared.
+		assetsClearance.Status = "Cleared"
+		now := time.Now()
+		assetsClearance.ClearanceDate = &now
+		autoNote := "Auto-cleared: employee has no assigned assets"
+		assetsClearance.Notes = &autoNote
+	} else if hasIssues {
 		assetsClearance.Status = "Issues"
 	} else if allReturned && len(assetReturns) > 0 {
 		assetsClearance.Status = "Cleared"
@@ -901,4 +1031,333 @@ func (s *OffboardingService) GetStatistics(tenantID *uint) (*employeeModels.Offb
 	}
 
 	return stats, nil
+}
+
+// ApproveLevelOne approves manager/hr level for offboarding.
+func (s *OffboardingService) ApproveLevelOne(
+	offboardingID string,
+	req *employeeModels.ApproveOffboardingLevelOneRequest,
+	tenantID *uint,
+	approver *userModels.User,
+) (*employeeModels.OffboardingWorkflow, error) {
+	if approver == nil {
+		return nil, errors.New("approver context is required")
+	}
+
+	workflow, err := s.workflowRepo.FindByOffboardingID(offboardingID, tenantID)
+	if err != nil {
+		return nil, errors.New("offboarding workflow not found")
+	}
+	if workflow.Status == "Completed" {
+		return nil, errors.New("workflow is already completed")
+	}
+
+	// Determine approver department level.
+	dept := ""
+	switch {
+	case approver.IsManager():
+		dept = "Manager"
+	case approver.IsHR():
+		dept = "HR"
+	case approver.IsAdmin() || approver.IsSuperAdmin():
+		if req.Department == nil {
+			return nil, errors.New("department is required for admin level-one approval (Manager or HR)")
+		}
+		switch *req.Department {
+		case "Manager", "HR":
+			dept = *req.Department
+		default:
+			return nil, errors.New("invalid department for level-one approval, allowed: Manager, HR")
+		}
+	default:
+		return nil, errors.New("only Manager, HR, or Admin can perform level-one approval")
+	}
+
+	clearances, err := s.clearanceRepo.FindByOffboardingID(offboardingID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	var target *employeeModels.OffboardingClearance
+	for i := range clearances {
+		if clearances[i].Department == dept {
+			target = &clearances[i]
+			break
+		}
+	}
+	if target == nil {
+		return nil, fmt.Errorf("%s clearance is not configured", dept)
+	}
+	if target.Status == "Cleared" {
+		return nil, fmt.Errorf("%s clearance is already approved", dept)
+	}
+
+	now := time.Now()
+	target.Status = "Cleared"
+	target.ClearanceDate = &now
+	approverID := fmt.Sprintf("%d", approver.ID)
+	target.ClearedByID = &approverID
+	if req.Notes != nil {
+		target.Notes = req.Notes
+	}
+	if err := s.clearanceRepo.Update(target); err != nil {
+		return nil, err
+	}
+
+	// Keep workflow progress in sync.
+	if err := s.updateWorkflowClearanceStatus(offboardingID, tenantID); err != nil {
+		return nil, err
+	}
+	updated, err := s.workflowRepo.FindByOffboardingID(offboardingID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+
+	// If executive approval is not required and HR approved, finish workflow now.
+	if dept == "HR" && !s.requiresExecutiveApproval(clearances) {
+		now := time.Now()
+		updated.Status = "Completed"
+		updated.CompletedAt = &now
+		updated.AccessRevokedDate = &now
+		approverID := fmt.Sprintf("%d", approver.ID)
+		updated.CompletedByID = &approverID
+		if req.Notes != nil {
+			updated.AdditionalNotes = req.Notes
+		}
+		if err := s.workflowRepo.Update(updated); err != nil {
+			return nil, err
+		}
+		if err := s.deactivateEmployeeAndUser(updated); err != nil {
+			return nil, err
+		}
+		return updated, nil
+	}
+
+	return updated, nil
+}
+
+// ApproveFinal approves offboarding at CEO/Director level and deactivates access.
+func (s *OffboardingService) ApproveFinal(
+	offboardingID string,
+	req *employeeModels.ApproveOffboardingFinalRequest,
+	tenantID *uint,
+	approver *userModels.User,
+) (*employeeModels.OffboardingWorkflow, error) {
+	if approver == nil {
+		return nil, errors.New("approver context is required")
+	}
+	if !s.canFinalApprove(approver) {
+		return nil, errors.New("final approval requires CEO, Managing Director, Director, or Admin")
+	}
+
+	workflow, err := s.workflowRepo.FindByOffboardingID(offboardingID, tenantID)
+	if err != nil {
+		return nil, errors.New("offboarding workflow not found")
+	}
+	if workflow.Status == "Completed" {
+		return nil, errors.New("workflow is already completed")
+	}
+
+	// Ensure level-one approvals are done.
+	clearances, err := s.clearanceRepo.FindByOffboardingID(offboardingID, tenantID)
+	if err != nil {
+		return nil, err
+	}
+	if !s.requiresExecutiveApproval(clearances) {
+		return nil, errors.New("executive approval is not required for this workflow")
+	}
+	managerApproved := false
+	hrApproved := false
+	var executiveClearance *employeeModels.OffboardingClearance
+	for _, c := range clearances {
+		if c.Department == "Manager" && c.Status == "Cleared" {
+			managerApproved = true
+		}
+		if c.Department == "HR" && c.Status == "Cleared" {
+			hrApproved = true
+		}
+		if c.Department == executiveApprovalDepartment {
+			tmp := c
+			executiveClearance = &tmp
+		}
+	}
+	if !(managerApproved || hrApproved) {
+		return nil, errors.New("cannot final approve before Manager or HR level-one approval")
+	}
+	if executiveClearance == nil {
+		return nil, errors.New("executive approval clearance is not configured")
+	}
+
+	// Mark executive approval clearance as cleared.
+	now := time.Now()
+	approverID := fmt.Sprintf("%d", approver.ID)
+	executiveClearance.Status = "Cleared"
+	executiveClearance.ClearanceDate = &now
+	executiveClearance.ClearedByID = &approverID
+	if req != nil && req.Notes != nil {
+		executiveClearance.Notes = req.Notes
+	}
+	if err := s.clearanceRepo.Update(executiveClearance); err != nil {
+		return nil, err
+	}
+	if err := s.updateWorkflowClearanceStatus(offboardingID, tenantID); err != nil {
+		return nil, err
+	}
+
+	now = time.Now()
+	workflow.Status = "Completed"
+	workflow.CompletedAt = &now
+	workflow.AccessRevokedDate = &now
+	workflow.CompletedByID = &approverID
+	if req != nil && req.Notes != nil {
+		workflow.AdditionalNotes = req.Notes
+	}
+	if err := s.workflowRepo.Update(workflow); err != nil {
+		return nil, err
+	}
+
+	// Deactivate employee and linked user account(s).
+	if err := s.deactivateEmployeeAndUser(workflow); err != nil {
+		return nil, err
+	}
+
+	return workflow, nil
+}
+
+func (s *OffboardingService) requiresExecutiveApproval(clearances []employeeModels.OffboardingClearance) bool {
+	for _, c := range clearances {
+		if c.Department == executiveApprovalDepartment {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *OffboardingService) canFinalApprove(approver *userModels.User) bool {
+	if approver.IsAdmin() || approver.IsSuperAdmin() {
+		return true
+	}
+	// Prefer explicit RBAC roles when assigned.
+	if roleCodes, err := s.roleRepo.GetUserRoleCodes(approver.ID); err == nil {
+		for _, code := range roleCodes {
+			c := strings.ToLower(strings.TrimSpace(code))
+			if c == "ceo" || c == "managing_director" || c == "director" {
+				return true
+			}
+		}
+	}
+
+	employee, err := s.employeeRepo.FindByUserID(approver.ID)
+	if err != nil || employee == nil || employee.PositionID == nil {
+		return false
+	}
+
+	position, err := s.positionRepo.FindByID(*employee.PositionID)
+	if err != nil || position == nil {
+		return false
+	}
+
+	title := strings.ToLower(strings.TrimSpace(position.Title))
+	return strings.Contains(title, "ceo") ||
+		strings.Contains(title, "managing director") ||
+		strings.Contains(title, "director")
+}
+
+func (s *OffboardingService) deactivateEmployeeAndUser(workflow *employeeModels.OffboardingWorkflow) error {
+	var employee *employeeModels.Employee
+	var err error
+	if workflow.EmployeeDBID != nil {
+		employee, err = s.employeeRepo.FindByID(*workflow.EmployeeDBID)
+	} else {
+		employee, err = s.employeeRepo.FindByEmployeeID(workflow.EmployeeID)
+	}
+	if err != nil || employee == nil {
+		return nil // keep workflow completion; employee may have been removed
+	}
+
+	employee.IsActive = false
+	employee.Status = employeeModels.StatusInactive
+	if err := s.employeeRepo.Update(employee); err != nil {
+		return err
+	}
+
+	// Deactivate linked user via user_id first.
+	if employee.UserID != nil {
+		if user, uErr := s.userRepo.FindByID(*employee.UserID); uErr == nil && user != nil {
+			user.IsActive = false
+			user.Status = userModels.UserStatusBlocked
+			_ = s.userRepo.Update(user)
+		}
+	}
+	// Fallback: deactivate user by work email.
+	if employee.WorkEmail != nil && *employee.WorkEmail != "" {
+		if user, uErr := s.userRepo.FindByEmail(*employee.WorkEmail); uErr == nil && user != nil {
+			user.IsActive = false
+			user.Status = userModels.UserStatusBlocked
+			_ = s.userRepo.Update(user)
+		}
+	}
+	return nil
+}
+
+// CancelOffboarding marks workflow as On Hold with cancellation reason.
+// This is a controlled "cancel" operation without introducing a new DB status value.
+func (s *OffboardingService) CancelOffboarding(
+	offboardingID string,
+	req *employeeModels.CancelOffboardingRequest,
+	tenantID *uint,
+	updatedBy *uint,
+) (*employeeModels.OffboardingWorkflow, error) {
+	workflow, err := s.workflowRepo.FindByOffboardingID(offboardingID, tenantID)
+	if err != nil {
+		return nil, errors.New("offboarding workflow not found")
+	}
+	if workflow.Status == "Completed" {
+		return nil, errors.New("completed offboarding cannot be cancelled")
+	}
+
+	workflow.Status = "On Hold"
+	reason := "Cancellation Reason: " + req.Reason
+	if req.Notes != nil && strings.TrimSpace(*req.Notes) != "" {
+		reason += " | Notes: " + strings.TrimSpace(*req.Notes)
+	}
+	workflow.AdditionalNotes = &reason
+	workflow.UpdatedBy = updatedBy
+
+	if err := s.workflowRepo.Update(workflow); err != nil {
+		return nil, err
+	}
+	return workflow, nil
+}
+
+// ResumeOffboarding moves an on-hold workflow back to in-progress.
+func (s *OffboardingService) ResumeOffboarding(
+	offboardingID string,
+	req *employeeModels.ResumeOffboardingRequest,
+	tenantID *uint,
+	updatedBy *uint,
+) (*employeeModels.OffboardingWorkflow, error) {
+	workflow, err := s.workflowRepo.FindByOffboardingID(offboardingID, tenantID)
+	if err != nil {
+		return nil, errors.New("offboarding workflow not found")
+	}
+	if workflow.Status == "Completed" {
+		return nil, errors.New("completed offboarding cannot be resumed")
+	}
+	if workflow.Status != "On Hold" {
+		return nil, errors.New("only on-hold offboarding can be resumed")
+	}
+
+	workflow.Status = "In Progress"
+	reason := "Resume Reason: " + req.Reason
+	if req.Notes != nil && strings.TrimSpace(*req.Notes) != "" {
+		reason += " | Notes: " + strings.TrimSpace(*req.Notes)
+	}
+	workflow.AdditionalNotes = &reason
+	workflow.UpdatedBy = updatedBy
+
+	if err := s.workflowRepo.Update(workflow); err != nil {
+		return nil, err
+	}
+	return workflow, nil
 }

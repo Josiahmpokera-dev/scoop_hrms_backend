@@ -371,7 +371,6 @@ func SetupRoutes(r *gin.Engine) {
 				offboarding.GET("/statistics", offboardingHandler.GetStatistics) // Get offboarding statistics
 
 				// Workflow management
-				offboarding.POST("/initiate", offboardingHandler.InitiateSeparation)                 // Initiate separation
 				offboarding.GET("/workflows", offboardingHandler.ListWorkflows)                      // List workflows
 				offboarding.GET("/workflows/:offboarding_id", offboardingHandler.GetWorkflowDetails) // Get workflow details
 				offboarding.PATCH("/workflows/:offboarding_id", offboardingHandler.UpdateWorkflow)   // Update workflow
@@ -398,7 +397,24 @@ func SetupRoutes(r *gin.Engine) {
 
 				// Complete offboarding
 				offboarding.POST("/workflows/:offboarding_id/complete", offboardingHandler.CompleteOffboarding) // Complete offboarding
+				offboarding.POST("/workflows/:offboarding_id/cancel", offboardingHandler.CancelOffboarding)     // Cancel/hold offboarding
+				offboarding.POST("/workflows/:offboarding_id/resume", offboardingHandler.ResumeOffboarding)     // Resume offboarding
 			}
+		}
+
+		// Offboarding initiation and approval routes (auth required; role checks happen in service layer).
+		offboardingHandler := employeeHandlers.NewOffboardingHandler()
+		offboardingApprovals := v1.Group("/employees/offboarding")
+		offboardingApprovals.Use(middleware.AuthMiddleware())
+		{
+			offboardingApprovals.POST("/initiate", offboardingHandler.InitiateSeparation)
+			offboardingApprovals.POST("/workflows/:offboarding_id/approvals/level-one", offboardingHandler.ApproveLevelOne)
+			offboardingApprovals.POST("/workflows/:offboarding_id/approvals/final", offboardingHandler.ApproveFinal)
+		}
+		offboardingAssetManage := v1.Group("/employees/offboarding")
+		offboardingAssetManage.Use(middleware.AuthMiddleware(), middleware.ManagerMiddleware())
+		{
+			offboardingAssetManage.POST("/workflows/:offboarding_id/assets/:asset_id/clearance", offboardingHandler.ManageAssetClearance)
 		}
 
 		// Department routes (require authentication - HR or Admin)
