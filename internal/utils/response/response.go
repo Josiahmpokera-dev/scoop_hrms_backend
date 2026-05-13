@@ -1,10 +1,23 @@
 package response
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
+
+func stringifyErr(err interface{}) interface{} {
+	if err == nil {
+		return nil
+	}
+	switch e := err.(type) {
+	case error:
+		return e.Error()
+	default:
+		return fmt.Sprintf("%v", e)
+	}
+}
 
 // APIResponse represents a standard API response structure
 type APIResponse struct {
@@ -92,7 +105,7 @@ func InternalServerError(c *gin.Context, message string, err interface{}) {
 	c.JSON(http.StatusInternalServerError, APIResponse{
 		Success: false,
 		Message: message,
-		Error:   err,
+		Error:   stringifyErr(err),
 	})
 }
 
@@ -101,7 +114,7 @@ func ServiceUnavailable(c *gin.Context, message string, err interface{}) {
 	c.JSON(http.StatusServiceUnavailable, APIResponse{
 		Success: false,
 		Message: message,
-		Error:   err,
+		Error:   stringifyErr(err),
 	})
 }
 

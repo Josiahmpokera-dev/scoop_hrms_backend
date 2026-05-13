@@ -121,3 +121,26 @@ func (r *LeavePolicyRepository) CountEmployeeAssignments(policyID uint) (int64, 
 	}
 	return count, nil
 }
+
+// FindActivePolicies returns all active leave policies for computing balances (ordered).
+// If tenantID is set but no rows match (e.g. policies are global with NULL tenant_id), it falls back to policies without a tenant filter.
+func (r *LeavePolicyRepository) FindActivePolicies(tenantID *uint) ([]models.LeavePolicy, error) {
+	var policies []models.LeavePolicy
+	run := func(tid *uint) error {
+		q := r.db.Model(&models.LeavePolicy{}).Preload("LeaveType").Where("is_active = ?", true)
+		if tid != nil {
+			q = q.Where("tenant_id = ?", *tid)
+		}
+		return q.Order("leave_type_code ASC, country ASC").Find(&policies).Error
+	}
+	if err := run(tenantID); err != nil {
+		return nil, err
+	}
+	if len(policies) == 0 && tenantID != nil {
+		policies = nil
+		if err := run(nil); err != nil {
+			return nil, err
+		}
+	}
+	return policies, nil
+}

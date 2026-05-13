@@ -7,17 +7,21 @@ import (
 )
 
 type TalentPoolCandidate struct {
-	ID            string         `json:"id" gorm:"primaryKey;type:varchar(36)"`
-	Name          string         `json:"name" gorm:"not null"`
-	Email         string         `json:"email" gorm:"unique;not null"`
-	Skills        []string       `json:"skills" gorm:"serializer:json"`
-	PreferredRole []string       `json:"preferredRole" gorm:"serializer:json"`
-	ResumeURL     string         `json:"resumeUrl"`
-	ExperienceMin int            `json:"experienceMin"` // Years
-	Location      string         `json:"location"`
-	CreatedAt     time.Time      `json:"createdAt"`
-	UpdatedAt     time.Time      `json:"updatedAt"`
-	DeletedAt     gorm.DeletedAt `json:"-" gorm:"index"`
+	ID                  string         `json:"id" gorm:"primaryKey;type:varchar(36)"`
+	Name                string         `json:"name" gorm:"not null"`
+	Email               string         `json:"email" gorm:"unique;not null"`
+	Skills              []string       `json:"skills" gorm:"serializer:json"`
+	PreferredRole       []string       `json:"preferredRole" gorm:"serializer:json"`
+	ResumeURL           string         `json:"resumeUrl"`
+	ExperienceMin       int            `json:"experienceMin"` // Years
+	Location            string         `json:"location"`
+	SourceJobOpeningID  string         `json:"sourceJobOpeningId" gorm:"size:36;index"`  // last known job context
+	SourceApplicationID string         `json:"sourceApplicationId" gorm:"size:36;index"` // optional link back
+	InternalNotes       string         `json:"internalNotes" gorm:"type:text"`           // HR notes for outreach
+	LastContactedAt     *time.Time     `json:"lastContactedAt"`
+	CreatedAt           time.Time      `json:"createdAt"`
+	UpdatedAt           time.Time      `json:"updatedAt"`
+	DeletedAt           gorm.DeletedAt `json:"-" gorm:"index"`
 }
 
 type AddToTalentPoolRequest struct {
@@ -26,4 +30,17 @@ type AddToTalentPoolRequest struct {
 	Skills        []string `json:"skills"`
 	PreferredRole []string `json:"preferredRole"`
 	ResumeURL     string   `json:"resumeUrl"`
+}
+
+// MoveApplicationToTalentPoolRequest moves an application out of the active pipeline into TalentPool stage.
+type MoveApplicationToTalentPoolRequest struct {
+	Notes             string `json:"notes"`             // stored on JobApplication
+	SyncTalentPoolRow *bool  `json:"syncTalentPoolRow"` // nil/true: upsert talent_pool_candidates for outreach; false: stage only
+	InternalPoolNotes string `json:"internalPoolNotes"` // stored on talent pool row when syncing
+}
+
+// ContactTalentPoolRequest sends an email to the talent pool candidate (SMTP must be configured).
+type ContactTalentPoolRequest struct {
+	Subject string `json:"subject" binding:"required"`
+	Message string `json:"message" binding:"required"`
 }

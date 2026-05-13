@@ -134,34 +134,31 @@ func main() {
 		&performanceModels.SuccessionPlan{},
 		&settingsModels.MenuVisibilitySetting{},
 		&recruitmentModels.JobRequisition{},
+		&recruitmentModels.ApprovalStep{}, // child table for JobRequisition.approvalFlow (required for GET / approve)
 		&recruitmentModels.JobOpening{},
 		&recruitmentModels.Candidate{},
 		&recruitmentModels.JobApplication{},
+		&recruitmentModels.ApplicationSubmissionQueue{},
 		&recruitmentModels.Interview{},
+		&recruitmentModels.Feedback{},
+		&recruitmentModels.InterviewWorkflowDefinition{},
+		&recruitmentModels.InterviewWorkflowDefinitionStage{},
+		&recruitmentModels.InterviewWorkflowProcess{},
+		&recruitmentModels.InterviewWorkflowProcessStageSnapshot{},
+		&recruitmentModels.InterviewWorkflowStageAttempt{},
+		&recruitmentModels.InterviewWorkflowFinalApproval{},
+		&recruitmentModels.InterviewWorkflowAuditEvent{},
 		&recruitmentModels.Offer{},
 		&recruitmentModels.TalentPoolCandidate{},
 		&attendanceModels.ManualPunch{},
 	}
 
-	db := database.GetDB()
-	missing := make([]interface{}, 0, len(modelsToMigrate))
-	for _, model := range modelsToMigrate {
-		if !db.Migrator().HasTable(model) {
-			missing = append(missing, model)
-		}
-	}
-
-	if len(missing) == 0 {
-		log.Println("No new tables detected. Migration skipped.")
-		return
-	}
-
-	log.Printf("Creating %d new table(s)...", len(missing))
-	for _, model := range missing {
-		log.Printf("MIGRATING MODEL: %T", model)
-		if err := database.Migrate(model); err != nil {
-			log.Fatalf("Failed to migrate %T: %v", model, err)
-		}
+	// AutoMigrate all registered models: creates missing tables AND adds new columns
+	// (e.g. job_openings.apply_token) on existing databases. The previous "new tables only"
+	// mode never altered existing tables, which caused schema drift.
+	log.Printf("Syncing schema for %d model(s) (tables + columns)...", len(modelsToMigrate))
+	if err := database.Migrate(modelsToMigrate...); err != nil {
+		log.Fatalf("Migration failed: %v", err)
 	}
 
 	log.Println("Migration completed successfully.")

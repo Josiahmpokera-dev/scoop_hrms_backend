@@ -125,17 +125,17 @@ func (r *LeaveRequestRepository) GenerateApplicationNumber(year int) (string, er
 	var count int64
 	prefix := "LV"
 	yearStr := fmt.Sprintf("%d", year)
-	
+
 	// Get count of requests for this year
 	pattern := fmt.Sprintf("%s-%s-%%", prefix, yearStr)
 	r.db.Model(&models.LeaveRequest{}).
 		Where("application_number LIKE ?", pattern).
 		Count(&count)
-	
+
 	// Format: LV-2026-00123
 	sequence := count + 1
 	appNumber := fmt.Sprintf("%s-%s-%05d", prefix, yearStr, sequence)
-	
+
 	return appNumber, nil
 }
 
@@ -143,13 +143,50 @@ func (r *LeaveRequestRepository) GenerateApplicationNumber(year int) (string, er
 func (r *LeaveRequestRepository) FindByDateRange(startDate, endDate string, tenantID *uint) ([]models.LeaveRequest, error) {
 	var requests []models.LeaveRequest
 	query := r.db.Preload("LeaveType").
-		Where("(from_date <= ? AND to_date >= ?) OR (from_date BETWEEN ? AND ?) OR (to_date BETWEEN ? AND ?)", 
+		Where("(from_date <= ? AND to_date >= ?) OR (from_date BETWEEN ? AND ?) OR (to_date BETWEEN ? AND ?)",
 			endDate, startDate, startDate, endDate, startDate, endDate)
-	
+
 	if tenantID != nil {
 		query = query.Where("tenant_id = ?", *tenantID)
 	}
-	
+
 	err := query.Find(&requests).Error
 	return requests, err
+}
+
+// SumConsumedDaysForYear sums approved / partially approved working days for balance used totals.
+func (r *LeaveRequestRepository) SumConsumedDaysForYear(employeeID, leaveTypeCode string, year int, tenantID *uint) (float64, error) {
+	var sum float64
+	query := r.db.Model(&models.LeaveRequest{}).
+		Select(`COALESCE(SUM(
+			CASE
+				WHEN status = 'partially_approved' AND approved_days IS NOT NULL THEN approved_days
+				WHEN status IN ('approved', 'partially_approved') THEN total_days
+				ELSE 0
+			END
+		), 0)`).
+		Where("employee_id = ? AND leave_type_code = ? AND leave_period_year = ?", employeeID, leaveTypeCode, year)
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	if err := query.Scan(&sum).Error; err != nil {
+		return 0, err
+	}
+	return sum, nil
+}
+
+// SumPendingDaysForYear sums days still awaiting approval (pending / returned for info).
+func (r *LeaveRequestRepository) SumPendingDaysForYear(employeeID, leaveTypeCode string, year int, tenantID *uint) (float64, error) {
+	var sum float64
+	query := r.db.Model(&models.LeaveRequest{}).
+		Select("COALESCE(SUM(total_days), 0)").
+		Where("employee_id = ? AND leave_type_code = ? AND leave_period_year = ?", employeeID, leaveTypeCode, year).
+		Where("status IN ?", []string{"pending", "returned_for_info"})
+	if tenantID != nil {
+		query = query.Where("tenant_id = ?", *tenantID)
+	}
+	if err := query.Scan(&sum).Error; err != nil {
+		return 0, err
+	}
+	return sum, nil
 }

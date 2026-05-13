@@ -22,6 +22,11 @@ func Initialize() error {
 		return err
 	}
 
+	// Add missing recruitment columns on existing DBs (e.g. job_openings.apply_token)
+	if err := database.EnsureRecruitmentSchema(); err != nil {
+		return err
+	}
+
 	// SQLC connection is optional (moved to internal/database/optional/)
 	// Uncomment and import if you want to use SQLC alongside GORM
 	// See docs/guides/SQLC_SETUP.md for details

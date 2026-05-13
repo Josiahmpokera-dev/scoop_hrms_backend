@@ -1049,6 +1049,7 @@ func SetupRoutes(r *gin.Engine) {
 		projectHandler := projectHandlers.NewProjectHandler()
 		dailyTaskHandler := projectHandlers.NewDailyTaskHandler()
 		recruitmentHandler := recruitmentHandlers.NewRecruitmentHandler()
+		interviewWorkflowHandler := recruitmentHandlers.NewInterviewWorkflowHandler()
 
 		// Projects - Management (HR/Admin/Manager)
 		projects := v1.Group("/projects")
@@ -1106,14 +1107,20 @@ func SetupRoutes(r *gin.Engine) {
 		// Public Routes (No Auth)
 		recruitmentPublic := v1.Group("/recruitment/public")
 		{
-			recruitmentPublic.POST("/apply", recruitmentHandler.SubmitApplication)
+			recruitmentPublic.GET("/openings/by-token/:token", recruitmentHandler.GetPublicJobOpeningByToken)
 			recruitmentPublic.GET("/openings", recruitmentHandler.ListPublicJobOpenings)
+			recruitmentPublic.POST("/apply", recruitmentHandler.SubmitApplication)
 		}
 
 		// Protected Routes
 		recruitment := v1.Group("/recruitment")
 		recruitment.Use(middleware.AuthMiddleware())
 		{
+			// Realtime updates (websocket)
+			recruitment.GET("/ws/candidates", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.CandidatesWS)
+
+			recruitment.GET("/dashboard/summary", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.GetRecruitmentDashboardSummary)
+
 			// Requisitions
 			recruitment.POST("/requisitions", middleware.PermissionMiddleware("recruitment:create"), recruitmentHandler.CreateRequisition)
 			recruitment.GET("/requisitions", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ListRequisitions)
@@ -1121,18 +1128,60 @@ func SetupRoutes(r *gin.Engine) {
 			recruitment.POST("/requisitions/:id/approval", middleware.PermissionMiddleware("recruitment:approve"), recruitmentHandler.ApproveRequisition)
 			recruitment.PUT("/requisitions/:id", middleware.PermissionMiddleware("recruitment:update"), recruitmentHandler.UpdateRequisition)
 
-			// Job Openings
+			// Job Openings (register specific :id routes before generic GET :id)
 			recruitment.POST("/openings", middleware.PermissionMiddleware("recruitment:create"), recruitmentHandler.CreateJobOpening)
 			recruitment.GET("/openings", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ListJobOpenings)
+			recruitment.GET("/openings/search", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.SearchJobOpenings)
+			recruitment.GET("/openings/grouped", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ListJobOpeningsGrouped)
+			recruitment.GET("/openings/:id/share-link", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ShareJobOpeningLink)
+			recruitment.GET("/openings/:id/applications", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ListJobOpeningApplications)
+			recruitment.GET("/openings/:id/interviews", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ListJobOpeningInterviews)
+			recruitment.GET("/openings/:id/offers", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ListJobOpeningOffers)
 			recruitment.POST("/openings/:id/publish", middleware.PermissionMiddleware("recruitment:publish"), recruitmentHandler.PublishJobOpening)
+			recruitment.POST("/openings/:id/activate", middleware.PermissionMiddleware("recruitment:publish"), recruitmentHandler.ActivateJobOpening)
+			recruitment.POST("/openings/:id/close", middleware.PermissionMiddleware("recruitment:update"), recruitmentHandler.CloseJobOpening)
+			recruitment.POST("/openings/:id/reopen", middleware.PermissionMiddleware("recruitment:update"), recruitmentHandler.ReopenJobOpening)
+			recruitment.PUT("/openings/:id", middleware.PermissionMiddleware("recruitment:update"), recruitmentHandler.UpdateJobOpening)
+			recruitment.GET("/openings/:id", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.GetJobOpening)
 
 			// Candidates
 			recruitment.GET("/candidates", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ListCandidates)
+			recruitment.GET("/candidates/interview-stages", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ListCandidatesByInterviewStage)
+			recruitment.GET("/candidates/:id", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.GetCandidateDetails)
 			recruitment.PATCH("/candidates/:id/stage", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.UpdateCandidateStage)
 
+			// Applications (pipeline by application id)
+			recruitment.PATCH("/applications/:id/stage", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.UpdateApplicationStage)
+			recruitment.POST("/applications/:id/action", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ActionApplication)
+			recruitment.POST("/applications/:id/move-to-talent-pool", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.MoveApplicationToTalentPool)
+
 			// Interviews
+			recruitment.GET("/interviews", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ListInterviews)
+			recruitment.GET("/interviews/:id", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.GetInterviewDetails)
+			recruitment.POST("/interviews/schedule-manual", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ScheduleInterviewManual)
+			recruitment.POST("/interviews/schedule-batch", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ScheduleInterviewBatch)
 			recruitment.POST("/interviews", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ScheduleInterview)
 			recruitment.POST("/interviews/:id/feedback", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.SubmitFeedback)
+			recruitment.POST("/interviews/:id/hr-decision", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.SubmitHrInterviewDecision)
+
+			// Structured stage-driven interview workflows (parallel to legacy /interviews)
+			recruitment.GET("/interview-workflows/definitions", middleware.PermissionMiddleware("recruitment:manage_candidates"), interviewWorkflowHandler.ListInterviewWorkflowDefinitions)
+			recruitment.POST("/interview-workflows/definitions", middleware.PermissionMiddleware("recruitment:manage_candidates"), interviewWorkflowHandler.CreateInterviewWorkflowDefinition)
+			recruitment.GET("/interview-workflows/definitions/:id", middleware.PermissionMiddleware("recruitment:read"), interviewWorkflowHandler.GetInterviewWorkflowDefinition)
+			recruitment.PUT("/interview-workflows/definitions/:id", middleware.PermissionMiddleware("recruitment:manage_candidates"), interviewWorkflowHandler.UpdateInterviewWorkflowDefinition)
+
+			recruitment.POST("/interview-workflows/processes", middleware.PermissionMiddleware("recruitment:manage_candidates"), interviewWorkflowHandler.StartInterviewWorkflowProcess)
+			recruitment.GET("/interview-workflows/processes/by-application/:applicationId", middleware.PermissionMiddleware("recruitment:read"), interviewWorkflowHandler.GetInterviewWorkflowProcessByApplication)
+			recruitment.GET("/interview-workflows/processes/:id/timeline", middleware.PermissionMiddleware("recruitment:read"), interviewWorkflowHandler.GetInterviewWorkflowTimeline)
+			recruitment.GET("/interview-workflows/processes/:id", middleware.PermissionMiddleware("recruitment:read"), interviewWorkflowHandler.GetInterviewWorkflowProcess)
+			recruitment.POST("/interview-workflows/processes/:id/stages", middleware.PermissionMiddleware("recruitment:manage_candidates"), interviewWorkflowHandler.ScheduleInterviewWorkflowStage)
+
+			recruitment.POST("/interview-workflows/stage-attempts/:id/attendance", middleware.PermissionMiddleware("recruitment:read"), interviewWorkflowHandler.RecordInterviewWorkflowAttendance)
+			recruitment.POST("/interview-workflows/stage-attempts/:id/start", middleware.PermissionMiddleware("recruitment:read"), interviewWorkflowHandler.StartInterviewWorkflowStage)
+			recruitment.POST("/interview-workflows/stage-attempts/:id/evaluation", middleware.PermissionMiddleware("recruitment:read"), interviewWorkflowHandler.SubmitInterviewWorkflowEvaluation)
+			recruitment.POST("/interview-workflows/stage-attempts/:id/absence-action", middleware.PermissionMiddleware("recruitment:read"), interviewWorkflowHandler.InterviewWorkflowAbsenceAction)
+
+			recruitment.POST("/interview-workflows/final-approvals/:id/decide", middleware.PermissionMiddleware("recruitment:read"), interviewWorkflowHandler.DecideInterviewWorkflowFinalApproval)
 
 			// Offers
 			recruitment.POST("/offers", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.CreateOffer)
@@ -1142,6 +1191,8 @@ func SetupRoutes(r *gin.Engine) {
 			// Talent Pool
 			recruitment.POST("/talent-pool", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.AddToTalentPool)
 			recruitment.GET("/talent-pool/search", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.SearchTalentPool)
+			recruitment.GET("/talent-pool", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ListTalentPool)
+			recruitment.POST("/talent-pool/:id/contact", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ContactTalentPoolCandidate)
 		}
 
 		// =====================================================================

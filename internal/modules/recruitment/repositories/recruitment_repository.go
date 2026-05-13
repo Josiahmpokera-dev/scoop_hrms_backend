@@ -1,8 +1,10 @@
 package repositories
 
 import (
+	"database/sql"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/database"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/recruitment/models"
@@ -22,7 +24,22 @@ func NewRecruitmentRepository() *RecruitmentRepository {
 // --- Requisitions ---
 
 func (r *RecruitmentRepository) CreateRequisition(req *models.JobRequisition) error {
-	return r.db.Create(req).Error
+	err := r.db.Session(&gorm.Session{FullSaveAssociations: false}).
+		Omit("ApprovalFlow").
+		Create(req).Error
+	if err == nil {
+		return nil
+	}
+	el := strings.ToLower(err.Error())
+	if strings.Contains(el, "priority") && (strings.Contains(el, "column") || strings.Contains(el, "does not exist")) {
+		// Older DBs created before the priority column; insert without it.
+		reqLegacy := *req
+		reqLegacy.Priority = ""
+		return r.db.Session(&gorm.Session{FullSaveAssociations: false}).
+			Omit("ApprovalFlow", "Priority").
+			Create(&reqLegacy).Error
+	}
+	return err
 }
 
 func (r *RecruitmentRepository) GetRequisitionByID(id string) (*models.JobRequisition, error) {
@@ -54,7 +71,8 @@ func (r *RecruitmentRepository) ListRequisitions(status, department string, page
 }
 
 func (r *RecruitmentRepository) UpdateRequisition(req *models.JobRequisition) error {
-	return r.db.Save(req).Error
+	// Persist nested ApprovalFlow rows when approvers append steps (ApproveRequisition).
+	return r.db.Session(&gorm.Session{FullSaveAssociations: true}).Save(req).Error
 }
 
 // --- Job Openings ---
@@ -65,26 +83,123 @@ func (r *RecruitmentRepository) CreateJobOpening(job *models.JobOpening) error {
 
 func (r *RecruitmentRepository) GetJobOpeningByID(id string) (*models.JobOpening, error) {
 	var job models.JobOpening
-	err := r.db.First(&job, "id = ?", id).Error
+	err := r.db.Preload("Requisition").First(&job, "id = ?", id).Error
 	return &job, err
 }
 
+// GetJobOpeningByApplyToken loads an opening by its public apply_token.
+func (r *RecruitmentRepository) GetJobOpeningByApplyToken(token string) (*models.JobOpening, error) {
+	var job models.JobOpening
+	err := r.db.Preload("Requisition").Where("apply_token = ?", token).First(&job).Error
+	return &job, err
+}
+
+func (r *RecruitmentRepository) IsApplyTokenTaken(token string) (bool, error) {
+	var count int64
+	err := r.db.Model(&models.JobOpening{}).Where("apply_token = ?", token).Count(&count).Error
+	return count > 0, err
+}
+
 func (r *RecruitmentRepository) ListJobOpenings(status, department string) ([]models.JobOpening, error) {
+	jobs, _, err := r.ListJobOpeningsPaginated(status, department, "", 0, 0)
+	return jobs, err
+}
+
+// ListJobOpeningsPaginated returns job openings with optional filters.
+// page/limit 0 = no pagination (all rows).
+func (r *RecruitmentRepository) ListJobOpeningsPaginated(status, department, requisitionID string, page, limit int) ([]models.JobOpening, int64, error) {
 	var jobs []models.JobOpening
+	var total int64
 	query := r.db.Model(&models.JobOpening{})
 
 	if status != "" {
-		query = query.Where("status = ?", status)
+		switch status {
+		case models.JobOpeningStatusActive:
+			query = query.Where("status IN ?", []string{models.JobOpeningStatusActive, models.LegacyStatusPublished})
+		default:
+			query = query.Where("status = ?", status)
+		}
 	}
-	// Note: JobOpening doesn't have Department directly, it's in Requisition.
-	// We might need a join if filtering by department is strictly required on this table.
-	// For now, let's assume if department is passed, we join.
+	if requisitionID != "" {
+		query = query.Where("requisition_id = ?", requisitionID)
+	}
 	if department != "" {
 		query = query.Joins("JOIN job_requisitions ON job_requisitions.id = job_openings.requisition_id").
 			Where("job_requisitions.department = ?", department)
 	}
 
-	err := query.Find(&jobs).Error
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	q2 := query.Session(&gorm.Session{})
+	if limit > 0 {
+		offset := (page - 1) * limit
+		if offset < 0 {
+			offset = 0
+		}
+		q2 = q2.Offset(offset).Limit(limit)
+	}
+	err := q2.Preload("Requisition").Order("created_at DESC").Find(&jobs).Error
+	return jobs, total, err
+}
+
+// SearchJobOpeningsPaginated returns openings filtered by keyword + existing filters.
+// Keyword currently matches job_title and job_description.
+func (r *RecruitmentRepository) SearchJobOpeningsPaginated(keyword, status, department, requisitionID string, page, limit int) ([]models.JobOpening, int64, error) {
+	var jobs []models.JobOpening
+	var total int64
+	query := r.db.Model(&models.JobOpening{})
+
+	kw := strings.TrimSpace(keyword)
+	if kw != "" {
+		like := "%" + strings.ToLower(kw) + "%"
+		query = query.Where("(LOWER(job_title) LIKE ? OR LOWER(job_description) LIKE ?)", like, like)
+	}
+
+	if status != "" {
+		switch status {
+		case models.JobOpeningStatusActive:
+			query = query.Where("status IN ?", []string{models.JobOpeningStatusActive, models.LegacyStatusPublished})
+		default:
+			query = query.Where("status = ?", status)
+		}
+	}
+	if requisitionID != "" {
+		query = query.Where("requisition_id = ?", requisitionID)
+	}
+	if department != "" {
+		query = query.Joins("JOIN job_requisitions ON job_requisitions.id = job_openings.requisition_id").
+			Where("job_requisitions.department = ?", department)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	q2 := query.Session(&gorm.Session{})
+	if limit > 0 {
+		offset := (page - 1) * limit
+		if offset < 0 {
+			offset = 0
+		}
+		q2 = q2.Offset(offset).Limit(limit)
+	}
+	err := q2.Preload("Requisition").Order("created_at DESC").Find(&jobs).Error
+	return jobs, total, err
+}
+
+// ListPublicActiveOpenings returns openings candidates can apply to (Active or legacy Published, not expired).
+func (r *RecruitmentRepository) ListPublicActiveOpenings(department string, now time.Time) ([]models.JobOpening, error) {
+	var jobs []models.JobOpening
+	query := r.db.Model(&models.JobOpening{}).
+		Where("status IN ?", []string{models.JobOpeningStatusActive, models.LegacyStatusPublished}).
+		Where("(expiry_date IS NULL OR expiry_date = ? OR expiry_date > ?)", time.Time{}, now)
+	if department != "" {
+		query = query.Joins("JOIN job_requisitions ON job_requisitions.id = job_openings.requisition_id").
+			Where("job_requisitions.department = ?", department)
+	}
+	err := query.Preload("Requisition").Order("created_at DESC").Find(&jobs).Error
 	return jobs, err
 }
 
@@ -126,7 +241,7 @@ func (r *RecruitmentRepository) CreateApplication(app *models.JobApplication) er
 
 func (r *RecruitmentRepository) GetApplicationByID(id string) (*models.JobApplication, error) {
 	var app models.JobApplication
-	err := r.db.Preload("JobOpening").Preload("Interviews").Preload("Offer").First(&app, "id = ?", id).Error
+	err := r.db.Preload("JobOpening").Preload("Candidate").Preload("Interviews").Preload("Offer").First(&app, "id = ?", id).Error
 	return &app, err
 }
 
@@ -158,8 +273,145 @@ func (r *RecruitmentRepository) ListCandidates(jobID, stage string) ([]models.Ca
 	return candidates, err
 }
 
+// ListCandidatesFiltered returns candidates globally, with optional filters and keyword search.
+func (r *RecruitmentRepository) ListCandidatesFiltered(jobID, stage, keyword string, page, limit int) ([]models.Candidate, int64, error) {
+	var rows []models.Candidate
+	var total int64
+
+	base := r.db.Model(&models.Candidate{})
+	needsJoinApplications := strings.TrimSpace(jobID) != "" || strings.TrimSpace(stage) != ""
+	if needsJoinApplications {
+		base = base.Joins("JOIN job_applications ON job_applications.candidate_id = candidates.id")
+	}
+	if strings.TrimSpace(jobID) != "" {
+		base = base.Where("job_applications.job_opening_id = ?", strings.TrimSpace(jobID))
+	}
+	if strings.TrimSpace(stage) != "" {
+		base = base.Where("job_applications.stage = ?", strings.TrimSpace(stage))
+	}
+	if kw := strings.TrimSpace(strings.ToLower(keyword)); kw != "" {
+		like := "%" + kw + "%"
+		base = base.Where(
+			"(LOWER(candidates.first_name) LIKE ? OR LOWER(candidates.last_name) LIKE ? OR LOWER(candidates.email) LIKE ? OR LOWER(candidates.phone) LIKE ?)",
+			like, like, like, like,
+		)
+	}
+
+	countQ := base.Session(&gorm.Session{})
+	if err := countQ.Distinct("candidates.id").Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	q := base.Session(&gorm.Session{}).
+		Select("candidates.*").
+		Distinct().
+		Preload("Applications").
+		Order("candidates.created_at DESC")
+	if limit > 0 {
+		offset := (page - 1) * limit
+		if offset < 0 {
+			offset = 0
+		}
+		q = q.Offset(offset).Limit(limit)
+	}
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+// GetCandidateWithDetails returns candidate profile plus recruitment details.
+func (r *RecruitmentRepository) GetCandidateWithDetails(candidateID string) (*models.Candidate, error) {
+	var row models.Candidate
+	err := r.db.
+		Preload("Applications").
+		Preload("Applications.JobOpening").
+		Preload("Applications.Interviews").
+		Preload("Applications.Offer").
+		First(&row, "id = ?", candidateID).Error
+	return &row, err
+}
+
+// ListCandidatesByInterviewRound returns candidates that have interviews in the requested round (1..3).
+func (r *RecruitmentRepository) ListCandidatesByInterviewRound(round int, jobID, keyword string, page, limit int) ([]models.Candidate, int64, error) {
+	var rows []models.Candidate
+	var total int64
+
+	base := r.db.Model(&models.Candidate{}).
+		Joins("JOIN job_applications ON job_applications.candidate_id = candidates.id").
+		Joins("JOIN interviews ON interviews.application_id = job_applications.id").
+		Where("interviews.round = ?", round)
+
+	if strings.TrimSpace(jobID) != "" {
+		base = base.Where("job_applications.job_opening_id = ?", strings.TrimSpace(jobID))
+	}
+	if kw := strings.TrimSpace(strings.ToLower(keyword)); kw != "" {
+		like := "%" + kw + "%"
+		base = base.Where(
+			"(LOWER(candidates.first_name) LIKE ? OR LOWER(candidates.last_name) LIKE ? OR LOWER(candidates.email) LIKE ? OR LOWER(candidates.phone) LIKE ?)",
+			like, like, like, like,
+		)
+	}
+
+	countQ := base.Session(&gorm.Session{})
+	if err := countQ.Distinct("candidates.id").Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	q := base.Session(&gorm.Session{}).
+		Select("candidates.*").
+		Distinct().
+		Preload("Applications", func(db *gorm.DB) *gorm.DB {
+			if strings.TrimSpace(jobID) != "" {
+				db = db.Where("job_opening_id = ?", strings.TrimSpace(jobID))
+			}
+			return db
+		}).
+		Preload("Applications.JobOpening").
+		Preload("Applications.Interviews", "round = ?", round).
+		Order("candidates.created_at DESC")
+
+	if limit > 0 {
+		offset := (page - 1) * limit
+		if offset < 0 {
+			offset = 0
+		}
+		q = q.Offset(offset).Limit(limit)
+	}
+
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
 func (r *RecruitmentRepository) UpdateApplication(app *models.JobApplication) error {
 	return r.db.Save(app).Error
+}
+
+// CountApplicationsByJobOpeningIDs returns application counts grouped by job opening id.
+func (r *RecruitmentRepository) CountApplicationsByJobOpeningIDs(jobOpeningIDs []string) (map[string]int64, error) {
+	out := make(map[string]int64)
+	if len(jobOpeningIDs) == 0 {
+		return out, nil
+	}
+	type row struct {
+		JobOpeningID string
+		Count        int64
+	}
+	var rows []row
+	err := r.db.Model(&models.JobApplication{}).
+		Select("job_opening_id, COUNT(*) as count").
+		Where("job_opening_id IN ?", jobOpeningIDs).
+		Group("job_opening_id").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		out[r.JobOpeningID] = r.Count
+	}
+	return out, nil
 }
 
 // --- Interviews ---
@@ -176,6 +428,85 @@ func (r *RecruitmentRepository) GetInterviewByID(id string) (*models.Interview, 
 
 func (r *RecruitmentRepository) UpdateInterview(interview *models.Interview) error {
 	return r.db.Save(interview).Error
+}
+
+// ListInterviewsPaginated lists interviews globally with optional filters.
+func (r *RecruitmentRepository) ListInterviewsPaginated(round int, status, jobOpeningID, candidateID string, page, limit int) ([]models.Interview, int64, error) {
+	var rows []models.Interview
+	var total int64
+
+	q := r.db.Model(&models.Interview{})
+	if round > 0 {
+		q = q.Where("round = ?", round)
+	}
+	if strings.TrimSpace(status) != "" {
+		q = q.Where("status = ?", strings.TrimSpace(status))
+	}
+	if strings.TrimSpace(jobOpeningID) != "" {
+		q = q.Where("job_opening_id = ?", strings.TrimSpace(jobOpeningID))
+	}
+	if strings.TrimSpace(candidateID) != "" {
+		q = q.Where("candidate_id = ?", strings.TrimSpace(candidateID))
+	}
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	q2 := q.Session(&gorm.Session{}).Preload("Feedback").Order("scheduled_date DESC, created_at DESC")
+	if limit > 0 {
+		offset := (page - 1) * limit
+		if offset < 0 {
+			offset = 0
+		}
+		q2 = q2.Offset(offset).Limit(limit)
+	}
+
+	if err := q2.Find(&rows).Error; err != nil {
+		return nil, 0, err
+	}
+	return rows, total, nil
+}
+
+// MaxAttemptForRound returns the highest attempt number recorded for this application and round.
+func (r *RecruitmentRepository) MaxAttemptForRound(applicationID string, round int) (int, error) {
+	var max sql.NullInt64
+	err := r.db.Model(&models.Interview{}).
+		Where("application_id = ? AND round = ?", applicationID, round).
+		Select("MAX(attempt)").
+		Scan(&max).Error
+	if err != nil {
+		return 0, err
+	}
+	if !max.Valid {
+		return 0, nil
+	}
+	return int(max.Int64), nil
+}
+
+// GetLatestInterviewForRound returns the interview row with the highest attempt for that round.
+func (r *RecruitmentRepository) GetLatestInterviewForRound(applicationID string, round int) (*models.Interview, error) {
+	var inv models.Interview
+	err := r.db.Where("application_id = ? AND round = ?", applicationID, round).
+		Order("attempt DESC, created_at DESC").
+		First(&inv).Error
+	return &inv, err
+}
+
+// CountBlockingInterviews counts sessions that still need panel completion or HR action before scheduling another interview.
+func (r *RecruitmentRepository) CountBlockingInterviews(applicationID string) (int64, error) {
+	var n int64
+	err := r.db.Model(&models.Interview{}).
+		Where("application_id = ? AND status IN ?", applicationID, blockingInterviewStatuses()).
+		Count(&n).Error
+	return n, err
+}
+
+func blockingInterviewStatuses() []string {
+	return []string{
+		models.InterviewStatusScheduled,
+		models.InterviewStatusPanelCompleted,
+		models.InterviewStatusLegacyCompleted,
+	}
 }
 
 // --- Offers ---
@@ -223,4 +554,114 @@ func (r *RecruitmentRepository) SearchTalentPool(skills []string, location strin
 
 	err := query.Find(&candidates).Error
 	return candidates, err
+}
+
+// ListApplicationsForJobOpening returns applications for one job opening with candidate preloaded.
+func (r *RecruitmentRepository) ListApplicationsForJobOpening(jobOpeningID, stage string, page, limit int) ([]models.JobApplication, int64, error) {
+	var apps []models.JobApplication
+	var total int64
+	base := r.db.Model(&models.JobApplication{}).Where("job_opening_id = ?", jobOpeningID)
+	if stage != "" {
+		base = base.Where("stage = ?", stage)
+	}
+	if err := base.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	q := r.db.Preload("Candidate").Where("job_opening_id = ?", jobOpeningID)
+	if stage != "" {
+		q = q.Where("stage = ?", stage)
+	}
+	if limit > 0 {
+		offset := (page - 1) * limit
+		if offset < 0 {
+			offset = 0
+		}
+		q = q.Offset(offset).Limit(limit)
+	}
+	err := q.Order("applied_date DESC").Find(&apps).Error
+	return apps, total, err
+}
+
+// ListInterviewsForJobOpening lists interviews linked to a job opening.
+func (r *RecruitmentRepository) ListInterviewsForJobOpening(jobOpeningID string) ([]models.Interview, error) {
+	var rows []models.Interview
+	err := r.db.Preload("Feedback").Where("job_opening_id = ?", jobOpeningID).Order("scheduled_date ASC").Find(&rows).Error
+	return rows, err
+}
+
+// ListOffersForJobOpening lists offers for a job opening.
+func (r *RecruitmentRepository) ListOffersForJobOpening(jobOpeningID string) ([]models.Offer, error) {
+	var rows []models.Offer
+	err := r.db.Where("job_opening_id = ?", jobOpeningID).Order("created_at DESC").Find(&rows).Error
+	return rows, err
+}
+
+// ListTalentPoolPaged lists talent pool rows with pagination.
+func (r *RecruitmentRepository) ListTalentPoolPaged(page, limit int) ([]models.TalentPoolCandidate, int64, error) {
+	var rows []models.TalentPoolCandidate
+	var total int64
+	q := r.db.Model(&models.TalentPoolCandidate{})
+	if err := q.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	offset := (page - 1) * limit
+	if offset < 0 {
+		offset = 0
+	}
+	err := r.db.Order("updated_at DESC").Offset(offset).Limit(limit).Find(&rows).Error
+	return rows, total, err
+}
+
+// GetTalentPoolCandidateByID returns one talent pool row.
+func (r *RecruitmentRepository) GetTalentPoolCandidateByID(id string) (*models.TalentPoolCandidate, error) {
+	var row models.TalentPoolCandidate
+	err := r.db.First(&row, "id = ?", id).Error
+	return &row, err
+}
+
+// GetTalentPoolByEmail finds an existing talent pool row by email.
+func (r *RecruitmentRepository) GetTalentPoolByEmail(email string) (*models.TalentPoolCandidate, error) {
+	var row models.TalentPoolCandidate
+	err := r.db.Where("email = ?", email).First(&row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	return &row, err
+}
+
+// SaveTalentPoolCandidate saves updates to an existing talent pool row.
+func (r *RecruitmentRepository) SaveTalentPoolCandidate(row *models.TalentPoolCandidate) error {
+	return r.db.Save(row).Error
+}
+
+// --- Application submission queue ---
+
+func (r *RecruitmentRepository) CreateApplicationSubmissionQueue(row *models.ApplicationSubmissionQueue) error {
+	return r.db.Create(row).Error
+}
+
+func (r *RecruitmentRepository) GetApplicationSubmissionQueueByID(id string) (*models.ApplicationSubmissionQueue, error) {
+	var row models.ApplicationSubmissionQueue
+	err := r.db.First(&row, "id = ?", id).Error
+	return &row, err
+}
+
+func (r *RecruitmentRepository) SaveApplicationSubmissionQueue(row *models.ApplicationSubmissionQueue) error {
+	return r.db.Save(row).Error
+}
+
+func (r *RecruitmentRepository) ListPendingApplicationSubmissionQueues(limit int) ([]models.ApplicationSubmissionQueue, error) {
+	var rows []models.ApplicationSubmissionQueue
+	if limit <= 0 {
+		limit = 20
+	}
+	err := r.db.Where("status IN ?", []string{
+		models.ApplicationQueueStatusPending,
+		models.ApplicationQueueStatusFailed,
+	}).
+		Where("retry_count < ?", 5).
+		Order("created_at ASC").
+		Limit(limit).
+		Find(&rows).Error
+	return rows, err
 }

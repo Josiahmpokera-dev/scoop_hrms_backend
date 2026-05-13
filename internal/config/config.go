@@ -53,6 +53,9 @@ type LoginRateLimitConfig struct {
 type ServerConfig struct {
 	Port string
 	Env  string
+	// PublicRecruitmentCareersURL is the front-end careers site base (no trailing slash), e.g. https://careers.example.com
+	// Used to build shareable apply links. If empty, the API falls back to this server's public API URLs.
+	PublicRecruitmentCareersURL string
 }
 
 // DatabaseConfig holds database configuration
@@ -99,13 +102,13 @@ type RabbitMQConfig struct {
 
 // SMTPConfig holds email configuration
 type SMTPConfig struct {
-	Host      string
-	Port      int
-	Username  string
-	Password  string
-	From      string
-	FromName  string
-	HREmail   string
+	Host     string
+	Port     int
+	Username string
+	Password string
+	From     string
+	FromName string
+	HREmail  string
 }
 
 var AppConfig *Config
@@ -117,8 +120,9 @@ func LoadConfig() (*Config, error) {
 
 	config := &Config{
 		Server: ServerConfig{
-			Port: getEnv("PORT", "8080"),
-			Env:  getEnv("ENV", "development"),
+			Port:                        getEnv("PORT", "8080"),
+			Env:                         getEnv("ENV", "development"),
+			PublicRecruitmentCareersURL: strings.TrimSuffix(getEnv("PUBLIC_RECRUITMENT_CAREERS_URL", ""), "/"),
 		},
 		Database: DatabaseConfig{
 			Host:     getEnv("DB_HOST", "localhost"),
