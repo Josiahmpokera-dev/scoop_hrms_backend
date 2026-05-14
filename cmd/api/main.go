@@ -213,6 +213,8 @@ func main() {
 	// Setup API routes
 	appRouter.SetupRoutes(router)
 
+	biometricWorkers.StartBioTimeAutoSync()
+
 	// Start transaction worker if RabbitMQ is enabled
 	cfg := config.AppConfig
 	if cfg != nil && cfg.RabbitMQ.Enabled {

@@ -494,6 +494,20 @@ func (h *RecruitmentHandler) SubmitApplication(c *gin.Context) {
 	response.Created(c, "Application submitted successfully", app)
 }
 
+// ListRecentApplicants returns the most recent job applications (latest applicants first).
+func (h *RecruitmentHandler) ListRecentApplicants(c *gin.Context) {
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "3"))
+	if limit < 1 {
+		limit = 3
+	}
+	rows, err := h.service.ListRecentApplicants(limit)
+	if err != nil {
+		response.InternalServerError(c, "Failed to list recent applicants", err.Error())
+		return
+	}
+	response.Success(c, "Recent applicants retrieved successfully", rows)
+}
+
 func (h *RecruitmentHandler) ListCandidates(c *gin.Context) {
 	jobID := c.Query("jobId")
 	stage := c.Query("stage")
@@ -817,6 +831,78 @@ func (h *RecruitmentHandler) ListTalentPool(c *gin.Context) {
 		return
 	}
 	response.Success(c, "Talent pool retrieved successfully", out)
+}
+
+// ListTalentPoolPipelineCandidates lists candidates with at least one job application in TalentPool stage.
+func (h *RecruitmentHandler) ListTalentPoolPipelineCandidates(c *gin.Context) {
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	out, err := h.service.ListTalentPoolPipelinePaged("", "", "", "", page, limit)
+	if err != nil {
+		response.InternalServerError(c, "Failed to list talent pool pipeline candidates", err.Error())
+		return
+	}
+	response.SuccessWithMeta(c, "Talent pool pipeline candidates retrieved successfully", out["data"], recruitmentMeta(out["meta"]))
+}
+
+// SearchTalentPoolPipelineCandidates keyword search (name, email, phone) on pipeline candidates.
+func (h *RecruitmentHandler) SearchTalentPoolPipelineCandidates(c *gin.Context) {
+	q := strings.TrimSpace(c.Query("q"))
+	if q == "" {
+		q = strings.TrimSpace(c.Query("search"))
+	}
+	if q == "" {
+		response.BadRequest(c, "q or search query parameter is required", nil)
+		return
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	out, err := h.service.SearchTalentPoolPipelinePaged(q, page, limit)
+	if err != nil {
+		response.InternalServerError(c, "Failed to search talent pool pipeline candidates", err.Error())
+		return
+	}
+	response.SuccessWithMeta(c, "Talent pool pipeline candidates retrieved successfully", out["data"], recruitmentMeta(out["meta"]))
+}
+
+// FilterTalentPoolPipelineCandidates filters pipeline candidates by job, location, or skill.
+func (h *RecruitmentHandler) FilterTalentPoolPipelineCandidates(c *gin.Context) {
+	jobID := strings.TrimSpace(c.Query("jobOpeningId"))
+	if jobID == "" {
+		jobID = strings.TrimSpace(c.Query("jobId"))
+	}
+	location := strings.TrimSpace(c.Query("location"))
+	skill := strings.TrimSpace(c.Query("skill"))
+	if skill == "" {
+		skill = strings.TrimSpace(c.Query("skills"))
+	}
+	if jobID == "" && location == "" && skill == "" {
+		response.BadRequest(c, "Provide at least one filter: jobOpeningId (or jobId), location, or skill (or skills)", nil)
+		return
+	}
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	out, err := h.service.FilterTalentPoolPipelinePaged(jobID, location, skill, page, limit)
+	if err != nil {
+		response.InternalServerError(c, "Failed to filter talent pool pipeline candidates", err.Error())
+		return
+	}
+	response.SuccessWithMeta(c, "Talent pool pipeline candidates retrieved successfully", out["data"], recruitmentMeta(out["meta"]))
+}
+
+// GetTalentPoolPipelineCandidateDetail returns full candidate context for talent-pool pipeline view.
+func (h *RecruitmentHandler) GetTalentPoolPipelineCandidateDetail(c *gin.Context) {
+	id := c.Param("id")
+	detail, err := h.service.GetTalentPoolPipelineCandidateDetail(id)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) || errors.Is(err, services.ErrTalentPoolPipelineCandidateMissing) {
+			response.NotFound(c, "Candidate not found or has no TalentPool-stage applications")
+			return
+		}
+		response.InternalServerError(c, "Failed to load talent pool candidate detail", err.Error())
+		return
+	}
+	response.Success(c, "Talent pool pipeline candidate detail retrieved successfully", detail)
 }
 
 // ContactTalentPoolCandidate sends an email to a talent pool entry (SMTP required).

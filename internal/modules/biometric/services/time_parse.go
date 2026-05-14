@@ -3,15 +3,17 @@ package services
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
-// getBiometricLocation returns the timezone used for parsing naive BioTime timestamps.
-// Priority:
-// 1) BIOMETRIC_TIMEZONE
-// 2) APP_TIMEZONE
-// 3) Africa/Dar_es_Salaam (default business timezone)
-// 4) UTC fallback
+// GetBiometricLocation returns the timezone used for parsing naive BioTime timestamps.
+// Priority: BIOMETRIC_TIMEZONE, APP_TIMEZONE, Africa/Dar_es_Salaam, UTC.
+func GetBiometricLocation() *time.Location {
+	return getBiometricLocation()
+}
+
+// getBiometricLocation is the internal alias used by parsers in this package.
 func getBiometricLocation() *time.Location {
 	if tz := os.Getenv("BIOMETRIC_TIMEZONE"); tz != "" {
 		if loc, err := time.LoadLocation(tz); err == nil {
@@ -29,9 +31,25 @@ func getBiometricLocation() *time.Location {
 	return time.UTC
 }
 
+// normalizeQueryDateTimeInput treats "YYYY-MM-DD+HH:MM:SS" like "YYYY-MM-DD HH:MM:SS".
+// Browsers often send "+" as %2B between date and time; our layouts expect a space.
+func normalizeQueryDateTimeInput(value string) string {
+	s := strings.TrimSpace(value)
+	if len(s) <= 11 || s[10] != '+' {
+		return s
+	}
+	if _, err := time.Parse("2006-01-02", s[:10]); err != nil {
+		return s
+	}
+	rest := strings.TrimSpace(s[11:])
+	s = s[:10] + " " + rest
+	return strings.Join(strings.Fields(s), " ")
+}
+
 // parseBiometricDateTime parses timestamp strings from BioTime/query params.
 // Naive layouts are interpreted in business timezone; RFC3339 keeps embedded zone.
 func parseBiometricDateTime(value string) (time.Time, error) {
+	value = normalizeQueryDateTimeInput(value)
 	loc := getBiometricLocation()
 
 	naiveLayouts := []string{
@@ -59,4 +77,9 @@ func parseBiometricDateTime(value string) (time.Time, error) {
 	}
 
 	return time.Time{}, fmt.Errorf("unable to parse time: %s", value)
+}
+
+// ParseBiometricDateTime parses timestamp strings from BioTime or API query params (exported for handlers).
+func ParseBiometricDateTime(value string) (time.Time, error) {
+	return parseBiometricDateTime(value)
 }

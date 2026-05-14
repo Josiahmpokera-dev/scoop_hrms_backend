@@ -8,7 +8,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/config"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/middleware"
+	biometricRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/repositories"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/services"
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/utils/response"
 	"github.com/gin-gonic/gin"
@@ -46,6 +48,61 @@ type BioTimeHandler struct {
 // NewBioTimeHandler creates a new BioTime handler
 func NewBioTimeHandler() *BioTimeHandler {
 	return &BioTimeHandler{}
+}
+
+// maxInlineAttendanceSyncDays caps how many days we pull from BioTime in one GET (timeouts / API limits).
+// Wider filters still return rows from the database; we simply skip that pull (see sync.reason).
+const maxInlineAttendanceSyncDays = 45
+
+const maxAttendanceSyncSpan = maxInlineAttendanceSyncDays * 24 * time.Hour
+
+// syncBioTimeForAttendanceFilter pulls BioTime transactions into the DB for the same
+// window as the daily attendance filter (only when source == "db"). Returns sync metadata
+// for the response, or a client/server error string pair.
+func (h *BioTimeHandler) syncBioTimeForAttendanceFilter(tenantID *uint, params services.GetDailyAttendanceParams, source string, skipSync bool) (syncMeta map[string]interface{}, badRequest string, internalErr error) {
+	if source != "db" {
+		return nil, "", nil
+	}
+	startT, endT, parseErr := services.ParseAttendanceRange(params.StartTime, params.EndTime)
+	if parseErr != nil {
+		return nil, parseErr.Error(), nil
+	}
+	if endT.Sub(startT) > maxAttendanceSyncSpan {
+		return map[string]interface{}{
+			"ran":                   false,
+			"reason":                "range_exceeds_inline_sync",
+			"max_inline_sync_days":  maxInlineAttendanceSyncDays,
+			"note":                  "Response uses the database only for this range. Use POST /biometric/biotime/sync with start_time/end_time (chunks of ~45 days) to import from BioTime; duplicate punches are still skipped on insert.",
+		}, "", nil
+	}
+
+	if skipSync {
+		return map[string]interface{}{
+			"ran":    false,
+			"reason": "skip_sync=true",
+		}, "", nil
+	}
+	if config.AppConfig != nil && config.AppConfig.BioTime.Enabled {
+		syncSvc := services.NewManualBioTimeSyncService(tenantID)
+		res, syncErr := syncSvc.SyncWindow(startT, endT)
+		if syncErr != nil {
+			return nil, "", syncErr
+		}
+		return map[string]interface{}{
+			"ran":                  true,
+			"start_time":           res.StartTime,
+			"end_time":             res.EndTime,
+			"api_pages":            res.APIPages,
+			"transactions_fetched": res.TransactionsFetched,
+			"inserted":             res.Inserted,
+			"skipped_duplicates":   res.SkippedDuplicates,
+			"scan_errors":          res.ScanErrors,
+		}, "", nil
+	}
+	return map[string]interface{}{
+		"ran":    false,
+		"reason": "biotime_disabled",
+	}, "", nil
 }
 
 // getService creates a BioTime service instance with tenant context
@@ -157,6 +214,7 @@ func (h *BioTimeHandler) GetTransactions(c *gin.Context) {
 		tenantID := middleware.GetTenantID(c)
 		attendanceService := services.NewAttendanceService()
 		source := strings.ToLower(strings.TrimSpace(c.DefaultQuery("source", "db")))
+		skipSync := strings.EqualFold(strings.TrimSpace(c.DefaultQuery("skip_sync", "false")), "true")
 
 		page := 1
 		if pageStr := c.Query("page"); pageStr != "" {
@@ -186,6 +244,16 @@ func (h *BioTimeHandler) GetTransactions(c *gin.Context) {
 		}
 		if empCode := c.Query("emp_code"); empCode != "" {
 			params.EmpCode = &empCode
+		}
+
+		syncMeta, badReq, syncInternalErr := h.syncBioTimeForAttendanceFilter(tenantID, params, source, skipSync)
+		if badReq != "" {
+			response.BadRequest(c, badReq, nil)
+			return
+		}
+		if syncInternalErr != nil {
+			response.InternalServerError(c, "Biometric sync failed for the selected filter range", syncInternalErr.Error())
+			return
 		}
 
 		var dailyRows []services.DailyAttendanceResponse
@@ -247,7 +315,7 @@ func (h *BioTimeHandler) GetTransactions(c *gin.Context) {
 			Code:     0,
 			Data:     daily,
 		}
-		response.Success(c, "Daily transactions retrieved successfully", map[string]interface{}{
+		responseData := map[string]interface{}{
 			"count":      dailyResp.Count,
 			"next":       dailyResp.Next,
 			"previous":   dailyResp.Previous,
@@ -263,7 +331,11 @@ func (h *BioTimeHandler) GetTransactions(c *gin.Context) {
 				"total":       total,
 				"total_pages": totalPages,
 			},
-		})
+		}
+		if syncMeta != nil {
+			responseData["sync"] = syncMeta
+		}
+		response.Success(c, "Daily transactions retrieved successfully", responseData)
 		return
 	}
 
@@ -337,6 +409,18 @@ func (h *BioTimeHandler) GetTransactions(c *gin.Context) {
 	}()
 
 	response.Success(c, "Transactions retrieved successfully", transactionsResp)
+}
+
+func classifyPunchKind(state, display string) string {
+	ds := strings.ToLower(display)
+	ss := strings.ToLower(strings.TrimSpace(state))
+	if strings.Contains(ds, "in") || ss == "0" || ss == "in" || strings.Contains(ss, "checkin") {
+		return "check_in"
+	}
+	if strings.Contains(ds, "out") || ss == "1" || ss == "out" || strings.Contains(ss, "checkout") {
+		return "check_out"
+	}
+	return "unknown"
 }
 
 func splitName(fullName string) (string, *string) {
@@ -547,6 +631,133 @@ func (h *BioTimeHandler) ManualSyncToDatabase(c *gin.Context) {
 	response.Success(c, "Biometric transactions synced to database", result)
 }
 
+// GetDevicePunchSyncFeed returns persisted punches from the database for apps/terminals (check-in/out sync).
+func (h *BioTimeHandler) GetDevicePunchSyncFeed(c *gin.Context) {
+	tenantID := middleware.GetTenantID(c)
+
+	limit := 500
+	if ls := c.Query("limit"); ls != "" {
+		if v, err := strconv.Atoi(ls); err == nil {
+			limit = v
+		}
+	}
+	if limit < 1 {
+		limit = 1
+	}
+	if limit > 2000 {
+		limit = 2000
+	}
+
+	loc := services.GetBiometricLocation()
+	now := time.Now().In(loc)
+
+	var startP, endP time.Time
+	sinceStr := strings.TrimSpace(c.Query("since"))
+	untilStr := strings.TrimSpace(c.Query("until"))
+	startStr := strings.TrimSpace(c.Query("start_time"))
+	endStr := strings.TrimSpace(c.Query("end_time"))
+
+	if sinceStr != "" {
+		t, err := time.Parse(time.RFC3339, sinceStr)
+		if err != nil {
+			t, err = services.ParseBiometricDateTime(sinceStr)
+			if err != nil {
+				response.BadRequest(c, "invalid since: use RFC3339 or biometric datetime", nil)
+				return
+			}
+		}
+		startP = t
+	} else if startStr != "" {
+		t, err := services.ParseBiometricDateTime(startStr)
+		if err != nil {
+			response.BadRequest(c, "invalid start_time", nil)
+			return
+		}
+		startP = t
+	} else {
+		startP = now.Add(-24 * time.Hour)
+	}
+
+	if untilStr != "" {
+		t, err := time.Parse(time.RFC3339, untilStr)
+		if err != nil {
+			t, err = services.ParseBiometricDateTime(untilStr)
+			if err != nil {
+				response.BadRequest(c, "invalid until", nil)
+				return
+			}
+		}
+		endP = t
+	} else if endStr != "" {
+		t, err := services.ParseBiometricDateTime(endStr)
+		if err != nil {
+			response.BadRequest(c, "invalid end_time", nil)
+			return
+		}
+		endP = t
+	} else {
+		endP = now
+	}
+
+	if startP.After(endP) {
+		response.BadRequest(c, "start of window must be before or equal to end", nil)
+		return
+	}
+
+	var empPtr *string
+	if ec := strings.TrimSpace(c.Query("emp_code")); ec != "" {
+		empPtr = &ec
+	}
+
+	repo := biometricRepos.NewBioTimeTransactionRepository()
+	rows, err := repo.ListDevicePunchFeed(tenantID, startP, endP, empPtr, limit)
+	if err != nil {
+		response.InternalServerError(c, "Failed to load punch feed from database", err.Error())
+		return
+	}
+
+	type punchItem struct {
+		ID                   uint    `json:"id"`
+		BiotimeTransactionID int     `json:"biotime_transaction_id"`
+		EmpCode              string  `json:"emp_code"`
+		Name                 string  `json:"name"`
+		PunchTime            string  `json:"punch_time"`
+		PunchState           string  `json:"punch_state"`
+		PunchStateDisplay    string  `json:"punch_state_display"`
+		Kind                 string  `json:"kind"`
+		TerminalSN           string  `json:"terminal_sn"`
+		TerminalAlias        *string `json:"terminal_alias,omitempty"`
+	}
+
+	out := make([]punchItem, 0, len(rows))
+	for _, row := range rows {
+		name := strings.TrimSpace(row.FirstName + " " + row.LastName)
+		out = append(out, punchItem{
+			ID:                   row.ID,
+			BiotimeTransactionID: row.BioTimeTransactionID,
+			EmpCode:              row.EmpCode,
+			Name:                 name,
+			PunchTime:            row.PunchTime.UTC().Format(time.RFC3339),
+			PunchState:           row.PunchState,
+			PunchStateDisplay:    row.PunchStateDisplay,
+			Kind:                 classifyPunchKind(row.PunchState, row.PunchStateDisplay),
+			TerminalSN:           row.TerminalSN,
+			TerminalAlias:        row.TerminalAlias,
+		})
+	}
+
+	response.Success(c, "Device punch sync feed (from database)", map[string]interface{}{
+		"punches": out,
+		"window": map[string]string{
+			"start": startP.UTC().Format(time.RFC3339),
+			"end":   endP.UTC().Format(time.RFC3339),
+		},
+		"limit": limit,
+		"count": len(out),
+		"note":  "Incremental sync: pass since=<RFC3339> of the last punch you applied, or use start_time/end_time.",
+	})
+}
+
 // BackfillTransactions handles backfilling historical transactions from BioTime
 // @Summary Backfill historical BioTime transactions
 // @Description Pulls all transactions from 2025-01-01 to now and queues them for database storage
@@ -644,10 +855,11 @@ func (h *BioTimeHandler) GetDailyAttendance(c *gin.Context) {
 	params.EndTime = endTime
 
 	// Source selection:
+	// - source=db      -> fetch from local database (default; supports history and filters after sync)
 	// - source=biotime -> fetch direct from BioTime API (real-time)
-	// - source=db      -> fetch from local database (synced data)
-	// Default: biotime (to avoid empty results when DB is not yet synced)
-	source := strings.ToLower(strings.TrimSpace(c.DefaultQuery("source", "biotime")))
+	source := strings.ToLower(strings.TrimSpace(c.DefaultQuery("source", "db")))
+
+	skipSync := strings.EqualFold(strings.TrimSpace(c.DefaultQuery("skip_sync", "false")), "true")
 
 	// Employee code (optional)
 	if empCode := c.Query("emp_code"); empCode != "" {
@@ -676,6 +888,16 @@ func (h *BioTimeHandler) GetDailyAttendance(c *gin.Context) {
 		params.PageSize = 50
 	}
 
+	syncMeta, badReq, syncInternalErr := h.syncBioTimeForAttendanceFilter(tenantID, params, source, skipSync)
+	if badReq != "" {
+		response.BadRequest(c, badReq, nil)
+		return
+	}
+	if syncInternalErr != nil {
+		response.InternalServerError(c, "Biometric sync failed for the selected filter range", syncInternalErr.Error())
+		return
+	}
+
 	// Get attendance data
 	var attendance []services.DailyAttendanceResponse
 	var total int64
@@ -696,7 +918,7 @@ func (h *BioTimeHandler) GetDailyAttendance(c *gin.Context) {
 		totalPages = 1
 	}
 
-	response.Success(c, "Daily attendance retrieved successfully", map[string]interface{}{
+	payload := map[string]interface{}{
 		"data": attendance,
 		"pagination": map[string]interface{}{
 			"page":        params.Page,
@@ -704,7 +926,12 @@ func (h *BioTimeHandler) GetDailyAttendance(c *gin.Context) {
 			"total":       total,
 			"total_pages": totalPages,
 		},
-	})
+	}
+	if syncMeta != nil {
+		payload["sync"] = syncMeta
+	}
+
+	response.Success(c, "Daily attendance retrieved successfully", payload)
 }
 
 // GetExceptional handles getting late arrivals (exceptional cases)

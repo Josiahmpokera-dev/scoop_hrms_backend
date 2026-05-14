@@ -894,6 +894,47 @@ func (s *RecruitmentService) ListCandidatesPaged(jobID, stage, keyword string, p
 	}, nil
 }
 
+// ListRecentApplicants returns the latest job applications (who applied most recently), not candidate account creation order.
+func (s *RecruitmentService) ListRecentApplicants(limit int) ([]models.RecentApplicantView, error) {
+	if limit < 1 {
+		limit = 3
+	}
+	if limit > 50 {
+		limit = 50
+	}
+	apps, err := s.repo.ListRecentJobApplications(limit)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]models.RecentApplicantView, 0, len(apps))
+	for _, a := range apps {
+		v := models.RecentApplicantView{
+			ApplicationID: a.ID,
+			CandidateID:   a.CandidateID,
+			JobOpeningID:  a.JobOpeningID,
+			AppliedAt:     a.AppliedDate,
+			Stage:         a.Stage,
+			Score:         a.Score,
+		}
+		if a.Candidate != nil {
+			v.FirstName = a.Candidate.FirstName
+			v.LastName = a.Candidate.LastName
+			v.FullName = strings.TrimSpace(a.Candidate.FirstName + " " + a.Candidate.LastName)
+			v.Email = a.Candidate.Email
+			v.Phone = a.Candidate.Phone
+		}
+		if a.JobOpening.ID != "" {
+			v.JobTitle = a.JobOpening.JobTitle
+			if a.JobOpening.Requisition != nil {
+				v.Department = a.JobOpening.Requisition.Department
+				v.Location = a.JobOpening.Requisition.Location
+			}
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
 func (s *RecruitmentService) GetCandidateDetails(id string) (*models.Candidate, error) {
 	return s.repo.GetCandidateWithDetails(id)
 }

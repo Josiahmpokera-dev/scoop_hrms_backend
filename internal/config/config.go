@@ -88,6 +88,10 @@ type BioTimeConfig struct {
 	Username string
 	Password string
 	Enabled  bool
+	// AutoSync pulls BioTime transactions into biotime_transactions on a timer (see cmd/api).
+	AutoSyncEnabled         bool
+	AutoSyncIntervalMinutes int
+	AutoSyncLookbackHours   int
 }
 
 // RabbitMQConfig holds RabbitMQ configuration
@@ -143,10 +147,13 @@ func LoadConfig() (*Config, error) {
 			AllowedHeaders: getEnvSlice("CORS_ALLOWED_HEADERS", []string{"Content-Type", "Authorization", "Accept", "Accept-Language"}),
 		},
 		BioTime: BioTimeConfig{
-			BaseURL:  getEnv("BIOTIME_BASE_URL", "http://10.4.9.24:8087"),
-			Username: getEnv("BIOTIME_USERNAME", "Developer"),
-			Password: getEnv("BIOTIME_PASSWORD", "Developer@123"),
-			Enabled:  getEnvBool("BIOTIME_ENABLED", true),
+			BaseURL:                 getEnv("BIOTIME_BASE_URL", "http://10.4.9.24:8087"),
+			Username:                getEnv("BIOTIME_USERNAME", "Developer"),
+			Password:                getEnv("BIOTIME_PASSWORD", "Developer@123"),
+			Enabled:                   getEnvBool("BIOTIME_ENABLED", true),
+			AutoSyncEnabled:           getEnvBool("BIOTIME_AUTO_SYNC_ENABLED", true),
+			AutoSyncIntervalMinutes: getEnvInt("BIOTIME_AUTO_SYNC_INTERVAL_MINUTES", 1),
+			AutoSyncLookbackHours:   getEnvInt("BIOTIME_AUTO_SYNC_LOOKBACK_HOURS", 48),
 		},
 		RabbitMQ: RabbitMQConfig{
 			URL:                getEnv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/"),
@@ -180,6 +187,19 @@ func LoadConfig() (*Config, error) {
 		Encryption: EncryptionConfig{
 			Key: getEnv("ENCRYPTION_KEY", "hrms-payroll-encryption-key-2024!"),
 		},
+	}
+
+	if config.BioTime.AutoSyncIntervalMinutes < 1 {
+		config.BioTime.AutoSyncIntervalMinutes = 1
+	}
+	if config.BioTime.AutoSyncIntervalMinutes > 1440 {
+		config.BioTime.AutoSyncIntervalMinutes = 1440
+	}
+	if config.BioTime.AutoSyncLookbackHours < 1 {
+		config.BioTime.AutoSyncLookbackHours = 1
+	}
+	if config.BioTime.AutoSyncLookbackHours > 168 {
+		config.BioTime.AutoSyncLookbackHours = 168
 	}
 
 	// Validate required configuration

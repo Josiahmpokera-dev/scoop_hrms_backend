@@ -82,3 +82,21 @@ type ApplicationActionRequest struct {
 	InterviewerEmployeeIDs []string `json:"interviewerEmployeeIds"`
 	Interviewers           []string `json:"interviewers"`
 }
+
+// RecentApplicantView is a compact row for GET /applications/recent (latest applications first).
+type RecentApplicantView struct {
+	ApplicationID  string    `json:"applicationId"`
+	CandidateID    string    `json:"candidateId"`
+	FirstName      string    `json:"firstName"`
+	LastName       string    `json:"lastName"`
+	FullName       string    `json:"fullName"`
+	Email          string    `json:"email"`
+	Phone          string    `json:"phone,omitempty"`
+	JobOpeningID   string    `json:"jobOpeningId"`
+	JobTitle       string    `json:"jobTitle"`
+	Department     string    `json:"department,omitempty"`
+	Location       string    `json:"location,omitempty"`
+	AppliedAt      time.Time `json:"appliedAt"`
+	Stage          string    `json:"stage"`
+	Score          float64   `json:"score,omitempty"`
+}

@@ -8,7 +8,11 @@ import (
 
 	"github.com/Josiahmpokera-dev/hrms-backend/internal/modules/recruitment/models"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
+
+// ErrTalentPoolPipelineCandidateMissing is returned when a candidate has no applications in TalentPool stage.
+var ErrTalentPoolPipelineCandidateMissing = errors.New("candidate has no applications in TalentPool stage")
 
 // ListApplicationsForJobOpening returns paginated applications with candidates for one opening.
 func (s *RecruitmentService) ListApplicationsForJobOpening(jobOpeningID, stage string, page, limit int) (map[string]interface{}, error) {
@@ -302,6 +306,180 @@ func (s *RecruitmentService) ListTalentPoolPaged(page, limit int) (map[string]in
 			"total_pages": tp,
 		},
 	}, nil
+}
+
+func briefTalentPoolApplication(a models.JobApplication) models.TalentPoolPipelineApplicationBrief {
+	b := models.TalentPoolPipelineApplicationBrief{
+		ApplicationID: a.ID,
+		JobOpeningID:    a.JobOpeningID,
+		AppliedDate:     a.AppliedDate,
+		LastStatusDate:  a.LastStatusDate,
+		Notes:           a.Notes,
+	}
+	if a.JobOpening.ID != "" {
+		b.JobTitle = a.JobOpening.JobTitle
+		if a.JobOpening.Requisition != nil {
+			b.Department = a.JobOpening.Requisition.Department
+			b.Location = a.JobOpening.Requisition.Location
+		}
+	}
+	return b
+}
+
+func (s *RecruitmentService) talentPoolPipelineSummariesForOrderedIDs(ids []string) ([]models.TalentPoolPipelineCandidateSummary, error) {
+	if len(ids) == 0 {
+		return []models.TalentPoolPipelineCandidateSummary{}, nil
+	}
+	apps, err := s.repo.ListJobApplicationsTalentPoolByCandidateIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	byCand := make(map[string][]models.JobApplication)
+	for i := range apps {
+		cid := apps[i].CandidateID
+		byCand[cid] = append(byCand[cid], apps[i])
+	}
+	cands, err := s.repo.FindCandidatesByIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	cm := make(map[string]*models.Candidate)
+	for i := range cands {
+		cm[cands[i].ID] = &cands[i]
+	}
+	var out []models.TalentPoolPipelineCandidateSummary
+	for _, cid := range ids {
+		c := cm[cid]
+		if c == nil {
+			continue
+		}
+		list := byCand[cid]
+		if len(list) == 0 {
+			continue
+		}
+		var lastAt time.Time
+		var briefs []models.TalentPoolPipelineApplicationBrief
+		for _, a := range list {
+			briefs = append(briefs, briefTalentPoolApplication(a))
+			if a.UpdatedAt.After(lastAt) {
+				lastAt = a.UpdatedAt
+			}
+		}
+		out = append(out, models.TalentPoolPipelineCandidateSummary{
+			CandidateID:                 c.ID,
+			FirstName:                   c.FirstName,
+			LastName:                    c.LastName,
+			FullName:                    strings.TrimSpace(c.FirstName + " " + c.LastName),
+			Email:                       c.Email,
+			Phone:                       c.Phone,
+			ResumeURL:                   c.ResumeURL,
+			Skills:                      c.Skills,
+			LastTalentPoolApplicationAt: lastAt,
+			TalentPoolApplications:      briefs,
+		})
+	}
+	return out, nil
+}
+
+// ListTalentPoolPipelinePaged lists candidates who have at least one application in TalentPool stage (not hired/rejected on that application).
+func (s *RecruitmentService) ListTalentPoolPipelinePaged(keyword, jobOpeningID, location, skill string, page, limit int) (map[string]interface{}, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	total, err := s.repo.CountTalentPoolPipelineCandidates(keyword, jobOpeningID, location, skill)
+	if err != nil {
+		return nil, err
+	}
+	ids, err := s.repo.ListTalentPoolPipelineCandidateIDs(keyword, jobOpeningID, location, skill, page, limit)
+	if err != nil {
+		return nil, err
+	}
+	rows, err := s.talentPoolPipelineSummariesForOrderedIDs(ids)
+	if err != nil {
+		return nil, err
+	}
+	tp := int((total + int64(limit) - 1) / int64(limit))
+	if tp < 1 {
+		tp = 1
+	}
+	return map[string]interface{}{
+		"data": rows,
+		"meta": map[string]interface{}{
+			"total":       total,
+			"page":        page,
+			"limit":       limit,
+			"total_pages": tp,
+			"query":       keyword,
+			"job_opening_id": jobOpeningID,
+			"location":    location,
+			"skill":       skill,
+		},
+	}, nil
+}
+
+// SearchTalentPoolPipelinePaged keyword search on name/email/phone.
+func (s *RecruitmentService) SearchTalentPoolPipelinePaged(q string, page, limit int) (map[string]interface{}, error) {
+	return s.ListTalentPoolPipelinePaged(strings.TrimSpace(q), "", "", "", page, limit)
+}
+
+// FilterTalentPoolPipelinePaged filters by job opening, requisition location, or skill substring on candidate.skills JSON.
+func (s *RecruitmentService) FilterTalentPoolPipelinePaged(jobOpeningID, location, skill string, page, limit int) (map[string]interface{}, error) {
+	return s.ListTalentPoolPipelinePaged("", jobOpeningID, location, skill, page, limit)
+}
+
+// GetTalentPoolPipelineCandidateDetail returns candidate profile plus TalentPool applications and optional registry row.
+func (s *RecruitmentService) GetTalentPoolPipelineCandidateDetail(candidateID string) (*models.TalentPoolPipelineCandidateDetail, error) {
+	full, err := s.repo.GetCandidateWithDetails(candidateID)
+	if err != nil {
+		return nil, err
+	}
+	if full == nil {
+		return nil, gorm.ErrRecordNotFound
+	}
+	apps, err := s.repo.ListJobApplicationsTalentPoolByCandidateIDs([]string{candidateID})
+	if err != nil {
+		return nil, err
+	}
+	if len(apps) == 0 {
+		return nil, ErrTalentPoolPipelineCandidateMissing
+	}
+	var briefs []models.TalentPoolPipelineApplicationBrief
+	var lastAt time.Time
+	for _, a := range apps {
+		briefs = append(briefs, briefTalentPoolApplication(a))
+		if a.UpdatedAt.After(lastAt) {
+			lastAt = a.UpdatedAt
+		}
+	}
+	var reg *models.TalentPoolCandidate
+	if row, err := s.repo.GetTalentPoolByEmail(full.Email); err == nil && row != nil {
+		reg = row
+	}
+	detail := &models.TalentPoolPipelineCandidateDetail{
+		TalentPoolPipelineCandidateSummary: models.TalentPoolPipelineCandidateSummary{
+			CandidateID:                 full.ID,
+			FirstName:                   full.FirstName,
+			LastName:                    full.LastName,
+			FullName:                    strings.TrimSpace(full.FirstName + " " + full.LastName),
+			Email:                       full.Email,
+			Phone:                       full.Phone,
+			ResumeURL:                   full.ResumeURL,
+			Skills:                      full.Skills,
+			LastTalentPoolApplicationAt: lastAt,
+			TalentPoolApplications:      briefs,
+		},
+		LinkedInURL:   full.LinkedInURL,
+		PortfolioURL:  full.PortfolioURL,
+		CoverLetter:   full.CoverLetter,
+		RegistryEntry: reg,
+	}
+	return detail, nil
 }
 
 // ContactTalentPoolCandidate sends an email and records last contacted time.

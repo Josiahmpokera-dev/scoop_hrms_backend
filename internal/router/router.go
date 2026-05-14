@@ -582,6 +582,7 @@ func SetupRoutes(r *gin.Engine) {
 			biometric.GET("/biotime/token", biotimeHandler.GetToken)
 			biometric.POST("/biotime/refresh-token", biotimeHandler.RefreshToken)
 			biometric.POST("/biotime/sync", biotimeHandler.ManualSyncToDatabase)
+			biometric.GET("/biotime/device-punches", biotimeHandler.GetDevicePunchSyncFeed)
 			biometric.GET("/biotime/terminals", biotimeHandler.GetTerminals)
 			biometric.GET("/biotime/device-status", biotimeHandler.GetDeviceStatus)
 			biometric.GET("/biotime/transactions", biotimeHandler.GetTransactions)
@@ -1150,6 +1151,9 @@ func SetupRoutes(r *gin.Engine) {
 			recruitment.GET("/candidates/:id", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.GetCandidateDetails)
 			recruitment.PATCH("/candidates/:id/stage", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.UpdateCandidateStage)
 
+			// Latest applications (who applied most recently); register before /applications/:id routes
+			recruitment.GET("/applications/recent", middleware.PermissionMiddleware("recruitment:read"), recruitmentHandler.ListRecentApplicants)
+
 			// Applications (pipeline by application id)
 			recruitment.PATCH("/applications/:id/stage", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.UpdateApplicationStage)
 			recruitment.POST("/applications/:id/action", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ActionApplication)
@@ -1189,6 +1193,11 @@ func SetupRoutes(r *gin.Engine) {
 			recruitment.POST("/offers/:id/send", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.SendOffer)
 
 			// Talent Pool
+			recruitment.GET("/talent-pool/candidates/pipeline", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ListTalentPoolPipelineCandidates)
+			recruitment.GET("/talent-pool/candidates/pipeline/search", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.SearchTalentPoolPipelineCandidates)
+			recruitment.GET("/talent-pool/candidates/pipeline/filter", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.FilterTalentPoolPipelineCandidates)
+			recruitment.GET("/talent-pool/candidates/:id/pipeline-detail", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.GetTalentPoolPipelineCandidateDetail)
+
 			recruitment.POST("/talent-pool", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.AddToTalentPool)
 			recruitment.GET("/talent-pool/search", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.SearchTalentPool)
 			recruitment.GET("/talent-pool", middleware.PermissionMiddleware("recruitment:manage_candidates"), recruitmentHandler.ListTalentPool)

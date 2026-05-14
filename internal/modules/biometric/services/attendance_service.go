@@ -6,9 +6,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Josiahmpokera-dev/hrms-backend/internal/config"
 	biometricRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/biometric/repositories"
 	employeeRepos "github.com/Josiahmpokera-dev/hrms-backend/internal/modules/employees/repositories"
 )
+
+// formatBiometricWallClock renders clock time in BIOMETRIC_TIMEZONE / APP_TIMEZONE.
+// Postgres/GORM typically returns instants in UTC; users expect the same wall clock as the device/office.
+func formatBiometricWallClock(t time.Time) string {
+	return t.In(getBiometricLocation()).Format("15:04:05")
+}
 
 // AttendanceService handles attendance-related business logic
 type AttendanceService struct {
@@ -50,18 +57,36 @@ func (s *AttendanceService) GetAttendanceCalendar(tenantID *uint, empCode, month
 		return nil, fmt.Errorf("emp_code is required")
 	}
 	month = strings.TrimSpace(month)
-	monthStart, err := time.Parse("2006-01", month)
+	loc := getBiometricLocation()
+	monthStart, err := time.ParseInLocation("2006-01", month, loc)
 	if err != nil {
 		return nil, fmt.Errorf("month must be in YYYY-MM format")
 	}
 
-	startTime := time.Date(monthStart.Year(), monthStart.Month(), 1, 0, 0, 0, 0, time.UTC)
+	startTime := time.Date(monthStart.Year(), monthStart.Month(), 1, 0, 0, 0, 0, loc)
 	endTime := startTime.AddDate(0, 1, 0).Add(-time.Nanosecond)
 
 	employee, err := s.employeeRepo.FindByEmployeeID(empCode)
-	if err != nil || employee == nil {
-		// Fallback to biometric-only lookup:
-		// some deployments use device emp_code values that are not mirrored in employees.employee_id.
+	if err != nil {
+		employee = nil
+	}
+
+	rows, err := s.transactionRepo.GetEmployeeDailyAttendanceForMonth(tenantID, empCode, startTime, endTime)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get attendance calendar data: %w", err)
+	}
+
+	if len(rows) == 0 && config.AppConfig != nil && config.AppConfig.BioTime.Enabled {
+		syncSvc := NewManualBioTimeSyncService(tenantID)
+		if _, syncErr := syncSvc.SyncWindow(startTime, endTime); syncErr == nil {
+			rows, err = s.transactionRepo.GetEmployeeDailyAttendanceForMonth(tenantID, empCode, startTime, endTime)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get attendance calendar data: %w", err)
+			}
+		}
+	}
+
+	if employee == nil {
 		hasTx, txErr := s.transactionRepo.HasTransactionsForEmpCode(tenantID, empCode, startTime, endTime)
 		if txErr != nil {
 			return nil, fmt.Errorf("failed to validate employee code: %w", txErr)
@@ -71,20 +96,21 @@ func (s *AttendanceService) GetAttendanceCalendar(tenantID *uint, empCode, month
 		}
 	}
 
-	rows, err := s.transactionRepo.GetEmployeeDailyAttendanceForMonth(tenantID, empCode, startTime, endTime)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get attendance calendar data: %w", err)
-	}
-
 	byDate := make(map[string]biometricRepos.CalendarAttendanceRecord, len(rows))
 	for _, r := range rows {
-		byDate[r.Date.Format("2006-01-02")] = r
+		var key string
+		if r.CheckIn != nil {
+			key = r.CheckIn.In(loc).Format("2006-01-02")
+		} else {
+			key = r.Date.In(loc).Format("2006-01-02")
+		}
+		byDate[key] = r
 	}
 
-	now := time.Now()
-	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, now.Location())
+	now := time.Now().In(loc)
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, loc)
 
-	events := make([]AttendanceCalendarEvent, 0, 31)
+	events := make([]AttendanceCalendarEvent, 0, 32)
 	for day := startTime; day.Month() == startTime.Month(); day = day.AddDate(0, 0, 1) {
 		dateKey := day.Format("2006-01-02")
 		rec, ok := byDate[dateKey]
@@ -97,12 +123,12 @@ func (s *AttendanceService) GetAttendanceCalendar(tenantID *uint, empCode, month
 		if ok {
 			punchCount = rec.PunchCount
 			if rec.CheckIn != nil {
-				s := rec.CheckIn.Format("15:04:05")
+				s := formatBiometricWallClock(*rec.CheckIn)
 				checkInStr = &s
 			}
 			// Checkout comes from explicit OUT timestamps or last punch when multiple rows exist (see repository SQL).
 			if rec.CheckOut != nil && rec.CheckIn != nil && rec.CheckOut.After(*rec.CheckIn) {
-				s := rec.CheckOut.Format("15:04:05")
+				s := formatBiometricWallClock(*rec.CheckOut)
 				checkOutStr = &s
 			}
 			if rec.CheckIn != nil && checkOutStr != nil && rec.CheckOut != nil {
@@ -110,8 +136,8 @@ func (s *AttendanceService) GetAttendanceCalendar(tenantID *uint, empCode, month
 				if d > 0 {
 					h := int(d.Hours())
 					m := int(d.Minutes()) % 60
-					s := int(d.Seconds()) % 60
-					ws := fmt.Sprintf("%02d:%02d:%02d", h, m, s)
+					sec := int(d.Seconds()) % 60
+					ws := fmt.Sprintf("%02d:%02d:%02d", h, m, sec)
 					workingHoursStr = &ws
 				}
 			}
@@ -121,7 +147,7 @@ func (s *AttendanceService) GetAttendanceCalendar(tenantID *uint, empCode, month
 		title := "Absent"
 		color := "#ef4444"
 
-		dayLocal := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, today.Location())
+		dayLocal := time.Date(day.Year(), day.Month(), day.Day(), 0, 0, 0, 0, loc)
 		switch {
 		case dayLocal.After(today):
 			eventType = "future"
@@ -205,29 +231,31 @@ func parseDateTime(dateTimeStr string) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("invalid datetime format. Supported formats: YYYY-MM-DD, YYYY-MM-DD HH:MM:SS, YYYY-MM-DD HH:MM, or RFC3339")
 }
 
-// GetDailyAttendance gets daily attendance records with check-in, check-out, and working hours
-func (s *AttendanceService) GetDailyAttendance(tenantID *uint, params GetDailyAttendanceParams) ([]DailyAttendanceResponse, int64, error) {
-	// Parse start time
-	startTime, err := parseDateTime(params.StartTime)
+// ParseAttendanceRange parses start_time/end_time (or start_date/end_date strings) using the same rules as GetDailyAttendance.
+func ParseAttendanceRange(startTimeStr, endTimeStr string) (time.Time, time.Time, error) {
+	startTime, err := parseDateTime(strings.TrimSpace(startTimeStr))
 	if err != nil {
-		return nil, 0, fmt.Errorf("invalid start_time format: %w", err)
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid start_time/start_date format: %w", err)
 	}
-
-	// Parse end time
-	endTime, err := parseDateTime(params.EndTime)
+	endTime, err := parseDateTime(strings.TrimSpace(endTimeStr))
 	if err != nil {
-		return nil, 0, fmt.Errorf("invalid end_time format: %w", err)
+		return time.Time{}, time.Time{}, fmt.Errorf("invalid end_time/end_date format: %w", err)
 	}
-
-	// If only date was provided (no time component), set end_time to end of day
-	// Check if the original string was date-only format (length 10 and no space)
-	if len(params.EndTime) == 10 && !strings.Contains(params.EndTime, " ") {
-		// Date only provided, set to end of day
+	trimEnd := strings.TrimSpace(endTimeStr)
+	if len(trimEnd) == 10 && !strings.Contains(trimEnd, " ") {
 		endTime = time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 23, 59, 59, 999999999, endTime.Location())
 	}
-
 	if startTime.After(endTime) {
-		return nil, 0, fmt.Errorf("start_time must be before or equal to end_time")
+		return time.Time{}, time.Time{}, fmt.Errorf("start_time must be before or equal to end_time")
+	}
+	return startTime, endTime, nil
+}
+
+// GetDailyAttendance gets daily attendance records with check-in, check-out, and working hours
+func (s *AttendanceService) GetDailyAttendance(tenantID *uint, params GetDailyAttendanceParams) ([]DailyAttendanceResponse, int64, error) {
+	startTime, endTime, err := ParseAttendanceRange(params.StartTime, params.EndTime)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	// Set default pagination
@@ -265,17 +293,17 @@ func (s *AttendanceService) GetDailyAttendance(tenantID *uint, params GetDailyAt
 			name = record.EmpCode // Fallback to emp_code if no name
 		}
 
-		// Format check-in time
+		// Format check-in / check-out in office timezone (DB stores instants, often as UTC).
 		var checkInStr *string
 		if record.CheckIn != nil {
-			formatted := record.CheckIn.Format("15:04:05")
+			formatted := formatBiometricWallClock(*record.CheckIn)
 			checkInStr = &formatted
 		}
 
 		// Format check-out: repository leaves it null for true single-punch days.
 		var checkOutStr *string
 		if record.CheckOut != nil && record.CheckIn != nil && record.CheckOut.After(*record.CheckIn) {
-			formatted := record.CheckOut.Format("15:04:05")
+			formatted := formatBiometricWallClock(*record.CheckOut)
 			checkOutStr = &formatted
 		}
 
@@ -291,8 +319,11 @@ func (s *AttendanceService) GetDailyAttendance(tenantID *uint, params GetDailyAt
 			}
 		}
 
-		// Format date
+		// Workday date aligned with first punch in business TZ (matches checkin/checkout display).
 		dateStr := record.Date.Format("2006-01-02")
+		if record.CheckIn != nil {
+			dateStr = record.CheckIn.In(getBiometricLocation()).Format("2006-01-02")
+		}
 
 		response[i] = DailyAttendanceResponse{
 			Name:         name,
@@ -312,20 +343,9 @@ func (s *AttendanceService) GetDailyAttendance(tenantID *uint, params GetDailyAt
 // GetDailyAttendanceFromBioTime fetches transactions from BioTime API directly and aggregates them per employee per day.
 // This is useful when the database sync hasn't run yet or when you want real-time data.
 func (s *AttendanceService) GetDailyAttendanceFromBioTime(tenantID *uint, params GetDailyAttendanceParams) ([]DailyAttendanceResponse, int64, error) {
-	// Parse start/end using same rules as DB method
-	startTime, err := parseDateTime(params.StartTime)
+	startTime, endTime, err := ParseAttendanceRange(params.StartTime, params.EndTime)
 	if err != nil {
-		return nil, 0, fmt.Errorf("invalid start_time format: %w", err)
-	}
-	endTime, err := parseDateTime(params.EndTime)
-	if err != nil {
-		return nil, 0, fmt.Errorf("invalid end_time format: %w", err)
-	}
-	if len(params.EndTime) == 10 && !strings.Contains(params.EndTime, " ") {
-		endTime = time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 23, 59, 59, 0, endTime.Location())
-	}
-	if startTime.After(endTime) {
-		return nil, 0, fmt.Errorf("start_time must be before or equal to end_time")
+		return nil, 0, err
 	}
 
 	// Pagination for final aggregated output
@@ -447,11 +467,11 @@ func (s *AttendanceService) GetDailyAttendanceFromBioTime(tenantID *uint, params
 		var workingHoursStr *string
 
 		if a.checkIn != nil {
-			s := a.checkIn.Format("15:04:05")
+			s := formatBiometricWallClock(*a.checkIn)
 			checkInStr = &s
 		}
 		if a.checkOut != nil && a.checkIn != nil && a.checkOut.After(*a.checkIn) {
-			s := a.checkOut.Format("15:04:05")
+			s := formatBiometricWallClock(*a.checkOut)
 			checkOutStr = &s
 		}
 		if a.checkIn != nil && checkOutStr != nil && a.checkOut != nil {
@@ -576,15 +596,18 @@ func (s *AttendanceService) GetLateArrivals(tenantID *uint, params GetLateArriva
 			name = record.EmpCode // Fallback to emp_code if no name
 		}
 
-		// Format check-in time
+		// Format check-in time in office timezone
 		var checkInStr *string
 		if record.CheckIn != nil {
-			formatted := record.CheckIn.Format("15:04:05")
+			formatted := formatBiometricWallClock(*record.CheckIn)
 			checkInStr = &formatted
 		}
 
-		// Format date
+		// Format date (workday in business TZ when check-in exists)
 		dateStr := record.Date.Format("2006-01-02")
+		if record.CheckIn != nil {
+			dateStr = record.CheckIn.In(getBiometricLocation()).Format("2006-01-02")
+		}
 
 		response[i] = LateArrivalResponse{
 			Name:        name,

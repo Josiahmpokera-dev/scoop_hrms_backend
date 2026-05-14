@@ -387,3 +387,22 @@ func (r *BioTimeTransactionRepository) GetLateArrivals(tenantID *uint, startTime
 
 	return records, total, nil
 }
+
+// ListDevicePunchFeed returns raw punches in punch_time order for terminal or app delta sync.
+func (r *BioTimeTransactionRepository) ListDevicePunchFeed(tenantID *uint, startPunch, endPunch time.Time, empCode *string, limit int) ([]models.BioTimeTransaction, error) {
+	var rows []models.BioTimeTransaction
+	q := r.db.Model(&models.BioTimeTransaction{}).
+		Where("punch_time >= ? AND punch_time <= ?", startPunch, endPunch)
+
+	if tenantID != nil {
+		q = q.Where("tenant_id = ?", *tenantID)
+	} else {
+		q = q.Where("tenant_id IS NULL")
+	}
+	if empCode != nil && *empCode != "" {
+		q = q.Where("emp_code = ?", *empCode)
+	}
+
+	err := q.Order("punch_time ASC, id ASC").Limit(limit).Find(&rows).Error
+	return rows, err
+}

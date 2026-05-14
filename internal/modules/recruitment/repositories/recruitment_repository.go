@@ -389,6 +389,22 @@ func (r *RecruitmentRepository) UpdateApplication(app *models.JobApplication) er
 	return r.db.Save(app).Error
 }
 
+// ListRecentJobApplications returns the most recent applications by applied_date (then created_at).
+func (r *RecruitmentRepository) ListRecentJobApplications(limit int) ([]models.JobApplication, error) {
+	if limit < 1 {
+		limit = 3
+	}
+	var apps []models.JobApplication
+	err := r.db.Model(&models.JobApplication{}).
+		Preload("Candidate").
+		Preload("JobOpening.Requisition").
+		Where("job_applications.deleted_at IS NULL").
+		Order("job_applications.applied_date DESC, job_applications.created_at DESC").
+		Limit(limit).
+		Find(&apps).Error
+	return apps, err
+}
+
 // CountApplicationsByJobOpeningIDs returns application counts grouped by job opening id.
 func (r *RecruitmentRepository) CountApplicationsByJobOpeningIDs(jobOpeningIDs []string) (map[string]int64, error) {
 	out := make(map[string]int64)
@@ -632,6 +648,88 @@ func (r *RecruitmentRepository) GetTalentPoolByEmail(email string) (*models.Tale
 // SaveTalentPoolCandidate saves updates to an existing talent pool row.
 func (r *RecruitmentRepository) SaveTalentPoolCandidate(row *models.TalentPoolCandidate) error {
 	return r.db.Save(row).Error
+}
+
+// --- Talent pool pipeline (candidates with applications in TalentPool stage) ---
+
+func (r *RecruitmentRepository) talentPoolPipelineSubquery(keyword, jobOpeningID, location, skill string) *gorm.DB {
+	sq := r.db.Table("job_applications ja").
+		Select("ja.candidate_id, MAX(ja.updated_at) AS mx").
+		Joins("JOIN candidates c ON c.id = ja.candidate_id AND c.deleted_at IS NULL").
+		Where("ja.deleted_at IS NULL AND ja.stage = ?", models.StageTalentPool)
+
+	if kw := strings.TrimSpace(strings.ToLower(keyword)); kw != "" {
+		like := "%" + kw + "%"
+		sq = sq.Where(
+			"(LOWER(c.first_name) LIKE ? OR LOWER(c.last_name) LIKE ? OR LOWER(c.email) LIKE ? OR LOWER(COALESCE(c.phone, '')) LIKE ?)",
+			like, like, like, like,
+		)
+	}
+	if jid := strings.TrimSpace(jobOpeningID); jid != "" {
+		sq = sq.Where("ja.job_opening_id = ?", jid)
+	}
+	if loc := strings.TrimSpace(location); loc != "" {
+		like := "%" + strings.ToLower(loc) + "%"
+		sq = sq.Joins("JOIN job_openings jo ON jo.id = ja.job_opening_id AND jo.deleted_at IS NULL").
+			Joins("JOIN job_requisitions jr ON jr.id = jo.requisition_id AND jr.deleted_at IS NULL").
+			Where("LOWER(COALESCE(jr.location, '')) LIKE ?", like)
+	}
+	if sk := strings.TrimSpace(skill); sk != "" {
+		sq = sq.Where("CAST(c.skills AS TEXT) ILIKE ?", "%"+sk+"%")
+	}
+	return sq.Group("ja.candidate_id")
+}
+
+// CountTalentPoolPipelineCandidates counts distinct candidates with at least one TalentPool-stage application.
+func (r *RecruitmentRepository) CountTalentPoolPipelineCandidates(keyword, jobOpeningID, location, skill string) (int64, error) {
+	sq := r.talentPoolPipelineSubquery(keyword, jobOpeningID, location, skill)
+	var total int64
+	err := r.db.Table("(?) AS t", sq).Count(&total).Error
+	return total, err
+}
+
+// ListTalentPoolPipelineCandidateIDs returns candidate IDs ordered by most recent TalentPool application activity.
+func (r *RecruitmentRepository) ListTalentPoolPipelineCandidateIDs(keyword, jobOpeningID, location, skill string, page, limit int) ([]string, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	offset := (page - 1) * limit
+	sq := r.talentPoolPipelineSubquery(keyword, jobOpeningID, location, skill)
+	var ids []string
+	err := r.db.Table("(?) AS ranked", sq).
+		Order("mx DESC").
+		Offset(offset).Limit(limit).
+		Pluck("candidate_id", &ids).Error
+	return ids, err
+}
+
+// ListJobApplicationsTalentPoolByCandidateIDs loads TalentPool-stage applications for the given candidates.
+func (r *RecruitmentRepository) ListJobApplicationsTalentPoolByCandidateIDs(candidateIDs []string) ([]models.JobApplication, error) {
+	var apps []models.JobApplication
+	if len(candidateIDs) == 0 {
+		return apps, nil
+	}
+	err := r.db.Where("candidate_id IN ? AND deleted_at IS NULL AND stage = ?", candidateIDs, models.StageTalentPool).
+		Preload("JobOpening.Requisition").
+		Order("updated_at DESC").
+		Find(&apps).Error
+	return apps, err
+}
+
+// FindCandidatesByIDs loads candidates by primary keys (order not preserved).
+func (r *RecruitmentRepository) FindCandidatesByIDs(ids []string) ([]models.Candidate, error) {
+	var rows []models.Candidate
+	if len(ids) == 0 {
+		return rows, nil
+	}
+	err := r.db.Where("id IN ?", ids).Find(&rows).Error
+	return rows, err
 }
 
 // --- Application submission queue ---
